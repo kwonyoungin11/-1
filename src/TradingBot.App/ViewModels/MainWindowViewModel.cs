@@ -154,12 +154,18 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void RefreshSymbolOptions()
     {
-        if (!Enum.TryParse<StockMarketKind>(SelectedStockKind, out var kind))
+        // Session may carry live holdings∪catalog watch after real bind; prefer session list.
+        var symbols = _harness.Session.ResolveWatchSymbols();
+        if (symbols.Length == 0)
         {
-            kind = StockMarketKind.나스닥;
+            if (!Enum.TryParse<StockMarketKind>(SelectedStockKind, out var kind))
+            {
+                kind = StockMarketKind.나스닥;
+            }
+
+            symbols = WatchlistCatalog.ResolveSymbols(kind).ToArray();
         }
 
-        var symbols = WatchlistCatalog.ResolveSymbols(kind);
         SymbolOptions.Clear();
         foreach (var s in symbols)
         {
@@ -168,7 +174,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var focus = _harness.GetAutoTradePanel().FocusSymbol;
         _suppressSelectionEcho = true;
-        SelectedSymbol = symbols.Contains(focus) ? focus : symbols[0];
+        SelectedSymbol = symbols.Contains(focus, StringComparer.OrdinalIgnoreCase)
+            ? focus
+            : symbols[0];
         _suppressSelectionEcho = false;
         _harness.SetFocusSymbol(SelectedSymbol);
     }
@@ -186,6 +194,8 @@ public partial class MainWindowViewModel : ViewModelBase
             IsBusy = true;
             StatusLine = "불러오는 중…";
             _ = await _harness.GetDashboardAsync().ConfigureAwait(true);
+            // Live 읽기 바인딩 후 워치·잔액 라벨 반영
+            RefreshSymbolOptions();
             ApplyPanel(_harness.GetAutoTradePanel());
             ConnectionLabel = _harness.ConnectionLabel;
             ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel);

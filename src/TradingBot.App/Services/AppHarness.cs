@@ -46,6 +46,10 @@ public sealed class AppHarness
     private readonly EvidenceBuilder _evidenceBuilder;
     private string _connectionLabel = "연결 확인 전";
     private string _connectionModeLabel = "mock";
+    private bool _isLiveReadOnlyConnected;
+    private IReadOnlyList<QuoteSnapshot> _lastQuotes = Array.Empty<QuoteSnapshot>();
+    private string? _cachedCandlesSymbol;
+    private IReadOnlyList<CandlePoint>? _cachedRealCandles;
 
     public AppHarness(
         TradingSafetySettings settings,
@@ -235,8 +239,19 @@ public sealed class AppHarness
     public (IReadOnlyList<CandlePoint> Candles, IReadOnlyList<TradeMarker> Markers) GetChartData()
     {
         var symbol = _session.ResolveFocusSymbol();
-        var seed = WatchlistCatalog.ChartSeedPrice(symbol);
-        var candles = MockCandleSeriesFactory.CreateSeries(symbol, 160, DateTimeOffset.UtcNow, seed);
+        IReadOnlyList<CandlePoint> candles;
+        if (_cachedRealCandles is { Count: > 0 }
+            && string.Equals(_cachedCandlesSymbol, symbol, StringComparison.OrdinalIgnoreCase))
+        {
+            candles = _cachedRealCandles;
+        }
+        else
+        {
+            // Live 읽기 시 마지막 실시세 seed, 없으면 카탈로그 연습 seed
+            var seed = TryResolveChartSeed(symbol);
+            candles = MockCandleSeriesFactory.CreateSeries(symbol, 160, DateTimeOffset.UtcNow, seed);
+        }
+
         var paperAll = MockCandleSeriesFactory.MarkersFromPaperFills(_paperLedger.GetSnapshot());
         // 포커스 종목 paper 체결만 강조 + 데모 버블(거래대금 규모)
         var paperFocus = paperAll
@@ -261,6 +276,229 @@ public sealed class AppHarness
         return (candles, merged);
     }
 
+    /// <summary>
+    /// Live 읽기 전용 스냅샷을 UI 세션에 바인딩: 잔액·워치·포커스.
+    /// mock / 오류 / 끊김에서는 호출하지 않음. 실주문 없음.
+    /// </summary>
+    public void ApplyRealPortfolio(ReadOnlyPortfolioSnapshot portfolio)
+    {
+        ArgumentNullException.ThrowIfNull(portfolio);
+        if (portfolio.ConnectionStatus != ConnectionStatus.LiveReadOnlyConnected)
+        {
+            return;
+        }
+
+        _isLiveReadOnlyConnected = true;
+        _lastQuotes = portfolio.Quotes ?? Array.Empty<QuoteSnapshot>();
+
+        var balance = TryResolveRealBalance(portfolio);
+        if (balance is decimal bal)
+        {
+            _session.ApplyExternalBalance(bal, setStartingIfUnset: true);
+        }
+
+        _session.SetDataSourceLabel("실계좌 읽기");
+
+        var currentWatch = _session.ResolveWatchSymbols();
+        var holdingSymbols = (portfolio.Holdings ?? Array.Empty<HoldingSummary>())
+            .Select(h => h.Symbol)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        // 보유 있으면 보유∪현재 워치(코어 포커스 유지); 없으면 현재 워치 유지
+        string[] watch;
+        if (holdingSymbols.Length > 0)
+        {
+            watch = holdingSymbols
+                .Union(currentWatch, StringComparer.OrdinalIgnoreCase)
+                .Select(s => s.ToUpperInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+        }
+        else
+        {
+            watch = currentWatch;
+        }
+
+        if (watch.Length > 0)
+        {
+            _session.ApplyExternalWatchSymbols(watch);
+        }
+
+        // Focus: 첫 보유 → 시세 있는 첫 종목 → 워치 첫 종목
+        var focus =
+            holdingSymbols.FirstOrDefault()
+            ?? _lastQuotes.FirstOrDefault(q => q.LastPrice is not null)?.Symbol
+            ?? (watch.Length > 0 ? watch[0] : null);
+        if (!string.IsNullOrWhiteSpace(focus))
+        {
+            _session.FocusSymbol = focus;
+        }
+    }
+
+    /// <summary>
+    /// CashBuyingPower(USD) 우선 — 병합 전 필드는 reflection-safe.
+    /// 없으면 MarketValueUsdSummary 파싱, 그것도 없으면 null(연습 유지).
+    /// </summary>
+    public static decimal? TryResolveRealBalance(ReadOnlyPortfolioSnapshot portfolio)
+    {
+        ArgumentNullException.ThrowIfNull(portfolio);
+
+        // Optional post-merge properties (buying-power wave): CashBuyingPowerUsd / CashBuyingPower
+        if (TryReadOptionalDecimalProperty(portfolio, "CashBuyingPowerUsd") is decimal usdCash)
+        {
+            return usdCash;
+        }
+
+        if (TryReadOptionalDecimalProperty(portfolio, "CashBuyingPower") is decimal cash)
+        {
+            return cash;
+        }
+
+        if (!string.IsNullOrWhiteSpace(portfolio.MarketValueUsdSummary)
+            && decimal.TryParse(
+                portfolio.MarketValueUsdSummary.Trim(),
+                System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var mv)
+            && mv >= 0m)
+        {
+            return mv;
+        }
+
+        return null;
+    }
+
+    private static decimal? TryReadOptionalDecimalProperty(object target, string propertyName)
+    {
+        var prop = target.GetType().GetProperty(propertyName);
+        if (prop is null || !prop.CanRead)
+        {
+            return null;
+        }
+
+        var raw = prop.GetValue(target);
+        return raw switch
+        {
+            null => null,
+            decimal d => d,
+            double dbl => (decimal)dbl,
+            float f => (decimal)f,
+            int i => i,
+            long l => l,
+            string s when decimal.TryParse(
+                s.Trim(),
+                System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var parsed) => parsed,
+            _ => null,
+        };
+    }
+
+    private double TryResolveChartSeed(string symbol)
+    {
+        var quote = _lastQuotes.FirstOrDefault(q =>
+            q.Symbol.Equals(symbol, StringComparison.OrdinalIgnoreCase));
+        if (quote?.LastPrice is decimal px && px > 0m)
+        {
+            return (double)px;
+        }
+
+        return WatchlistCatalog.ChartSeedPrice(symbol);
+    }
+
+    /// <summary>
+    /// Optional candles on portfolio service (candles wave merge). Reflection-safe; no-op if missing.
+    /// </summary>
+    private async Task TryCacheRealCandlesAsync(string symbol, CancellationToken cancellationToken)
+    {
+        if (!_isLiveReadOnlyConnected || string.IsNullOrWhiteSpace(symbol))
+        {
+            return;
+        }
+
+        try
+        {
+            var method = _portfolio.GetType().GetMethod(
+                "GetCandlesAsync",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            if (method is null)
+            {
+                return;
+            }
+
+            var parameters = method.GetParameters();
+            object? resultTask;
+            if (parameters.Length >= 2)
+            {
+                // Prefer (symbol, count, ct) or (symbol, ct)
+                var args = new object?[parameters.Length];
+                args[0] = symbol;
+                for (var i = 1; i < parameters.Length; i++)
+                {
+                    var p = parameters[i];
+                    if (p.ParameterType == typeof(CancellationToken))
+                    {
+                        args[i] = cancellationToken;
+                    }
+                    else if (p.ParameterType == typeof(int) || p.ParameterType == typeof(int?))
+                    {
+                        args[i] = 160;
+                    }
+                    else if (p.ParameterType == typeof(string))
+                    {
+                        args[i] = "1m";
+                    }
+                    else if (p.HasDefaultValue)
+                    {
+                        args[i] = p.DefaultValue;
+                    }
+                    else
+                    {
+                        args[i] = null;
+                    }
+                }
+
+                resultTask = method.Invoke(_portfolio, args);
+            }
+            else
+            {
+                return;
+            }
+
+            if (resultTask is not Task task)
+            {
+                return;
+            }
+
+            await task.ConfigureAwait(false);
+            var resultProp = task.GetType().GetProperty("Result");
+            var result = resultProp?.GetValue(task);
+            if (result is IReadOnlyList<CandlePoint> list && list.Count > 0)
+            {
+                _cachedRealCandles = list;
+                _cachedCandlesSymbol = symbol.ToUpperInvariant();
+            }
+            else if (result is IEnumerable<CandlePoint> seq)
+            {
+                var arr = seq.ToList();
+                if (arr.Count > 0)
+                {
+                    _cachedRealCandles = arr;
+                    _cachedCandlesSymbol = symbol.ToUpperInvariant();
+                }
+            }
+        }
+        catch
+        {
+            // Fail closed for chart: keep mock seed path. Never affect orders.
+            _cachedRealCandles = null;
+            _cachedCandlesSymbol = null;
+        }
+    }
+
     public async Task<CockpitDashboardModel> GetDashboardAsync(
         CancellationToken cancellationToken = default)
     {
@@ -277,6 +515,23 @@ public sealed class AppHarness
             .ConfigureAwait(false);
         _connectionLabel = portfolio.ConnectionOwnerMessage;
         _connectionModeLabel = TossReadOnlyFactory.DescribeMode(_tossOptions);
+
+        // Live 읽기 전용일 때만 실 포트폴리오를 세션에 바인딩 (mock은 연습 유지)
+        if (portfolio.ConnectionStatus == ConnectionStatus.LiveReadOnlyConnected)
+        {
+            ApplyRealPortfolio(portfolio);
+            await TryCacheRealCandlesAsync(_session.ResolveFocusSymbol(), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            _isLiveReadOnlyConnected = false;
+            // mock/오류: 시세는 차트 seed로만 캐시 (라벨·잔액은 연습 유지)
+            _lastQuotes = portfolio.Quotes ?? Array.Empty<QuoteSnapshot>();
+            _cachedRealCandles = null;
+            _cachedCandlesSymbol = null;
+        }
+
         var snapshot = CockpitReadOnlyProjector.Project(portfolio, _settings);
 
         var now = DateTimeOffset.UtcNow;
@@ -290,7 +545,7 @@ public sealed class AppHarness
             // End-to-end practice strategy: sizer + daily halt % + trend params + session window.
             var practice = BuildPracticeContext();
             evaluated = _pipeline.BuildCandidates(
-                portfolio.Quotes,
+                portfolio.Quotes ?? Array.Empty<QuoteSnapshot>(),
                 _settings,
                 defaultOrderQuantity: qty,
                 nowUtc: now,
