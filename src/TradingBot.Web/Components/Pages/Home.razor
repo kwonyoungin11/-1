@@ -5,6 +5,7 @@
 @using TradingBot.Web.Components.Cockpit
 @inject WebHarness Harness
 
+
 <PageTitle>홈 — TradingBot 콕핏</PageTitle>
 
 <h1>Overview (홈)</h1>
@@ -32,6 +33,15 @@ else
     <RiskGateList Rows="_dash.RiskGates" />
     <OrderCandidateList Rows="_dash.OrderCandidates" />
 
+    @if (_ev is not null)
+    {
+        <section class="card">
+            <h2>연습 증거</h2>
+            <p>dry-run @_ev.DryRunCount · paper @_ev.PaperFillCount · 실주문 차단 @(_ev.LiveBlocked ? "예" : "아니오")</p>
+        </section>
+    }
+
+
     <section>
         <h2>최근 감사 (요약)</h2>
         <ul>
@@ -45,9 +55,11 @@ else
 
 @code {
     private CockpitDashboardModel? _dash;
+    private WebEvidenceSummary? _ev;
 
     protected override async Task OnInitializedAsync()
     {
         _dash = await Harness.GetDashboardAsync();
+        _ev = await Harness.GetEvidenceSummaryAsync();
     }
 }

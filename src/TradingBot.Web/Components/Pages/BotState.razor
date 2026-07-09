@@ -1,14 +1,80 @@
 @page "/bot-state"
+@rendermode InteractiveServer
+@using TradingBot.Ui
+@using TradingBot.Web.Services
+@using TradingBot.Web.Components.Cockpit
+@inject WebHarness Harness
 
 <PageTitle>봇 상태 — TradingBot 콕핏</PageTitle>
 
-<section class="page-stub" aria-labelledby="page-title">
-    <h1 id="page-title">봇 상태</h1>
-    <p class="lead">지금 봇이 어떤 단계에 있는지 자세히 보여 줍니다.</p>
-    <p class="status-banner">준비 중</p>
-    <p class="muted">
-        홈(Overview)의 봇 상태 카드와 같은 정보를 단계별로 설명할 화면입니다.
-        실주문 버튼은 없습니다.
-    </p>
+<h1>봇 상태</h1>
+<p class="lead">지금 봇이 어떤 단계에 있는지 자세히 보여 줍니다. 실주문 버튼은 없습니다.</p>
+
+@if (_dash is null)
+{
+    <p>불러오는 중…</p>
+}
+else
+{
+    <SafetyStrip Snapshot="_dash.Snapshot" />
+    <NextActionCard Message="@_dash.Snapshot.NextActionOwnerMessage" />
+
+    <section aria-labelledby="bot-detail-title">
+        <h2 id="bot-detail-title">단계 상세</h2>
+        <dl class="home-meta">
+            <div>
+                <dt>생명주기 코드</dt>
+                <dd>@_dash.Snapshot.BotState</dd>
+            </div>
+            <div>
+                <dt>오너 설명</dt>
+                <dd>@_dash.Snapshot.BotStateOwnerMessage</dd>
+            </div>
+            <div>
+                <dt>연결</dt>
+                <dd>@_dash.Snapshot.ConnectionSummary</dd>
+            </div>
+            <div>
+                <dt>시장 세션</dt>
+                <dd>@_dash.Snapshot.MarketSessionSummary</dd>
+            </div>
+            <div>
+                <dt>주문 모드</dt>
+                <dd>@_dash.Snapshot.OrderMode</dd>
+            </div>
+            <div>
+                <dt>주문 후보 수</dt>
+                <dd>@_dash.Snapshot.OrderCandidateCount</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section aria-labelledby="block-title">
+        <h2 id="block-title">최근 차단·안내</h2>
+        @if (_dash.Snapshot.RecentBlockMessages.Count == 0)
+        {
+            <p class="muted">표시할 차단 메시지가 없습니다.</p>
+        }
+        else
+        {
+            <ul>
+                @foreach (var msg in _dash.Snapshot.RecentBlockMessages)
+                {
+                    <li>@msg</li>
+                }
+            </ul>
+        }
+    </section>
+
+    <p class="muted">이 화면은 상태 설명만 합니다. 매수·매도·실주문 실행 버튼은 없습니다.</p>
     <p><a href="/">← 홈으로</a></p>
-</section>
+}
+
+@code {
+    private CockpitDashboardModel? _dash;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dash = await Harness.GetDashboardAsync();
+    }
+}

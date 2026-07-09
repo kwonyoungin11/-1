@@ -1,14 +1,50 @@
 @page "/audit"
+@rendermode InteractiveServer
+@using TradingBot.Ui
+@using TradingBot.Web.Services
+@using TradingBot.Web.Components.Cockpit
+@inject WebHarness Harness
 
 <PageTitle>감사 로그 — TradingBot 콕핏</PageTitle>
 
-<section class="page-stub" aria-labelledby="page-title">
-    <h1 id="page-title">감사 로그</h1>
-    <p class="lead">시스템이 무엇을 했는지 사람이 읽는 기록입니다.</p>
-    <p class="status-banner">준비 중</p>
-    <p class="muted">
-        비밀·토큰·전체 계좌번호는 로그에 표시하지 않습니다.
-        홈의 최근 기록 3줄이 여기 전체 목록으로 확장됩니다.
-    </p>
-    <p><a href="/">← 홈으로</a></p>
-</section>
+<h1>감사 · 연습 증거</h1>
+<p class="lead">사람이 읽을 수 있는 기록과 dry-run/paper 증거 요약입니다. 실주문 경로 없음.</p>
+
+@if (_dash is null || _ev is null)
+{
+    <p>불러오는 중…</p>
+}
+else
+{
+    <SafetyStrip Snapshot="_dash.Snapshot" />
+    <section class="card">
+        <h2>연습 증거 요약</h2>
+        <ul>
+            <li>dry-run 기록 수: @_ev.DryRunCount</li>
+            <li>paper 가상 체결 수: @_ev.PaperFillCount</li>
+            <li>실주문 차단: @(_ev.LiveBlocked ? "예" : "아니오")</li>
+            <li>모드 힌트: @string.Join(", ", _ev.LastModes)</li>
+        </ul>
+    </section>
+    <section class="card">
+        <h2>최근 감사 줄 (스냅샷)</h2>
+        <ul>
+            @foreach (var line in _dash.Snapshot.RecentAuditLines)
+            {
+                <li>@line</li>
+            }
+        </ul>
+        <p class="hint">전체 구조화 감사는 IAuditLog 메모리 저장소에 쌓입니다. 비밀값은 마스킹됩니다.</p>
+    </section>
+}
+
+@code {
+    private CockpitDashboardModel? _dash;
+    private WebEvidenceSummary? _ev;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dash = await Harness.GetDashboardAsync();
+        _ev = await Harness.GetEvidenceSummaryAsync();
+    }
+}

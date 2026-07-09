@@ -42,6 +42,8 @@ run_safety_gates() {
   run_gate "check-secrets" bash ./scripts/grok/check-secrets.sh || failed=1
   run_gate "check-trading-safety" bash ./scripts/grok/check-trading-safety.sh || failed=1
   run_gate "check-owner-readiness" bash ./scripts/grok/check-owner-readiness.sh || failed=1
+  # Passes while reporting LIVE_READY=false (blocked_as_expected). Fail only if safety broken / docs missing.
+  run_gate "check-live-readiness" bash ./scripts/grok/check-live-readiness.sh || failed=1
   return "$failed"
 }
 

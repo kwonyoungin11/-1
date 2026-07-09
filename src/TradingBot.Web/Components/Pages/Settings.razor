@@ -1,16 +1,89 @@
 @page "/settings"
+@rendermode InteractiveServer
+@using TradingBot.Domain
+@using TradingBot.Ui
+@using TradingBot.Web.Services
+@using TradingBot.Web.Components.Cockpit
+@inject WebHarness Harness
 
 <PageTitle>설정 · 연결 가이드 — TradingBot 콕핏</PageTitle>
 
-<section class="page-stub" aria-labelledby="page-title">
-    <h1 id="page-title">설정 · 연결 가이드</h1>
-    <p class="lead">키와 연결은 여기서 안내만 합니다. 키 값은 화면에 보이지 않습니다.</p>
-    <p class="status-banner">준비 중</p>
-    <ul>
-        <li>.env에 키를 넣으세요. 채팅·화면에 붙여 넣지 마세요.</li>
-        <li>키·토큰·계좌 원문은 표시하지 않습니다.</li>
-        <li>실거래 관련 스위치는 고급·잠김 — 기본 차단을 바꾸지 않습니다.</li>
-    </ul>
-    <p class="muted">실주문 허용 토글 UI는 라이브 준비 완료 전까지 제공하지 않습니다.</p>
+<h1>설정 · 연결 가이드</h1>
+<p class="lead">키와 연결은 여기서 안내만 합니다. 키 값·토큰·계좌 원문은 화면에 보이지 않습니다.</p>
+
+@if (_dash is null)
+{
+    <p>불러오는 중…</p>
+}
+else
+{
+    <SafetyStrip Snapshot="_dash.Snapshot" />
+    <NextActionCard Message="@_dash.Snapshot.NextActionOwnerMessage" />
+
+    <section aria-labelledby="safety-defaults-title">
+        <h2 id="safety-defaults-title">안전 기본값 (텍스트 안내)</h2>
+        <p>코드에 고정된 안전 기본값입니다. 화면에서 바꾸거나 시크릿을 입력하지 않습니다.</p>
+        <pre class="settings-defaults" aria-label="안전 기본값">ALLOW_LIVE_ORDERS=false
+KILL_SWITCH=true
+ORDER_MODE=dry_run</pre>
+        <dl class="home-meta">
+            <div>
+                <dt>실거래 허용 (기본)</dt>
+                <dd>@TradingSafetyDefaults.AllowLiveOrders.ToString().ToLowerInvariant()</dd>
+            </div>
+            <div>
+                <dt>긴급 정지 (기본)</dt>
+                <dd>@TradingSafetyDefaults.KillSwitch (ON이면 차단)</dd>
+            </div>
+            <div>
+                <dt>주문 모드 (기본)</dt>
+                <dd>@TradingSafetyDefaults.OrderMode</dd>
+            </div>
+            <div>
+                <dt>시세 최대 지연 (초, 기본)</dt>
+                <dd>@TradingSafetyDefaults.MarketDataMaxStalenessSeconds</dd>
+            </div>
+        </dl>
+        <h3>현재 런타임 반영 (값만 · 비밀 없음)</h3>
+        <dl class="home-meta">
+            <div>
+                <dt>AllowLiveOrders</dt>
+                <dd>@_dash.Snapshot.AllowLiveOrders</dd>
+            </div>
+            <div>
+                <dt>KillSwitchActive</dt>
+                <dd>@_dash.Snapshot.KillSwitchActive</dd>
+            </div>
+            <div>
+                <dt>OrderMode</dt>
+                <dd>@_dash.Snapshot.OrderMode</dd>
+            </div>
+            <div>
+                <dt>Live Lock</dt>
+                <dd>@_dash.Snapshot.LiveLock</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section aria-labelledby="env-guide-title">
+        <h2 id="env-guide-title">로컬 .env 안내</h2>
+        <ul>
+            <li>API 키·토큰은 <strong>로컬 .env</strong> 에만 넣으세요. 채팅·이 화면에 붙여 넣지 마세요.</li>
+            <li>저장소에 커밋된 <code>.env.example</code> 을 참고해 항목 이름만 확인합니다.</li>
+            <li>키·토큰·계좌 원문은 표시하지 않습니다. 에이전트도 실제 키를 채우지 않습니다.</li>
+            <li>실거래 관련 스위치는 고급·잠김 — 라이브 준비·오너 승인 전까지 기본 차단을 바꾸지 않습니다.</li>
+        </ul>
+    </section>
+
+    <p class="muted">실주문 허용 토글 UI는 라이브 준비 완료 전까지 제공하지 않습니다. 이 화면에 비밀 입력 칸·실주문 버튼이 없습니다.</p>
     <p><a href="/">← 홈으로</a></p>
-</section>
+}
+
+@code {
+    private CockpitDashboardModel? _dash;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dash = await Harness.GetDashboardAsync();
+    }
+}

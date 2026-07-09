@@ -1,14 +1,59 @@
 @page "/account"
+@rendermode InteractiveServer
+@using TradingBot.Ui
+@using TradingBot.Web.Services
+@using TradingBot.Web.Components.Cockpit
+@inject WebHarness Harness
 
 <PageTitle>계좌 스냅샷 — TradingBot 콕핏</PageTitle>
 
-<section class="page-stub" aria-labelledby="page-title">
-    <h1 id="page-title">계좌 스냅샷</h1>
-    <p class="lead">읽기 전용 계좌·보유 요약입니다. (계좌번호는 마스킹)</p>
-    <p class="status-banner">준비 중</p>
+<h1>계좌 스냅샷</h1>
+<p class="lead">읽기 전용 계좌·보유 요약입니다. 계좌번호는 마스킹됩니다. 주문·이체 기능 없음.</p>
+
+@if (_dash is null)
+{
+    <p>불러오는 중…</p>
+}
+else
+{
+    <SafetyStrip Snapshot="_dash.Snapshot" />
+    <AccountSummaryCard MaskedSummary="@_dash.Snapshot.AccountMaskedSummary" />
+    <NextActionCard Message="@_dash.Snapshot.NextActionOwnerMessage" />
+
+    <section aria-labelledby="acct-meta-title">
+        <h2 id="acct-meta-title">연결·시장 맥락</h2>
+        <dl class="home-meta">
+            <div>
+                <dt>연결</dt>
+                <dd>@_dash.Snapshot.ConnectionSummary</dd>
+            </div>
+            <div>
+                <dt>시장 세션</dt>
+                <dd>@_dash.Snapshot.MarketSessionSummary</dd>
+            </div>
+            <div>
+                <dt>봇 상태</dt>
+                <dd>@_dash.Snapshot.BotStateOwnerMessage</dd>
+            </div>
+            <div>
+                <dt>주문 모드</dt>
+                <dd>@_dash.Snapshot.OrderMode (연습/가상 — 실주문 아님)</dd>
+            </div>
+        </dl>
+    </section>
+
     <p class="muted">
-        Phase 2 이후 토스 읽기 연결 데이터가 채워집니다.
-        지금은 주문·이체 기능이 없습니다.
+        이 화면은 읽기 전용입니다. 주문·이체·출금 버튼이 없습니다.
+        계좌 원문·토큰은 표시하지 않습니다.
     </p>
     <p><a href="/">← 홈으로</a></p>
-</section>
+}
+
+@code {
+    private CockpitDashboardModel? _dash;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dash = await Harness.GetDashboardAsync();
+    }
+}

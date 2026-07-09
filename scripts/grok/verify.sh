@@ -7,6 +7,8 @@ echo "== TradingBot verify harness =="
 bash ./scripts/grok/check-secrets.sh
 bash ./scripts/grok/check-trading-safety.sh
 bash ./scripts/grok/check-owner-readiness.sh
+# Required gate: must PASS while reporting LIVE_READY=false (live not ready).
+bash ./scripts/grok/check-live-readiness.sh
 
 if ! command -v dotnet >/dev/null 2>&1; then
   echo "warning: dotnet SDK not installed — skipping restore/build/test"

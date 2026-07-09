@@ -1,14 +1,45 @@
 @page "/candidates"
+@rendermode InteractiveServer
+@using TradingBot.Ui
+@using TradingBot.Web.Services
+@using TradingBot.Web.Components.Cockpit
+@inject WebHarness Harness
 
 <PageTitle>주문 후보 — TradingBot 콕핏</PageTitle>
 
-<section class="page-stub" aria-labelledby="page-title">
-    <h1 id="page-title">주문 후보</h1>
-    <p class="lead">전략이 제안한 후보 목록입니다. <strong>실주문이 아닙니다.</strong></p>
-    <p class="status-banner">준비 중</p>
-    <p class="muted">
-        종목이 보여도 실제 매수·매도가 나가지 않습니다.
-        “매수 실행” 버튼은 이 화면에 없습니다.
-    </p>
+<h1>주문 후보</h1>
+<p class="lead">전략이 제안한 후보 목록입니다. <strong>실주문이 아닙니다.</strong> 매수·매도 실행 버튼은 없습니다.</p>
+
+@if (_dash is null)
+{
+    <p>불러오는 중…</p>
+}
+else
+{
+    <SafetyStrip Snapshot="_dash.Snapshot" />
+    <NextActionCard Message="@_dash.Snapshot.NextActionOwnerMessage" />
+
+    <section aria-labelledby="cand-count-title">
+        <h2 id="cand-count-title">후보 개요</h2>
+        <p>
+            스냅샷 후보 수: <strong>@_dash.Snapshot.OrderCandidateCount</strong>
+            · 표시 행: <strong>@_dash.OrderCandidates.Count</strong>
+            · 실거래 가능: <strong>@(_dash.IsLiveTradingVisuallyOpen ? "아니오(주의: 설정 확인)" : "아니오 — 잠김")</strong>
+        </p>
+        <p class="muted">종목이 보여도 실제 매수·매도가 나가지 않습니다. dry-run / paper 가상 경로만 사용합니다.</p>
+    </section>
+
+    <OrderCandidateList Rows="_dash.OrderCandidates" />
+
+    <p class="muted">“매수 실행” / “실주문” 버튼은 이 화면에 없습니다. 후보 ≠ 주문입니다.</p>
     <p><a href="/">← 홈으로</a></p>
-</section>
+}
+
+@code {
+    private CockpitDashboardModel? _dash;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dash = await Harness.GetDashboardAsync();
+    }
+}

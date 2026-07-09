@@ -1,16 +1,92 @@
 @page "/live-lock"
+@rendermode InteractiveServer
+@using TradingBot.Ui
+@using TradingBot.Web.Services
+@using TradingBot.Web.Components.Cockpit
+@inject WebHarness Harness
 
 <PageTitle>돈 보호 장치 — TradingBot 콕핏</PageTitle>
 
-<section class="page-stub" aria-labelledby="page-title">
-    <h1 id="page-title">돈 보호 장치 (Live Lock · 긴급 정지)</h1>
-    <p class="lead">실거래 잠금과 긴급 정지를 확인하는 화면입니다.</p>
-    <p class="status-banner">준비 중</p>
-    <ul>
-        <li>긴급 정지(Kill Switch): 기본 ON — 실거래 차단</li>
-        <li>실거래 잠금(Live Lock): 기본 잠김</li>
-        <li>잠금 해제는 라이브 준비 완료·오너 승인 전까지 불가</li>
-    </ul>
-    <p class="muted">이 화면에도 실주문·잠금 해제 실행 버튼은 두지 않습니다. (Phase 1 골격)</p>
+<h1>돈 보호 장치 (Live Lock · 긴급 정지)</h1>
+<p class="lead">실거래 잠금과 긴급 정지를 확인하는 화면입니다. 잠금 해제·실주문 실행 버튼은 없습니다.</p>
+
+@if (_dash is null)
+{
+    <p>불러오는 중…</p>
+}
+else
+{
+    <SafetyStrip Snapshot="_dash.Snapshot" />
+    <NextActionCard Message="@_dash.Snapshot.NextActionOwnerMessage" />
+
+    <section aria-labelledby="lock-detail-title">
+        <h2 id="lock-detail-title">현재 잠금 상태</h2>
+        <dl class="home-meta">
+            <div>
+                <dt>실거래 잠금 (Live Lock)</dt>
+                <dd>@LiveLockLabel(_dash.Snapshot.LiveLock)</dd>
+            </div>
+            <div>
+                <dt>긴급 정지 (Kill Switch)</dt>
+                <dd>@(_dash.Snapshot.KillSwitchActive ? "ON — 실거래 차단" : "OFF")</dd>
+            </div>
+            <div>
+                <dt>실거래 허용 플래그</dt>
+                <dd>@(_dash.Snapshot.AllowLiveOrders ? "켜짐(주의)" : "꺼짐 (기본)")</dd>
+            </div>
+            <div>
+                <dt>주문 모드</dt>
+                <dd>@_dash.Snapshot.OrderMode</dd>
+            </div>
+            <div>
+                <dt>화면상 실거래 열림</dt>
+                <dd>@(_dash.IsLiveTradingVisuallyOpen ? "열림(주의)" : "닫힘 — 실주문 불가")</dd>
+            </div>
+        </dl>
+        <p class="headline">@_dash.Snapshot.SafetyHeadline</p>
+    </section>
+
+    <section aria-labelledby="policy-title">
+        <h2 id="policy-title">보호 정책 (기본값)</h2>
+        <ul>
+            <li>긴급 정지(Kill Switch): 기본 <strong>ON</strong> — 실거래 차단</li>
+            <li>실거래 잠금(Live Lock): 기본 <strong>잠김</strong></li>
+            <li>주문 모드: 기본 <strong>dry_run</strong> (연습만)</li>
+            <li>실거래 허용: 기본 <strong>false</strong></li>
+            <li>잠금 해제는 라이브 준비 완료·오너 승인·전 게이트 통과 전까지 불가</li>
+        </ul>
+    </section>
+
+    @if (_dash.Snapshot.RecentBlockMessages.Count > 0)
+    {
+        <section aria-labelledby="live-blocks-title">
+            <h2 id="live-blocks-title">관련 차단 메시지</h2>
+            <ul>
+                @foreach (var msg in _dash.Snapshot.RecentBlockMessages)
+                {
+                    <li>@msg</li>
+                }
+            </ul>
+        </section>
+    }
+
+    <p class="muted">이 화면에는 실주문·잠금 해제 실행 버튼이 없습니다. 상태 확인 전용입니다.</p>
     <p><a href="/">← 홈으로</a></p>
-</section>
+}
+
+@code {
+    private CockpitDashboardModel? _dash;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dash = await Harness.GetDashboardAsync();
+    }
+
+    private static string LiveLockLabel(LiveLockState state) => state switch
+    {
+        LiveLockState.Locked => "잠김",
+        LiveLockState.UnlockPendingApproval => "승인 대기",
+        LiveLockState.Unlocked => "열림(주의)",
+        _ => "알 수 없음",
+    };
+}

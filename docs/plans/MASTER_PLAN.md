@@ -25,12 +25,13 @@
 
 ## 현재 위치
 
-- Phase 0: 하네스·worktree·dev-loop 완료
-- Phase 1: **오너 승인 완료** (2026-07-09) — `docs/cockpit/PHASE_01_APPROVAL.md`
-- Phase 2: mock read-only 완료
-- **Phase 3: 신호·리스크·후보 파이프라인 구현**
-- **다음: Phase 4 dry-run 고도화 또는 UI**
-- 활성 worktree: `.worktrees/active-dev`
+- Phase 0–3: 완료
+- Phase 4 dry-run ledger: 완료
+- Phase 5 paper: 골격+증거 완료
+- Blazor MVP 8 screens: 데이터 바인딩 완료
+- Live readiness automation: `check-live-readiness.sh` (LIVE_READY=false expected)
+- **실거래: 계속 차단** (오너 Phase 7 승인 전 개방 없음)
+
 
 ## 작업 규칙
 

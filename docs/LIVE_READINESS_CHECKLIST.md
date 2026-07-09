@@ -4,6 +4,26 @@
 
 모든 항목이 증거와 함께 체크되기 전까지 live order는 열지 않습니다.
 
+## Automation (기계 검증 — live 허용 아님)
+
+아래 자동화는 **live를 열지 않습니다.**  
+통과 = “기본값이 여전히 차단 + 체크리스트/증거 문서 존재 + src에 live submit 없음”.
+
+| 항목 | 명령 | 통과 의미 | live 허용? |
+|------|------|-----------|------------|
+| Live readiness automation | `bash scripts/grok/check-live-readiness.sh` | `LIVE_READY=false`, 안전 기본값 intact | **아니오** |
+| Trading safety scan | `bash scripts/grok/check-trading-safety.sh` | fail-closed 기본값·금지 패턴 유지 | **아니오** |
+| Owner readiness | `bash scripts/grok/check-owner-readiness.sh` | harness/docs 존재 | **아니오** |
+
+- 증거 수집 방법: [`docs/plans/LIVE_READINESS_EVIDENCE.md`](plans/LIVE_READINESS_EVIDENCE.md)
+- `check-live-readiness.sh`는 **flags를 live로 바꾸지 않음**
+- exit 0 + `LIVE_READY=false` = 정상(차단 유지). exit 1 = 안전이 깨졌거나 필수 문서 누락
+- dev-loop / verify 에 포함되어 있어도 **live order는 여전히 불가능**
+
+- [x] `scripts/grok/check-live-readiness.sh` 존재 및 통과 시 `LIVE_READY=false` 출력
+- [x] `docs/plans/LIVE_READINESS_EVIDENCE.md` 존재
+- [ ] 섹션 A–E 전 항목 사람/테스트 증거 완료 (아래 — **미완료, live 불가**)
+
 ## A. 환경 / 보안
 
 - [ ] .NET SDK 설치 및 `dotnet test` 통과

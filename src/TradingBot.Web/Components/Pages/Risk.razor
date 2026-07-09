@@ -1,14 +1,53 @@
 @page "/risk"
+@rendermode InteractiveServer
+@using TradingBot.Ui
+@using TradingBot.Web.Services
+@using TradingBot.Web.Components.Cockpit
+@inject WebHarness Harness
 
 <PageTitle>리스크 게이트 — TradingBot 콕핏</PageTitle>
 
-<section class="page-stub" aria-labelledby="page-title">
-    <h1 id="page-title">리스크 게이트</h1>
-    <p class="lead">주문이 막히는 이유를 한 줄씩 보여 줍니다.</p>
-    <p class="status-banner">준비 중</p>
-    <p class="muted">
-        홈의 차단·경고와 같은 게이트 목록이 여기에 채워집니다.
-        막힘·데이터 없음·오류는 모두 “차단”으로 표시합니다. 실주문 버튼 없음.
-    </p>
+<h1>리스크 게이트</h1>
+<p class="lead">주문이 막히는 이유를 한 줄씩 보여 줍니다. 막힘·데이터 없음·오류는 모두 “차단”입니다. 실주문 버튼 없음.</p>
+
+@if (_dash is null)
+{
+    <p>불러오는 중…</p>
+}
+else
+{
+    <SafetyStrip Snapshot="_dash.Snapshot" />
+    <NextActionCard Message="@_dash.Snapshot.NextActionOwnerMessage" />
+    <RiskGateList Rows="_dash.RiskGates" />
+
+    <section aria-labelledby="risk-summary-title">
+        <h2 id="risk-summary-title">요약</h2>
+        <p>
+            전체 @_dash.RiskGates.Count 개 게이트 중
+            통과 @_dash.RiskGates.Count(r => r.Passed) /
+            차단 @_dash.RiskGates.Count(r => !r.Passed)
+        </p>
+        @if (_dash.Snapshot.RecentBlockMessages.Count > 0)
+        {
+            <h3>최근 차단·안내</h3>
+            <ul>
+                @foreach (var msg in _dash.Snapshot.RecentBlockMessages)
+                {
+                    <li>@msg</li>
+                }
+            </ul>
+        }
+    </section>
+
+    <p class="muted">게이트를 우회하는 실행 버튼은 제공하지 않습니다. fail-closed(막히면 주문 불가)가 원칙입니다.</p>
     <p><a href="/">← 홈으로</a></p>
-</section>
+}
+
+@code {
+    private CockpitDashboardModel? _dash;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dash = await Harness.GetDashboardAsync();
+    }
+}

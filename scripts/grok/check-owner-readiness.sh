@@ -10,6 +10,7 @@ required=(
   .gitignore
   docs/OWNER_PLAYBOOK.md
   docs/LIVE_READINESS_CHECKLIST.md
+  docs/plans/LIVE_READINESS_EVIDENCE.md
   docs/UX_UI_GUIDE.md
   docs/DESIGN_SYSTEM.md
   docs/TOSS_OPENAPI_NOTES.md
@@ -22,6 +23,7 @@ required=(
   .agents/state/CURRENT_STATE.md
   scripts/grok/check-secrets.sh
   scripts/grok/check-trading-safety.sh
+  scripts/grok/check-live-readiness.sh
 )
 for f in "${required[@]}"; do
   if [[ -f "$f" ]]; then
