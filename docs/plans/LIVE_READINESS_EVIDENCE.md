@@ -41,7 +41,7 @@ Honest split: **engineering finished for practice/read-only path** vs **ops that
 | Risk / LiveOrderGate unit core | `RiskGate` · `LiveOrderGate` · `UsMarketSessionGuard` · Risk.Tests |
 | Dry-run unit | `DryRunOrderRouter` · `InMemoryDryRunLedger` · `DryRunLedgerTests` |
 | Paper **unit** (not multi-day ops) | `PaperOrderRouter` · `InMemoryPaperLedger` · `PaperLedgerTests` · `EvidenceBuilderTests` (`LiveModePresent=false`) |
-| Idempotency **field present** | `OrderCandidate.ClientOrderId` generated in pipeline — **not** a duplicate-submit store |
+| Idempotency **field + store (dry-run/paper)** | `ClientOrderIdFactory` + `ClientOrderIdIndex` on dry-run/paper routers; tests in `ClientOrderIdempotencyTests` |
 | Cockpit live lock / kill UI | `CockpitSnapshot` · Web `LiveLock`/`SafetyStrip` · Avalonia safety strip · Ui tests |
 | Audit redaction | Domain + Observability redactor tests |
 | OpenAPI 1.2.2 snapshot on disk | `artifacts/openapi/toss-openapi.snapshot.json` |
@@ -62,7 +62,7 @@ Do **not** mark these complete without dated artifacts / owner action.
 | Owner-approved redacted Toss read smoke | **Missing** | Optional for daily work; **required before claiming live-ready connectivity**. Never commit tokens |
 | OpenAPI re-fetch / drift ops log | **Missing log** | Scripts exist; attach dated re-verify when run |
 | gitleaks/trivy as hard gate | **Optional / not hard** | `verify.sh` non-fatal today |
-| Duplicate-submit / idempotency **store** | **Not implemented** | `ClientOrderId` field only — design before any live submit |
+| Duplicate-submit / idempotency **store (practice)** | **Implemented (dry-run/paper)** | Live submit path still absent — Phase 7 must reuse same guard |
 | Account reconcile + full live limits | **Not evidenced** | Beyond pre-live unit Max* |
 | Incident drill **date** | **Missing** | Procedure doc only: `docs/INCIDENT_RESPONSE.md` |
 | Owner walkthrough completion note | **Missing date** | Doc exists; no owner signature/date |
@@ -193,8 +193,8 @@ Use this when updating `LIVE_READINESS_CHECKLIST.md`. Store ops artifacts under
 | Evidence aggregation | **Evidence (code)** | `EvidenceBuilder` · `LiveModePresent == false` |
 | Multi-day paper ops | **Missing (ops)** | **Do not mark done** without dated export under `artifacts/` |
 | Manual approval UX | **Partial** | Flag + lock UI; no live unlock control (by design) |
-| Idempotency field | **Present (code)** | `ClientOrderId` in candidate pipeline |
-| Idempotency / duplicate store | **Missing** | No dedicated store/tests yet — not “multi-day paper” but still blocks live claims |
+| Idempotency field | **Present (code)** | `ClientOrderIdFactory` in pipeline |
+| Idempotency / duplicate store | **Present for dry-run/paper** | `ClientOrderIdIndex` + tests; live path still none (blocks live claims) |
 | Live impl still disabled | **Evidence (code)** | `BlockedLiveOrderRouter` · no `SubmitOrderAsync` · readiness + safety scripts |
 
 ### D. UX / operations
@@ -233,8 +233,8 @@ ORDER_MODE=dry_run
 | valid Toss credential | Local owner secret; **no committed smoke** |
 | account reconciled | Not evidenced |
 | limits ok | Partial Max* settings |
-| duplicate guard pass | Not evidenced |
-| idempotency key present | ClientOrderId field only |
+| duplicate guard pass | Dry-run/paper evidenced (`ClientOrderIdempotencyTests`) |
+| idempotency key present | Factory + index on practice routers |
 | audit log enabled | `InMemoryAuditLog` unit |
 | operator confirms live | **No Phase 7 signature** |
 

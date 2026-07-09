@@ -38,7 +38,7 @@
 | Risk gate | stale/missing/session/notional 등 후보 차단 · LiveOrderGate | `RiskGate` · `LiveOrderGate` · `UsMarketSessionGuard` · Risk.Tests |
 | Dry-run | dry-run 라우터 + in-memory ledger | `DryRunOrderRouter` · `InMemoryDryRunLedger` · `DryRunLedgerTests` |
 | Paper (unit) | paper 라우터 + in-memory ledger · evidence `LiveModePresent=false` | `PaperOrderRouter` · `InMemoryPaperLedger` · `PaperLedgerTests` · `EvidenceBuilderTests` |
-| Idempotency (present) | `ClientOrderId` 생성·후보/ledger 전파 | `OrderCandidate.ClientOrderId` · pipeline `cand-{symbol}-{ms}` — **전용 중복 제출 저장소/가드는 없음(아래 ops/설계 갭)** |
+| Idempotency (present) | `ClientOrderId` 생성 + dry-run/paper 중복 거부 | `ClientOrderIdFactory` · `ClientOrderIdIndex` · `ClientOrderIdempotencyTests` (실 라우터+ledger) |
 | Cockpit UX | live lock / kill switch / safety strip 표시 | Avalonia + Web `LiveLock` / `SafetyStrip` · `CockpitSnapshot` · Ui/Web tests |
 | Observability | audit redaction · in-memory audit | `SecretRedactor` · `AuditMessageRedactor` · `InMemoryAuditLog` |
 | OpenAPI snapshot | 공식 스펙 스냅샷 1.2.2 | `artifacts/openapi/toss-openapi.snapshot.json` |
@@ -60,7 +60,7 @@
 | **Owner-approved redacted Toss read smoke** | **미첨부** (선택이나 “live-ready 주장” 시 필요) | mock/stub ≠ 실 연결. 오너 로컬 키 + redacted 로그 1회 |
 | **OpenAPI snapshot 주기 재검증 로그** | 프로세스만 있음 | 스냅샷 존재하나 운영 re-fetch 로그 미첨부 |
 | **gitleaks/trivy hard gate** | optional | 설치 시 hard gate로 고정하려면 운영/CI 증거 |
-| **Idempotency / duplicate submit store** | 필드만 존재 | `ClientOrderId` 있음 · 중복 제출 차단 저장소·테스트는 live 전 설계 필요 (live submit 추가 없이) |
+| **Idempotency / duplicate on live path** | dry-run/paper 가드 완료 · **live 경로 없음** | 연습 경로 `ClientOrderIdIndex` 완료. live submit 추가 시 동일 가드 재사용 필요 (Phase 7) |
 | **Account reconcile / full live limits** | 미증거 | 실거래 전 계좌 정합·한도 전체 세트 |
 | **Incident drill date** | **날짜 없음** | `docs/INCIDENT_RESPONSE.md` 절차만 존재 · 리허설 기록 미첨부 |
 | **Owner cockpit walkthrough sign-off** | 문서만 | walkthrough 존재 · 오너 완료 서명/날짜 미첨부 |
@@ -151,7 +151,7 @@ dotnet test: 실패 0 (Domain/Risk/Orders/Toss/Application/Ui/Web/Runner/App/Obs
 | [x] | paper **단위** ledger | `PaperOrderRouter` · `PaperLedgerTests` · `EvidenceBuilderTests` | code |
 | [ ] | paper **다일/기간** 운영 ledger | **미첨부** — 단위 ≠ 기간 안정 | **ops (blocks live)** |
 | [~] | manual approval 2단계 UX | 게이트 플래그 + Live Lock 표시. **실거래 2단계 승인 UX 없음(의도적)** | code partial + **owner Phase 7** |
-| [~] | idempotency / duplicate guard | `ClientOrderId` **있음**. 중복 제출 저장소·전용 테스트 **미완** | field=code; store=**pre-live hardening** |
+| [x] | idempotency / duplicate guard (dry-run/paper) | `ClientOrderIdFactory` + `ClientOrderIdIndex` + 실 라우터 테스트 PASS | code (pre-live) |
 | [x] | live implementation 명시 비활성 | `BlockedLiveOrderRouter` · no `SubmitOrderAsync` · scripts PASS | code |
 
 **C 결론:** dry-run/paper **단위 = pre-live code 완료**. 다일 paper·멱등 저장소·live 한도 = **ops/hardening**.  
@@ -189,8 +189,8 @@ paper trading stable                 ← 단위 OK / 다일 증거 없음 ← op
 valid Toss credential                ← 로컬 .env / 실스모크 미첨부 ← owner/ops
 account reconciled                   ← 미증거
 limits ok                            ← 일부 Max* 설정만
-duplicate guard pass                 ← 저장소 미완
-idempotency key present              ← ClientOrderId만 (필드 존재)
+duplicate guard pass                 ← dry-run/paper ClientOrderIdIndex 완료 (live 경로 없음)
+idempotency key present              ← ClientOrderIdFactory + 검증
 audit log enabled                    ← InMemoryAuditLog 단위
 operator confirms live mode          ← 오너 Phase 7 서명 없음
 ```
