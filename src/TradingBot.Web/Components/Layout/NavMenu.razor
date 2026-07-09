@@ -1,0 +1,52 @@
+@* MVP 8 screens — SCREEN_MAP.md S01–S08. No live-order links. *@
+
+<div class="nav-brand">
+    <a href="/" class="nav-home">TradingBot 콕핏</a>
+    <p class="nav-sub">읽기 · 후보 · 보호 우선</p>
+</div>
+
+<nav class="nav-menu" aria-label="메인 메뉴">
+    <div class="nav-section">
+        <span class="nav-section-title">홈</span>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Overview (홈)</NavLink>
+        </div>
+    </div>
+
+    <div class="nav-section">
+        <span class="nav-section-title">상태 · 보호</span>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="/bot-state">Bot State (봇 상태)</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="/live-lock">Live Lock (돈 보호)</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="/risk">Risk (리스크 게이트)</NavLink>
+        </div>
+    </div>
+
+    <div class="nav-section">
+        <span class="nav-section-title">후보 · 계좌</span>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="/candidates">Candidates (주문 후보)</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="/account">Account (계좌)</NavLink>
+        </div>
+    </div>
+
+    <div class="nav-section">
+        <span class="nav-section-title">기록 · 설정</span>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="/audit">Audit (감사 로그)</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="/settings">Settings (설정)</NavLink>
+        </div>
+    </div>
+</nav>
+
+<p class="nav-footer muted" role="note">
+    메뉴에 실주문·매수 실행 항목이 없습니다.
+</p>

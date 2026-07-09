@@ -1,0 +1,9 @@
+<section class="next-action" aria-label="다음 행동">
+    <h2>지금 내가 할 일</h2>
+    <p>@(string.IsNullOrWhiteSpace(Message) ? "특별한 조치 없음 — 안전 대기." : Message)</p>
+</section>
+
+@code {
+    [Parameter]
+    public string? Message { get; set; }
+}

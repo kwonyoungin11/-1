@@ -1,0 +1,102 @@
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+h1:focus {
+    outline: none;
+}
+
+h1 {
+    font-size: 1.35rem;
+    margin: 0 0 0.5rem;
+}
+
+h2 {
+    font-size: 1.1rem;
+    margin: 1.25rem 0 0.5rem;
+}
+
+.home-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin: 1rem 0;
+}
+
+.home-meta dt {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+}
+
+.home-meta dd {
+    margin: 0.15rem 0 0;
+    font-weight: 500;
+}
+
+.gate-list,
+.candidate-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.gate-item {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #64748b;
+    border-radius: 6px;
+    padding: 0.65rem 0.85rem;
+}
+
+.gate-item.severity-block {
+    border-left-color: #dc2626;
+}
+
+.gate-item.severity-warning {
+    border-left-color: #d97706;
+}
+
+.gate-item.severity-info {
+    border-left-color: #2563eb;
+}
+
+.gate-item p {
+    margin: 0.35rem 0 0;
+    color: #334155;
+    font-size: 0.9rem;
+}
+
+.candidate-list li {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.55rem 0.85rem;
+}
+
+.valid.modified:not([type=checkbox]) {
+    outline: 1px solid #26b050;
+}
+
+.invalid {
+    outline: 1px solid #e50000;
+}
+
+.validation-message {
+    color: #e50000;
+}
+
+.blazor-error-boundary {
+    background: #b32121;
+    padding: 1rem 1rem 1rem 1rem;
+    color: white;
+}
+
+.blazor-error-boundary::after {
+    content: "An error has occurred.";
+}

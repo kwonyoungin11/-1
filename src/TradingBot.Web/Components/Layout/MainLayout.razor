@@ -1,0 +1,38 @@
+@inherits LayoutComponentBase
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <header class="cockpit-header" role="banner">
+            <div class="cockpit-brand">
+                <strong>TradingBot</strong>
+                <span class="cockpit-subtitle">자동매매 콕핏 (읽기·연습)</span>
+            </div>
+            <div class="cockpit-safety-strip" aria-live="polite">
+                <span class="badge badge-lock">실거래 잠김</span>
+                <span class="badge badge-kill">긴급정지 ON</span>
+                <span class="badge badge-mode">모드: dry_run</span>
+                <span class="badge badge-live-off">실거래 허용 꺼짐</span>
+            </div>
+        </header>
+
+        <article class="content px-4">
+            @Body
+        </article>
+
+        <footer class="cockpit-footer">
+            <small>
+                시크릿·토큰·계좌 원문은 표시하지 않습니다. 실주문 버튼/HTTP는 없습니다.
+            </small>
+        </footer>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    오류가 발생했습니다.
+    <a href="." class="reload">다시 로드</a>
+    <span class="dismiss">🗙</span>
+</div>

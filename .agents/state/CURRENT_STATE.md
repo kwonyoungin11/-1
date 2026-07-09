@@ -1,6 +1,7 @@
 # CURRENT_STATE
 
 ```text
-Wave 03: Blazor cockpit home skeleton (parallel 3 agents)
+Wave 03: Blazor cockpit skeleton integrated
+Run: dotnet run --project src/TradingBot.Web
 live order: blocked
 ```

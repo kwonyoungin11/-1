@@ -1,0 +1,28 @@
+@using TradingBot.Ui
+
+<section class="risk-gates" aria-label="리스크 게이트">
+    <h2>리스크 게이트</h2>
+    @if (Rows is null || Rows.Count == 0)
+    {
+        <p>표시할 게이트가 없습니다.</p>
+    }
+    else
+    {
+        <ul>
+            @foreach (var row in Rows)
+            {
+                <li class="@(row.Passed ? "pass" : "block")">
+                    <strong>@(row.Passed ? "통과" : "차단")</strong>
+                    — @row.Title
+                    <div class="msg">@row.OwnerMessage</div>
+                    <code>@row.Code</code>
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<RiskGateRowViewModel>? Rows { get; set; }
+}

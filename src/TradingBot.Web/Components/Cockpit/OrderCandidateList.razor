@@ -1,0 +1,43 @@
+@using TradingBot.Ui
+
+<section class="candidates" aria-label="주문 후보">
+    <h2>주문 후보 <span class="tag">실주문 아님</span></h2>
+    @if (Rows is null || Rows.Count == 0)
+    {
+        <p>현재 후보 없음.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>종목</th>
+                    <th>방향</th>
+                    <th>수량</th>
+                    <th>가격</th>
+                    <th>상태</th>
+                    <th>실주문</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Rows)
+                {
+                    <tr>
+                        <td>@row.Symbol</td>
+                        <td>@row.Side</td>
+                        <td>@row.Quantity</td>
+                        <td>@(row.LimitPrice?.ToString() ?? "-")</td>
+                        <td>@row.Status</td>
+                        <td>@(row.IsLive ? "예" : "아니오")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="note">매수/매도 실행 버튼은 제공하지 않습니다.</p>
+    }
+</section>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<OrderCandidateRowViewModel>? Rows { get; set; }
+}

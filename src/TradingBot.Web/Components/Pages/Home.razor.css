@@ -1,0 +1,169 @@
+.cockpit-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.cockpit-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.cockpit-header h1 {
+    margin: 0 0 0.35rem;
+    font-size: 1.5rem;
+}
+
+.safety-headline {
+    margin: 0;
+    font-weight: 600;
+    color: #0f766e;
+}
+
+.kill-switch-badge {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.5rem 0.85rem;
+    text-align: center;
+}
+
+.kill-switch-badge .label {
+    display: block;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.kill-switch-badge .on {
+    color: #b45309;
+}
+
+.kill-switch-badge .off {
+    color: #b91c1c;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+@media (max-width: 640px) {
+    .card-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+}
+
+.card h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+}
+
+.status-big {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0.25rem 0;
+}
+
+.muted {
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.summary-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+}
+
+.summary-strip .label {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748b;
+    margin-bottom: 0.2rem;
+}
+
+.gate-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.gate-list li {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: baseline;
+}
+
+.gate-mark {
+    font-size: 0.8rem;
+    font-weight: 700;
+    min-width: 2.5rem;
+}
+
+.gate-block .gate-mark {
+    color: #b91c1c;
+}
+
+.gate-warning .gate-mark {
+    color: #b45309;
+}
+
+.gate-info .gate-mark {
+    color: #0369a1;
+}
+
+.candidates-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.candidates-table th,
+.candidates-table td {
+    text-align: left;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.overview-footer-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 0.5rem 0;
+}
+
+.overview-footer-nav a {
+    color: #0f766e;
+}
+
+.no-live-cta {
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+}
+
+.nav-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    color: #0f766e;
+    font-size: 0.9rem;
+}

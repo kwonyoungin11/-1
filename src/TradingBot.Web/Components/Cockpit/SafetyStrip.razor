@@ -1,0 +1,26 @@
+@using TradingBot.Ui
+@using TradingBot.Domain
+
+<section class="safety-strip" aria-label="안전 상태">
+    <h2 class="visually-hidden">안전 상태</h2>
+    <p class="headline">@Snapshot.SafetyHeadline</p>
+    <ul class="badges">
+        <li class="badge">실거래 잠금: @LiveLockLabel</li>
+        <li class="badge">긴급정지: @(Snapshot.KillSwitchActive ? "ON" : "OFF")</li>
+        <li class="badge">주문 모드: @Snapshot.OrderMode</li>
+        <li class="badge">실거래 허용: @(Snapshot.AllowLiveOrders ? "켜짐(주의)" : "꺼짐")</li>
+    </ul>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public CockpitSnapshot Snapshot { get; set; } = default!;
+
+    private string LiveLockLabel => Snapshot.LiveLock switch
+    {
+        LiveLockState.Locked => "잠김",
+        LiveLockState.UnlockPendingApproval => "승인 대기",
+        LiveLockState.Unlocked => "열림(주의)",
+        _ => "알 수 없음",
+    };
+}

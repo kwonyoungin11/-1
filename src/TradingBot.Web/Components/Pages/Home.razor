@@ -1,0 +1,53 @@
+@page "/"
+@rendermode InteractiveServer
+@using TradingBot.Ui
+@using TradingBot.Web.Services
+@using TradingBot.Web.Components.Cockpit
+@inject WebHarness Harness
+
+<PageTitle>홈 — TradingBot 콕핏</PageTitle>
+
+<h1>Overview (홈)</h1>
+<p class="lead">자동매매 상태 판단 화면입니다. 실주문 버튼이 없습니다.</p>
+
+@if (_dash is null)
+{
+    <p>불러오는 중…</p>
+}
+else
+{
+    <SafetyStrip Snapshot="_dash.Snapshot" />
+    <NextActionCard Message="@_dash.Snapshot.NextActionOwnerMessage" />
+    <AccountSummaryCard MaskedSummary="@_dash.Snapshot.AccountMaskedSummary" />
+
+    <section class="grid">
+        <div>
+            <h2>연결 / 시장</h2>
+            <p>연결: @_dash.Snapshot.ConnectionSummary</p>
+            <p>시장: @_dash.Snapshot.MarketSessionSummary</p>
+            <p>봇: @_dash.Snapshot.BotStateOwnerMessage</p>
+        </div>
+    </section>
+
+    <RiskGateList Rows="_dash.RiskGates" />
+    <OrderCandidateList Rows="_dash.OrderCandidates" />
+
+    <section>
+        <h2>최근 감사 (요약)</h2>
+        <ul>
+            @foreach (var line in _dash.Snapshot.RecentAuditLines)
+            {
+                <li>@line</li>
+            }
+        </ul>
+    </section>
+}
+
+@code {
+    private CockpitDashboardModel? _dash;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dash = await Harness.GetDashboardAsync();
+    }
+}
