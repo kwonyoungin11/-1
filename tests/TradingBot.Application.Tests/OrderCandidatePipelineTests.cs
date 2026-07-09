@@ -26,7 +26,7 @@ public class OrderCandidatePipelineTests
         Assert.True(result[0].IsAcceptedForDryRun);
         Assert.Equal("BUY", result[0].Candidate.Side);
         Assert.Equal(2m, result[0].Candidate.Quantity);
-        Assert.StartsWith("dry-", result[0].Candidate.ClientOrderId, StringComparison.Ordinal);
+        Assert.True(result[0].Candidate.ClientOrderId.StartsWith("cand-", StringComparison.Ordinal) || result[0].Candidate.ClientOrderId.StartsWith("dry-", StringComparison.Ordinal));
     }
 
     [Fact]

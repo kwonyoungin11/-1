@@ -40,7 +40,7 @@ public sealed class RiskGate
 
         if (!context.MarketSessionKnown || !context.MarketSessionOpen)
         {
-            blocks.Add(BlockedReason.MarketSessionClosed);
+            blocks.Add(BuildMarketSessionBlock(context));
         }
 
         var maxStale = settings.MarketDataMaxStalenessSeconds;
@@ -90,6 +90,34 @@ public sealed class RiskGate
         return blocks.Count == 0 ? RiskDecision.Allow() : RiskDecision.Block(blocks.ToArray());
     }
 
+    /// <summary>
+    /// Session-only gate for US NASDAQ calendar snapshot. Fail-closed when unknown or closed.
+    /// Does not evaluate quote staleness, notional, or live-path rules.
+    /// </summary>
+    public RiskDecision EvaluateSession(
+        UsMarketSessionSnapshot? snapshot,
+        DateTimeOffset? wallClockUtc = null)
+        => EvaluateSessionStatic(snapshot, wallClockUtc);
+
+    /// <summary>Static helper for tests and call sites without a <see cref="RiskGate"/> instance.</summary>
+    public static RiskDecision EvaluateSessionStatic(
+        UsMarketSessionSnapshot? snapshot,
+        DateTimeOffset? wallClockUtc = null)
+    {
+        var evaluation = UsMarketSessionGuard.Evaluate(snapshot, wallClockUtc);
+        if (evaluation.IsKnown && evaluation.IsOpenForOrders)
+        {
+            return RiskDecision.Allow();
+        }
+
+        var detail = evaluation.OwnerMessage;
+        var message = !evaluation.IsKnown
+            ? $"Market session is unknown. Orders blocked. {detail}"
+            : $"Market session is closed. Orders blocked. {detail}";
+
+        return RiskDecision.Block(new BlockedReason(BlockedReason.MarketSessionClosed.Code, message));
+    }
+
     public RiskDecision EvaluateLiveSubmission(TradingSafetySettings settings, LiveOrderContext context)
     {
         return _liveOrderGate.Evaluate(settings, context);
@@ -107,5 +135,18 @@ public sealed class RiskGate
         }
 
         return RiskDecision.Allow();
+    }
+
+    private static BlockedReason BuildMarketSessionBlock(CandidateRiskContext context)
+    {
+        if (!string.IsNullOrWhiteSpace(context.MarketSessionOwnerMessage))
+        {
+            var kind = !context.MarketSessionKnown ? "unknown" : "closed";
+            return new BlockedReason(
+                BlockedReason.MarketSessionClosed.Code,
+                $"Market session is {kind}. Orders blocked. {context.MarketSessionOwnerMessage}");
+        }
+
+        return BlockedReason.MarketSessionClosed;
     }
 }

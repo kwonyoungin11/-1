@@ -19,6 +19,18 @@ public class OrderRouterTests
     }
 
     [Fact]
+    public async Task Paper_accepts_without_live_submission()
+    {
+        var ledger = new InMemoryPaperLedger();
+        var router = new PaperOrderRouter(ledger);
+        var result = await router.RouteAsync(Sample(), CancellationToken.None);
+        Assert.True(result.Accepted);
+        Assert.Equal("Paper", result.Mode);
+        Assert.NotEqual("Live", result.Mode);
+        Assert.Equal(1, ledger.Count);
+    }
+
+    [Fact]
     public async Task BlockedLiveRouter_blocks_with_default_settings()
     {
         var router = new BlockedLiveOrderRouter(TradingSafetySettings.CreateSafeDefaults());

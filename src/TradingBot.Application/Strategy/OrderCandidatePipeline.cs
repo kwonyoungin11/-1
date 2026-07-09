@@ -16,11 +16,21 @@ public sealed class OrderCandidatePipeline
         DateTimeOffset nowUtc,
         bool marketSessionOpen = true,
         bool marketSessionKnown = true,
-        IReadOnlyDictionary<string, decimal>? positions = null)
+        IReadOnlyDictionary<string, decimal>? positions = null,
+        UsMarketSessionSnapshot? usMarket = null)
     {
         ArgumentNullException.ThrowIfNull(quotes);
         ArgumentNullException.ThrowIfNull(settings);
         positions ??= new Dictionary<string, decimal>();
+
+        string? sessionOwnerMessage = null;
+        if (usMarket is not null)
+        {
+            var session = UsMarketSessionGuard.Evaluate(usMarket, nowUtc);
+            marketSessionOpen = session.IsOpenForOrders;
+            marketSessionKnown = session.IsKnown;
+            sessionOwnerMessage = session.OwnerMessage;
+        }
 
         var results = new List<EvaluatedOrderCandidate>();
 
@@ -40,7 +50,7 @@ public sealed class OrderCandidatePipeline
                 OrderType: "LIMIT",
                 Quantity: qty,
                 LimitPrice: price,
-                ClientOrderId: $"dry-{signal.Symbol}-{nowUtc.ToUnixTimeMilliseconds()}",
+                ClientOrderId: $"cand-{signal.Symbol}-{nowUtc.ToUnixTimeMilliseconds()}",
                 CreatedAtUtc: nowUtc);
 
             positions.TryGetValue(signal.Symbol, out var pos);
@@ -56,11 +66,12 @@ public sealed class OrderCandidatePipeline
                 HasMissingData = price is null || qty <= 0,
                 MarketSessionOpen = marketSessionOpen,
                 MarketSessionKnown = marketSessionKnown,
+                MarketSessionOwnerMessage = sessionOwnerMessage,
             };
 
             var risk = _riskGate.EvaluateOrderCandidate(settings, ctx);
             var status = risk.Allowed
-                ? "dry-run 후보 허용 (실주문 아님)"
+                ? "후보 허용 (실주문 아님 — dry-run/paper 가능)"
                 : $"risk 차단: {string.Join(", ", risk.Blocks.Select(b => b.Code))}";
 
             results.Add(new EvaluatedOrderCandidate(candidate, signal, risk, status));

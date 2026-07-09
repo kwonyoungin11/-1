@@ -1,3 +1,5 @@
+using TradingBot.Domain;
+
 namespace TradingBot.Risk;
 
 /// <summary>Inputs for evaluating whether an order *candidate* may proceed to dry-run/paper.</summary>
@@ -14,4 +16,20 @@ public sealed record CandidateRiskContext
     public bool HasApiError { get; init; }
     public bool MarketSessionOpen { get; init; } = true;
     public bool MarketSessionKnown { get; init; } = true;
+
+    /// <summary>
+    /// Optional owner-facing session detail from <see cref="UsMarketSessionGuard"/>.
+    /// Used to enrich <see cref="BlockedReason.MarketSessionClosed"/> messages.
+    /// </summary>
+    public string? MarketSessionOwnerMessage { get; init; }
+
+    /// <summary>
+    /// Builds a context with US market session flags set from a calendar snapshot (fail-closed).
+    /// Prefer this (or <see cref="UsMarketSessionGuard.ApplyToContext"/>) in the pipeline.
+    /// </summary>
+    public static CandidateRiskContext BuildContextFromUsSnapshot(
+        CandidateRiskContext baseContext,
+        UsMarketSessionSnapshot? snapshot,
+        DateTimeOffset? wallClockUtc = null)
+        => UsMarketSessionGuard.ApplyToContext(baseContext, snapshot, wallClockUtc);
 }
