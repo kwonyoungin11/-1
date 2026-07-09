@@ -1,0 +1,62 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+secrets.json
+credentials.json
+appsettings.Production.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# User local overrides
+appsettings.*.local.json
+**/Properties/launchSettings.user.json
+
+# .NET build
+bin/
+obj/
+[Bb]uild/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+project.lock.json
+project.fragment.lock.json
+artifacts/bin/
+artifacts/obj/
+TestResults/
+coverage/
+coverage*.json
+coverage*.xml
+*.coverage
+*.coveragexml
+.vs/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tool caches
+.dotnet/
+.nuget/
+packages/
+node_modules/
+
+# Local runtime / paper ledgers may contain account data — keep out of git by default
+data/private/
+logs/private/
+*.ledger.local.json
+
+# OpenAPI full snapshot may be large; summary is tracked, full snapshot optional
+# artifacts/openapi/*.snapshot.json is allowed for contract pinning (no secrets)
+
+# Grok / agent local
+.agents/state/private/
+*.bak

@@ -1,0 +1,51 @@
+# Project-local Grok Build configuration
+# TradingBot — Toss Open API NASDAQ automation (C# / .NET)
+# Safety-first defaults. Secrets never hardcoded here.
+
+[project]
+name = "TradingBot"
+description = "C# / .NET Toss Securities Open API NASDAQ automated trading system"
+language = "csharp"
+primary_stack = ".NET"
+
+[safety]
+allow_live_orders_default = false
+kill_switch_default = true
+order_mode_default = "dry_run"
+fail_closed = true
+forbid_secret_stdout = true
+forbid_env_cat = true
+require_official_toss_docs = true
+
+[docs]
+toss_llms_txt = "https://developers.tossinvest.com/llms.txt"
+toss_overview = "https://openapi.tossinvest.com/openapi-docs/overview.md"
+toss_openapi_json = "https://openapi.tossinvest.com/openapi-docs/latest/openapi.json"
+context7_fallback_aliases = [
+  "CONTEXT7_API_KEY_1",
+  "CONTEXT7_API_KEY_2",
+  "CONTEXT7_API_KEY_3",
+  "CONTEXT7_API_KEY_4",
+  "CONTEXT7_API_KEY_5",
+  "CONTEXT7_API_KEY_6",
+]
+
+[verification]
+script = "scripts/grok/verify.sh"
+secret_scan = "scripts/grok/check-secrets.sh"
+trading_safety_scan = "scripts/grok/check-trading-safety.sh"
+owner_readiness = "scripts/grok/check-owner-readiness.sh"
+
+[hooks]
+pre_tool = ".grok/hooks/pre-tool-safety.sh"
+post_tool = ".grok/hooks/post-tool-reminders.sh"
+# Owner may need to run /hooks-trust before project hooks are enforced.
+
+[agents]
+directory = ".grok/agents"
+
+[skills]
+directory = ".grok/skills"
+
+[memory]
+state_file = ".agents/state/CURRENT_STATE.md"
