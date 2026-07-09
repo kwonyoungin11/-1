@@ -139,3 +139,12 @@ Toss has **REST only** per official OpenAPI 1.2.2 snapshot (2026-07-09) — no T
 ## Live readiness
 
 See `docs/LIVE_READINESS_CHECKLIST.md`. Until every item is evidenced: **live remains impossible**.
+
+## Worktree 필수 (오너 확정 2026-07-09)
+
+- **모든 개발 작업은 git worktree에서 진행한다.**
+- 기본 활성 작업 경로: `.worktrees/active-dev` (브랜치 `feature/worktree-all-dev`)
+- main 루트는 안정 정식본. 기능 구현을 main에서 직접 하지 않는다.
+- 상세: `docs/WORKTREE_POLICY.md`
+- 새 작업실: `bash scripts/grok/new-worktree.sh <이름> [브랜치]`
+

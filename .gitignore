@@ -63,3 +63,7 @@ logs/private/
 
 # Local agent/session noise
 .omo/
+
+# Git worktrees (isolated dev folders — never commit)
+.worktrees/
+worktrees/
