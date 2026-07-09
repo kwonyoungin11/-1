@@ -15,7 +15,12 @@ public sealed record PracticeStrategyContext(
     /// <summary>Owner news-day: halve size, no aggressive reprice (not auto news trading).</summary>
     bool NewsDay = false,
     /// <summary>Symbol regulatory warning / halt-style flag from data layer.</summary>
-    bool SymbolWarningActive = false)
+    bool SymbolWarningActive = false,
+    /// <summary>
+    /// Chart / cache candles for bar strategies (CERS etc.). Cap at display bar count.
+    /// Null when harness has not attached a series yet.
+    /// </summary>
+    IReadOnlyList<CandlePoint>? Candles = null)
 {
     /// <summary>Safe practice defaults (100k equity, 1% risk, 2% stop, 3% max daily loss).</summary>
     public static PracticeStrategyContext CreateSafeDefaults() => new();

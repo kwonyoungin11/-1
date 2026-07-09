@@ -21,7 +21,7 @@ public class StockKindSwitchTests
     }
 
     [Fact]
-    public void SetStockKind_비전마린_focus_vmar_scalp_preset_live_locked()
+    public void SetStockKind_비전마린_focus_vmar_cers_preset_live_locked()
     {
         var harness = CreateTestHarness();
         // Force non-default first so the switch itself is exercised.
@@ -33,10 +33,10 @@ public class StockKindSwitchTests
         Assert.Equal(StockMarketKind.비전마린, harness.Session.StockKind);
         Assert.Equal(WatchlistCatalog.VmarSymbol, harness.Session.ResolveFocusSymbol());
         Assert.Equal(new[] { WatchlistCatalog.VmarSymbol }, harness.Session.ResolveWatchSymbols());
-        Assert.Equal(VmarOneMinuteScalpPreset.Strategy, harness.Session.Strategy);
-        Assert.Equal(VmarOneMinuteScalpPreset.Timeframe, harness.Session.Timeframe);
-        Assert.Equal(TradingStrategyKind.일분분할스캘프, harness.Session.Strategy);
-        Assert.Equal(ChartTimeframe.분봉15, harness.Session.Timeframe);
+        Assert.Equal(CersPreset.Strategy, harness.Session.Strategy);
+        Assert.Equal(CersPreset.Timeframe, harness.Session.Timeframe);
+        Assert.Equal(TradingStrategyKind.CERS비용회귀, harness.Session.Strategy);
+        Assert.Equal(ChartTimeframe.분봉1, harness.Session.Timeframe);
         Assert.False(harness.IsLiveSubmissionEnabled);
         Assert.True(harness.GetEvidenceCounts().LiveBlocked);
     }
@@ -77,8 +77,8 @@ public class StockKindSwitchTests
         harness.SetStockKind(StockMarketKind.비전마린);
         Assert.Equal(StockMarketKind.비전마린, harness.Session.StockKind);
         Assert.Equal(WatchlistCatalog.VmarSymbol, harness.Session.ResolveFocusSymbol());
-        Assert.Equal(VmarOneMinuteScalpPreset.Strategy, harness.Session.Strategy);
-        Assert.Equal(VmarOneMinuteScalpPreset.Timeframe, harness.Session.Timeframe);
+        Assert.Equal(CersPreset.Strategy, harness.Session.Strategy);
+        Assert.Equal(CersPreset.Timeframe, harness.Session.Timeframe);
         Assert.False(harness.IsLiveSubmissionEnabled);
 
         // Round-trip VMAR → SPCX → VMAR → SPCX remains stable and live-locked.

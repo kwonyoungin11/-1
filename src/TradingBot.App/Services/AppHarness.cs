@@ -240,10 +240,11 @@ public sealed class AppHarness
         }
         else
         {
+            // Owner primary strategy: CERS cost-aware mean reversion on 1m (practice · live gated).
             session.StockKind = StockMarketKind.비전마린;
             session.FocusSymbol = WatchlistCatalog.VmarSymbol;
-            session.Strategy = VmarOneMinuteScalpPreset.Strategy;
-            session.Timeframe = VmarOneMinuteScalpPreset.Timeframe;
+            session.Strategy = CersPreset.Strategy;
+            session.Timeframe = CersPreset.Timeframe;
         }
 
         self = new AppHarness(
@@ -312,16 +313,22 @@ public sealed class AppHarness
             ? _session.StartingBalance
             : DefaultPracticeStartingBalance;
         var equity = _session.Balance > 0m ? _session.Balance : dayStart;
+        // Attach display-capped chart candles for bar strategies (CERS) / dashboard candidates.
+        var (candles, _, _) = GetChartData();
+        var stopLossPercent = _session.Strategy == TradingStrategyKind.CERS비용회귀
+            ? (decimal)(CersPreset.StopLossPct * 100.0) // 1.2
+            : 2m;
         return new PracticeStrategyContext(
             Equity: equity,
             RiskPercentPerTrade: 1m,
-            StopLossPercent: 2m,
+            StopLossPercent: stopLossPercent,
             MaxDailyLossPercent: 3m,
             DayStartEquity: dayStart,
             CurrentEquity: equity,
             TrendFollow: TrendFollowParameters.CreateSafeDefaults(),
             NewsDay: _newsDay,
-            SymbolWarningActive: _symbolWarningActive);
+            SymbolWarningActive: _symbolWarningActive,
+            Candles: candles);
     }
 
     /// <summary>Owner toggle: news/event day — size 50%, no aggressive limit chase.</summary>
@@ -461,8 +468,8 @@ public sealed class AppHarness
         }
         else
         {
-            _session.Strategy = VmarOneMinuteScalpPreset.Strategy;
-            SetTimeframe(VmarOneMinuteScalpPreset.Timeframe);
+            // VMAR default: CERS (owner primary), not 1m split scalp.
+            ApplyCersPresetCore();
         }
 
         _cachedRealCandles = null;
@@ -473,7 +480,40 @@ public sealed class AppHarness
         }
     }
 
-    public void SetStrategy(TradingStrategyKind strategy) => _session.Strategy = strategy;
+    /// <summary>
+    /// Apply CERS cost-aware mean-reversion preset (strategy + 1m TF).
+    /// Practice signals only · does not unlock live orders.
+    /// </summary>
+    public void SetCersPreset()
+    {
+        ApplyCersPresetCore();
+        _cachedRealCandles = null;
+        _cachedCandlesSymbol = null;
+        if (_isLiveReadOnlyConnected)
+        {
+            _chartCandleFetchFailedOrEmpty = true;
+        }
+    }
+
+    private void ApplyCersPresetCore()
+    {
+        _session.Strategy = CersPreset.Strategy;
+        // Avoid clearing cache twice when called from SetStockKind (caller clears after).
+        _session.Timeframe = CersPreset.Timeframe;
+    }
+
+    /// <summary>
+    /// Set practice strategy. Selecting <see cref="TradingStrategyKind.CERS비용회귀"/>
+    /// auto-applies 1m timeframe (same pattern as stock-kind presets).
+    /// </summary>
+    public void SetStrategy(TradingStrategyKind strategy)
+    {
+        _session.Strategy = strategy;
+        if (strategy == TradingStrategyKind.CERS비용회귀)
+        {
+            SetTimeframe(CersPreset.Timeframe);
+        }
+    }
 
     public void SetFocusSymbol(string symbol)
     {
@@ -515,10 +555,40 @@ public sealed class AppHarness
         var last = ResolveLastPrice(candles, symbol);
         var practice = BuildPracticeContext();
         var riskPercent = practice.EffectiveRiskPercentPerTrade;
-        if (_session.StockKind == StockMarketKind.비전마린
-            || string.Equals(symbol, WatchlistCatalog.VmarSymbol, StringComparison.OrdinalIgnoreCase))
+        var isScalp = _session.Strategy == TradingStrategyKind.일분분할스캘프;
+        if (isScalp
+            && (_session.StockKind == StockMarketKind.비전마린
+                || string.Equals(symbol, WatchlistCatalog.VmarSymbol, StringComparison.OrdinalIgnoreCase)))
         {
             riskPercent = Math.Min(riskPercent, VmarOneMinuteScalpPreset.RiskPercentPerTrade);
+        }
+
+        if (practice.SymbolWarningActive || riskPercent <= 0m)
+        {
+            return TradeBracketPlan.Invalid(
+                symbol,
+                "종목 경고 또는 리스크 0 — 지정가 계획 중단 · 실주문 없음");
+        }
+
+        var equity = practice.Equity > 0m ? practice.Equity : DefaultPracticeStartingBalance;
+
+        // CERS: fixed 1.2% stop; TP from last expected edge when computable,
+        // else EntryThreshold floor so display plan still has SL 1.2%.
+        if (_session.Strategy == TradingStrategyKind.CERS비용회귀)
+        {
+            var expected = CersMath.LastExpectedEdge(candles);
+            var edge = expected is double e
+                && e > 0
+                && !double.IsNaN(e)
+                && !double.IsInfinity(e)
+                ? e
+                : CersPreset.EntryThreshold;
+            return CersBracketPlanner.PlanLong(
+                symbol,
+                last,
+                edge,
+                equity,
+                riskPercentPerTrade: riskPercent);
         }
 
         var isVmar = _session.StockKind == StockMarketKind.비전마린
@@ -529,17 +599,11 @@ public sealed class AppHarness
             UseAtrStops = !isVmar,
             FallbackStopLossPercent = isVmar ? 2.0m : SpacexRiskParameters.CreateSafeDefaults().FallbackStopLossPercent,
         };
-        if (practice.SymbolWarningActive || riskPercent <= 0m)
-        {
-            return TradeBracketPlan.Invalid(
-                symbol,
-                "종목 경고 또는 리스크 0 — 지정가 계획 중단 · 실주문 없음");
-        }
         var trend = practice.TrendFollow ?? TrendFollowParameters.CreateSafeDefaults();
         return TradeBracketPlanner.PlanLongLimit(
             symbol,
             last,
-            practice.Equity > 0m ? practice.Equity : DefaultPracticeStartingBalance,
+            equity,
             risk,
             isVmar ? null : atr,
             trend);
