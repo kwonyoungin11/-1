@@ -36,6 +36,12 @@ public sealed record BlockedReason(string Code, string Message)
     public static BlockedReason MaxPositionSizeExceeded { get; } =
         new("max_position_size_exceeded", "Position size would exceed configured maximum.");
 
+    public static BlockedReason DailyLossLimitExceeded { get; } =
+        new("daily_loss_limit_exceeded", "Daily loss limit reached. New entries are blocked.");
+
+    public static BlockedReason DailyLossLimitDataInvalid { get; } =
+        new("daily_loss_limit_data_invalid", "Daily loss guard inputs are invalid or missing. Fail-closed block.");
+
     public static BlockedReason MarketSessionClosed { get; } =
         new("market_session_closed", "Market session is closed or unknown. Orders blocked.");
 

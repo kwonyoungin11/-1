@@ -8,6 +8,7 @@ public class OrderCandidateRiskTests
     private static TradingSafetySettings Settings(
         decimal? maxNotional = null,
         decimal? maxPos = null,
+        decimal? maxDailyLoss = null,
         int stale = 5) => new()
     {
         AllowLiveOrders = false,
@@ -15,6 +16,7 @@ public class OrderCandidateRiskTests
         OrderMode = OrderMode.DryRun,
         MaxOrderNotional = maxNotional,
         MaxPositionSize = maxPos,
+        MaxDailyLoss = maxDailyLoss,
         MarketDataMaxStalenessSeconds = stale,
     };
 
@@ -347,5 +349,69 @@ public class OrderCandidateRiskTests
 
         var decision = new RiskGate().EvaluateOrderCandidate(settings, OkContext(now));
         Assert.True(decision.Allowed);
+    }
+
+    // --- daily loss (optional MaxDailyLoss) ---
+
+    [Fact]
+    public void Max_daily_loss_not_configured_skips_daily_loss_check()
+    {
+        var now = DateTimeOffset.Parse("2026-07-09T15:00:00Z");
+        // Equity would breach a 1k limit if configured; without MaxDailyLoss, allow.
+        var ctx = OkContext(now) with
+        {
+            DayStartEquity = 100_000m,
+            CurrentEquity = 90_000m,
+        };
+        var decision = new RiskGate().EvaluateOrderCandidate(Settings(maxDailyLoss: null), ctx);
+        Assert.True(decision.Allowed);
+        Assert.DoesNotContain(decision.Blocks, b => b.Code == BlockedReason.DailyLossLimitExceeded.Code);
+    }
+
+    [Fact]
+    public void Max_daily_loss_exceeded_blocks_candidate()
+    {
+        var now = DateTimeOffset.Parse("2026-07-09T15:00:00Z");
+        var ctx = OkContext(now) with
+        {
+            DayStartEquity = 100_000m,
+            CurrentEquity = 98_500m, // loss 1500
+        };
+        var decision = new RiskGate().EvaluateOrderCandidate(Settings(maxDailyLoss: 1_000m), ctx);
+        Assert.True(decision.IsBlocked);
+        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.DailyLossLimitExceeded.Code);
+    }
+
+    [Fact]
+    public void Max_daily_loss_below_limit_allows()
+    {
+        var now = DateTimeOffset.Parse("2026-07-09T15:00:00Z");
+        var ctx = OkContext(now) with
+        {
+            DayStartEquity = 100_000m,
+            CurrentEquity = 99_500m, // loss 500 < 1000
+        };
+        var decision = new RiskGate().EvaluateOrderCandidate(Settings(maxDailyLoss: 1_000m), ctx);
+        Assert.True(decision.Allowed);
+    }
+
+    [Fact]
+    public void Max_daily_loss_configured_without_equity_blocks_fail_closed()
+    {
+        var now = DateTimeOffset.Parse("2026-07-09T15:00:00Z");
+        var ctx = OkContext(now); // no DayStartEquity / CurrentEquity
+        var decision = new RiskGate().EvaluateOrderCandidate(Settings(maxDailyLoss: 1_000m), ctx);
+        Assert.True(decision.IsBlocked);
+        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.DailyLossLimitDataInvalid.Code);
+    }
+
+    [Fact]
+    public void Max_daily_loss_partial_equity_blocks_fail_closed()
+    {
+        var now = DateTimeOffset.Parse("2026-07-09T15:00:00Z");
+        var ctx = OkContext(now) with { DayStartEquity = 100_000m, CurrentEquity = null };
+        var decision = new RiskGate().EvaluateOrderCandidate(Settings(maxDailyLoss: 1_000m), ctx);
+        Assert.True(decision.IsBlocked);
+        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.DailyLossLimitDataInvalid.Code);
     }
 }
