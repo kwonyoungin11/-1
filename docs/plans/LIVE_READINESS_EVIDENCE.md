@@ -2,7 +2,7 @@
 
 **Status: LIVE REMAINS BLOCKED (`LIVE_READY=false`)**  
 **Date baseline: 2026-07-09**  
-**Worktree snapshot: `feature/pw05-phase6` (docs-only Phase 6 map)**
+**Worktree snapshot: `feature/pw06-readiness` (WAVE 06 — pre-live code vs ops honesty)**
 
 This document explains **how** readiness evidence is collected and verified, and maps  
 **current codebase artifacts** to [`docs/LIVE_READINESS_CHECKLIST.md`](../LIVE_READINESS_CHECKLIST.md).
@@ -16,12 +16,61 @@ It does **not** authorize live orders. Until every checklist item has reproducib
 
 | 항목 | 값 |
 |------|-----|
-| 실거래 가능? | **아니오** |
+| 실거래 가능? | **아니오** (`LIVE_READY=false`) |
+| Pre-live **code** | **완료** (Phase 0–5 엔지니어링 + mock/dry-run/paper unit/cockpit/safety) |
+| Phase 6 **ops/owner** | **갭 남음** (다일 paper, 실 스모크, incident 날짜, Phase 7 서명 등) |
 | 기계 게이트 | `check-live-readiness.sh` → `LIVE_READY=false` + exit 0 (정상 차단) |
 | 안전 스캔 | `check-trading-safety.sh` PASSED |
 | 단위 테스트 | `dotnet test` 실패 0 (2026-07-09, 이 worktree) |
 | 주문 API | **미구현** · `SubmitOrderAsync` 없음 · `BlockedLiveOrderRouter` / `BlockedTossOrderClient` |
-| 다음 | paper 기간 증거 · (선택) 읽기 스모크 · 오너 Phase 7 승인 전 개방 금지 |
+| 다음 | multi-day paper ops · (선택) redacted 읽기 스모크 · incident drill · 오너 Phase 7 전 개방 금지 |
+
+---
+
+## 0b. Pre-live development complete (code)
+
+Honest split: **engineering finished for practice/read-only path** vs **ops that still block live**.
+
+| Done in code (do not re-label as “dev incomplete”) | Evidence anchors |
+|---------------------------------------------------|------------------|
+| Safety defaults fail-closed | `TradingSafetyDefaults.cs` · `.env.example` · harness hard-codes |
+| Mock Toss read portfolio path | `MockTossClients` · fixtures · `ReadOnlyPortfolioServiceTests` |
+| Gated live HTTP read clients (stub-tested) | `LiveTossAuth/Account/MarketDataClient` · `LiveHttpGuard` · `LiveTossHttpClientTests` |
+| No live order submit path | no `SubmitOrderAsync` · `BlockedTossOrderClient` · `BlockedLiveOrderRouter` |
+| Strategy signals + order candidates | `StrategyCatalog` · `OrderCandidatePipeline` · Application tests |
+| Risk / LiveOrderGate unit core | `RiskGate` · `LiveOrderGate` · `UsMarketSessionGuard` · Risk.Tests |
+| Dry-run unit | `DryRunOrderRouter` · `InMemoryDryRunLedger` · `DryRunLedgerTests` |
+| Paper **unit** (not multi-day ops) | `PaperOrderRouter` · `InMemoryPaperLedger` · `PaperLedgerTests` · `EvidenceBuilderTests` (`LiveModePresent=false`) |
+| Idempotency **field present** | `OrderCandidate.ClientOrderId` generated in pipeline — **not** a duplicate-submit store |
+| Cockpit live lock / kill UI | `CockpitSnapshot` · Web `LiveLock`/`SafetyStrip` · Avalonia safety strip · Ui tests |
+| Audit redaction | Domain + Observability redactor tests |
+| OpenAPI 1.2.2 snapshot on disk | `artifacts/openapi/toss-openapi.snapshot.json` |
+| Readiness automation expects block | `check-live-readiness.sh` → `LIVE_READY=false` |
+
+**Code conclusion:** Pre-live development for the safe practice pipeline is **complete**.  
+Claiming “live ready” still requires the ops/owner section below — which is **not** done.
+
+---
+
+## 0c. Still blocks live (ops/owner — not "dev incomplete")
+
+Do **not** mark these complete without dated artifacts / owner action.
+
+| Blocker | Status | Notes |
+|---------|--------|-------|
+| Multi-day paper ops log | **Missing** | Unit paper ≠ period stability. Need redacted ledger export under `artifacts/` |
+| Owner-approved redacted Toss read smoke | **Missing** | Optional for daily work; **required before claiming live-ready connectivity**. Never commit tokens |
+| OpenAPI re-fetch / drift ops log | **Missing log** | Scripts exist; attach dated re-verify when run |
+| gitleaks/trivy as hard gate | **Optional / not hard** | `verify.sh` non-fatal today |
+| Duplicate-submit / idempotency **store** | **Not implemented** | `ClientOrderId` field only — design before any live submit |
+| Account reconcile + full live limits | **Not evidenced** | Beyond pre-live unit Max* |
+| Incident drill **date** | **Missing** | Procedure doc only: `docs/INCIDENT_RESPONSE.md` |
+| Owner walkthrough completion note | **Missing date** | Doc exists; no owner signature/date |
+| Owner Phase 7 signature | **Absent (intentional)** | Automation must never invent this |
+| Final gate E all true simultaneously | **Not met** | Defaults remain blocked |
+
+**LIVE_READY stays false** until these are evidenced **and** owner Phase 7 process completes.  
+Multi-day paper, real Toss smoke, incident date, and Phase 7 signature are **explicitly not done**.
 
 ---
 
@@ -111,49 +160,51 @@ Use this when updating `LIVE_READINESS_CHECKLIST.md`. Store ops artifacts under
 
 | Checklist item | Status | How / where |
 |----------------|--------|-------------|
-| .NET SDK + `dotnet test` | **Evidence** | `dotnet --info` (SDK 10.x) · `dotnet test TradingBot.sln` · or `bash scripts/grok/dev-loop.sh` |
-| `.env` untracked | **Evidence** | `git check-ignore -v .env` · `.gitignore` lines `.env` / `.env.*` · `check-secrets.sh` |
-| Secret scan | **Evidence** | `bash scripts/grok/check-secrets.sh` |
-| gitleaks/trivy | **Partial** | `verify.sh` runs if installed, **non-fatal**. Install: see `docs/MACOS_SETUP.md` |
-| No secret/account in logs | **Evidence (unit)** | `tests/TradingBot.Domain.Tests/TradingSafetyDefaultsTests.cs` (`SecretRedactor`) · `tests/TradingBot.Observability.Tests/AuditMessageRedactorTests.cs` · `DomainTossRedactor` |
+| .NET SDK + `dotnet test` | **Evidence (code)** | `dotnet --info` (SDK 10.x) · `dotnet test TradingBot.sln` · or `bash scripts/grok/dev-loop.sh` |
+| `.env` untracked | **Evidence (code)** | `git check-ignore -v .env` · `.gitignore` · `check-secrets.sh` |
+| Secret scan | **Evidence (code)** | `bash scripts/grok/check-secrets.sh` |
+| gitleaks/trivy | **Partial (ops/CI)** | `verify.sh` runs if installed, **non-fatal**. Install: see `docs/MACOS_SETUP.md` |
+| No secret/account in logs | **Evidence (unit)** | `TradingSafetyDefaultsTests` · `AuditMessageRedactorTests` · `DomainTossRedactor` |
 
 ### B. Toss connection (read-only)
 
 | Checklist item | Status | How / where |
 |----------------|--------|-------------|
-| Official OpenAPI snapshot | **Evidence** | `artifacts/openapi/toss-openapi.snapshot.json` (v **1.2.2**) · notes: `docs/TOSS_OPENAPI_NOTES.md`, `docs/TOSS_SPEC_SNAPSHOT.md` |
-| Snapshot freshness process | **Partial** | `scripts/grok/fetch-toss-openapi-spec.sh` + `check-toss-openapi-diff.sh` — re-run and attach log when refreshing |
-| OAuth / mock | **Evidence** | `tests/.../Fixtures/oauth_token.json` · `MockTossClients` · `LiveTossHttpClientTests` stub token path |
-| Live HTTP clients (read) | **Code + stub tests** | `src/TradingBot.Infrastructure.Toss/Http/LiveTossAuthClient.cs` · `LiveTossAccountClient.cs` · `LiveTossMarketDataClient.cs` · factory `TossReadOnlyFactory` |
-| Live HTTP guard | **Evidence** | `LiveHttpGuard` · `TOSS_ALLOW_LIVE_HTTP` default false · tests in `ReadOnlyPortfolioServiceTests`, `LiveTossHttpClientTests` |
-| accounts / holdings / prices / calendar | **Mock evidence** | Fixtures under `tests/TradingBot.Infrastructure.Toss.Tests/Fixtures/` · `ReadOnlyPortfolioServiceTests` · `TossDtoMapperTests` |
-| No order HTTP on read path | **Evidence (stub)** | `LiveTossHttpClientTests` asserts paths exclude `orders` |
-| Order client disabled | **Evidence** | `BlockedTossOrderClient` · `BlockedOrderClientTests` · safety scan `IsLiveSubmissionEnabled => false` |
-| Real sandbox smoke | **Missing ops log** | Owner-local only: set credentials in `.env`, `TOSS_ALLOW_LIVE_HTTP=true`, run read-only smoke, save **redacted** log to `artifacts/` — never commit tokens |
-| rate limit / errors | **Partial** | Documented notes; dedicated retry/rate-limit tests still thin |
-| redaction | **Evidence** | Domain + Observability redactor tests |
+| Official OpenAPI snapshot | **Evidence (code artifact)** | `artifacts/openapi/toss-openapi.snapshot.json` (v **1.2.2**) · notes docs |
+| Snapshot freshness process | **Partial (ops log missing)** | `fetch-toss-openapi-spec.sh` + `check-toss-openapi-diff.sh` — re-run and attach log |
+| OAuth / mock | **Evidence (code)** | fixtures · `MockTossClients` · stub token path tests |
+| Live HTTP clients (read) | **Code + stub tests** | `LiveToss*Client` · `TossReadOnlyFactory` |
+| Live HTTP guard | **Evidence (code)** | `LiveHttpGuard` · `TOSS_ALLOW_LIVE_HTTP` default false |
+| accounts / holdings / prices / calendar | **Mock evidence (code)** | Fixtures · `ReadOnlyPortfolioServiceTests` · `TossDtoMapperTests` |
+| No order HTTP on read path | **Evidence (stub)** | `LiveTossHttpClientTests` excludes `orders` |
+| Order client disabled | **Evidence (code)** | `BlockedTossOrderClient` · safety scan |
+| Real sandbox smoke | **Missing ops/owner log** | Owner-local only; redacted log to `artifacts/` — **not done** |
+| rate limit / errors | **Partial** | Notes; dedicated tests thin |
+| redaction | **Evidence (code)** | Domain + Observability |
 
 ### C. Risk / orders
 
 | Checklist item | Status | How / where |
 |----------------|--------|-------------|
-| Risk gate rules + tests | **Partial (solid unit core)** | `src/TradingBot.Risk/RiskGate.cs` · `LiveOrderGate.cs` · `UsMarketSessionGuard.cs` · tests: `OrderCandidateRiskTests`, `LiveOrderGateTests`, `UsMarketSessionGuardTests` |
-| Dry-run stable (unit) | **Evidence** | `DryRunOrderRouter` · `InMemoryDryRunLedger` · `tests/TradingBot.Orders.Tests/DryRunLedgerTests.cs` · `OrderRouterTests` |
-| Paper ledger (unit) | **Evidence** | `PaperOrderRouter` · `InMemoryPaperLedger` · `PaperLedgerTests` · phase note `docs/plans/PHASE_05_paper.md` |
-| Evidence aggregation | **Evidence** | `EvidenceBuilder` · `EvidenceBuilderTests` asserts `LiveModePresent == false` |
-| Multi-day paper ops | **Missing** | Need dated paper ledger export / session notes under `artifacts/` (no secrets, no profit claims) |
-| Manual approval UX | **Partial** | Gate flag `ManualApprovalPresent` · UI: `LiveLock.razor`, safety strip — **no live unlock control** (by design) |
-| Idempotency / duplicate | **Partial / missing guard** | `OrderCandidate.ClientOrderId` generated in `OrderCandidatePipeline` · no dedicated duplicate-submit store/tests yet |
-| Live impl still disabled | **Evidence** | `BlockedLiveOrderRouter` · `LiveOrderGate` + `LiveImplementationEnabled=false` · `check-live-readiness.sh` + `check-trading-safety.sh` · no `SubmitOrderAsync` in `src` |
+| Risk gate core + tests | **Evidence (pre-live code)** | `RiskGate` · `LiveOrderGate` · `UsMarketSessionGuard` · Risk.Tests |
+| Full live limits / reconcile | **Missing ops/design** | Not multi-day paper; still blocks claiming live-ready limits |
+| Dry-run stable (unit) | **Evidence (code)** | `DryRunOrderRouter` · `DryRunLedgerTests` · `OrderRouterTests` |
+| Paper ledger (unit) | **Evidence (code)** | `PaperOrderRouter` · `PaperLedgerTests` · `PHASE_05_paper.md` |
+| Evidence aggregation | **Evidence (code)** | `EvidenceBuilder` · `LiveModePresent == false` |
+| Multi-day paper ops | **Missing (ops)** | **Do not mark done** without dated export under `artifacts/` |
+| Manual approval UX | **Partial** | Flag + lock UI; no live unlock control (by design) |
+| Idempotency field | **Present (code)** | `ClientOrderId` in candidate pipeline |
+| Idempotency / duplicate store | **Missing** | No dedicated store/tests yet — not “multi-day paper” but still blocks live claims |
+| Live impl still disabled | **Evidence (code)** | `BlockedLiveOrderRouter` · no `SubmitOrderAsync` · readiness + safety scripts |
 
 ### D. UX / operations
 
 | Checklist item | Status | How / where |
 |----------------|--------|-------------|
-| Live lock / kill switch clear | **Evidence (UI code + unit)** | `src/TradingBot.Ui/CockpitSnapshot.cs` (`IsLiveTradingVisuallyOpen` requires all open flags) · Web `Components/Pages/LiveLock.razor` · `SafetyStrip.razor` · Avalonia projector messages · `TradingBot.Ui.Tests` |
-| Owner understands state | **Partial** | `docs/cockpit/OWNER_WALKTHROUGH.md` · Korean owner copy — needs owner completion note with date |
-| Incident response drill | **Missing date** | Procedure: `docs/INCIDENT_RESPONSE.md` — add dated rehearsal record when done |
-| Owner live-approval signature | **Missing** | Not created by automation; required only for Phase 7 |
+| Live lock / kill switch clear | **Evidence (code + unit)** | `CockpitSnapshot` · Web/Avalonia safety surfaces · Ui.Tests |
+| Owner understands state | **Partial (owner)** | `OWNER_WALKTHROUGH.md` — needs dated owner completion note |
+| Incident response drill | **Missing date (ops)** | `INCIDENT_RESPONSE.md` — **no rehearsal date recorded** |
+| Owner live-approval signature | **Missing (owner Phase 7)** | Not created by automation |
 
 ### E. Final gate (all required)
 
@@ -176,16 +227,16 @@ ORDER_MODE=dry_run
 | manual approval exists | Flag only; ops flow incomplete |
 | session open | Unit guard only |
 | market data fresh | Unit staleness rule only |
-| risk gate pass | Core unit rules; full live limits incomplete |
+| risk gate pass | Pre-live core unit rules |
 | dry-run pass | Unit OK |
-| paper trading stable | Unit OK; multi-day missing |
-| valid Toss credential | Local owner secret; no committed smoke |
+| paper trading stable | Unit OK; **multi-day missing** |
+| valid Toss credential | Local owner secret; **no committed smoke** |
 | account reconciled | Not evidenced |
 | limits ok | Partial Max* settings |
 | duplicate guard pass | Not evidenced |
 | idempotency key present | ClientOrderId field only |
 | audit log enabled | `InMemoryAuditLog` unit |
-| operator confirms live | No signature |
+| operator confirms live | **No Phase 7 signature** |
 
 ---
 
@@ -208,12 +259,13 @@ dotnet test TradingBot.sln --nologo
 
 | Project | What it proves |
 |---------|----------------|
-| `tests/TradingBot.Domain.Tests` | Fail-closed defaults · secret mask |
+| `tests/TradingBot.Domain.Tests` | Fail-closed defaults · secret mask · strategy catalog |
+| `tests/TradingBot.Application.Tests` | Candidate pipeline · strategy signals · auto-trade session |
 | `tests/TradingBot.Risk.Tests` | LiveOrderGate blocks · candidate risk · session guard |
-| `tests/TradingBot.Orders.Tests` | Dry-run / paper ledgers · blocked live router · evidence builder never live |
-| `tests/TradingBot.Infrastructure.Toss.Tests` | Mock portfolio · live HTTP guard · stub read path without orders · blocked order client |
+| `tests/TradingBot.Orders.Tests` | Dry-run / paper ledgers · blocked live router · evidence never live |
+| `tests/TradingBot.Infrastructure.Toss.Tests` | Mock portfolio · live HTTP guard · stub read without orders · blocked order client |
 | `tests/TradingBot.Observability.Tests` | Audit redaction |
-| `tests/TradingBot.Ui.Tests` / `Web.Tests` / `App.Tests` / `Runner.Tests` | Cockpit/harness surfaces still show blocked live |
+| `tests/TradingBot.Ui.Tests` / `Web.Tests` / `App.Tests` / `Runner.Tests` | Cockpit/harness still show blocked live |
 
 ### Key source anchors (do not weaken)
 
@@ -237,6 +289,7 @@ dotnet test TradingBot.sln --nologo
 - A **fail** with `broken` is a safety stop — do not weaken the gate to “fix” tests.
 - Opening live requires owner phase-7 process outside this automation (see checklist E + `docs/OWNER_PLAYBOOK.md`).
 - **Do not confuse** `docs/DEV_LOOP.md` (engineering quality loop) with a live-trading loop.
+- **Pre-live code complete** + **dev-loop green** still means **live blocked**.
 
 ---
 
@@ -248,6 +301,8 @@ dotnet test TradingBot.sln --nologo
 - Do not commit tokens, account numbers, or raw `.env`.
 - Do not claim multi-day paper stability from unit tests alone.
 - Do not claim real Toss connectivity from mock/stub tests alone.
+- Do not mark multi-day paper, owner Phase 7 signature, or real Toss smoke as done when artifacts/signatures are absent.
+- Do not reclassify remaining ops/owner blockers as “development incomplete” when the practice pipeline code already exists.
 
 ---
 
@@ -275,5 +330,15 @@ bash scripts/grok/dev-loop.sh   # development only; not live trading
 5. Save redacted log under artifacts/ (no tokens/account numbers)
 ```
 
-**Bottom line:** Evidence collection is automated for *blocking integrity*.  
-Live trading remains **not ready** until human checklist A–E is fully evidenced and owner-approved.
+### Multi-day paper ops (still required before live claims)
+
+```text
+1. Agree owner paper period (calendar days / sessions)
+2. Run paper path only (ORDER_MODE=paper or project paper mode; never live)
+3. Export redacted ledger / session notes to artifacts/ with dates
+4. No profit guarantees in logs or owner reports
+5. Attach path in checklist C — only then mark multi-day paper evidenced
+```
+
+**Bottom line:** Pre-live **code** evidence is in place. Ops/owner evidence is **not**.  
+Live trading remains **not ready** (`LIVE_READY=false`) until human checklist A–E ops items are fully evidenced and owner-approved. Phase 7 remains **forbidden**.
