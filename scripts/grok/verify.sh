@@ -11,6 +11,10 @@ bash ./scripts/grok/check-owner-readiness.sh
 bash ./scripts/grok/check-live-readiness.sh
 # MANDATORY: parallel worktrees + max agents (owner policy)
 bash ./scripts/grok/check-parallel-policy.sh
+# Non-blocking: machine-readable recommend→implement loop stop (LOOP_STOP token)
+if [[ -x ./scripts/grok/check-recommend-implement-loop.sh ]] || [[ -f ./scripts/grok/check-recommend-implement-loop.sh ]]; then
+  bash ./scripts/grok/check-recommend-implement-loop.sh || echo "warning: check-recommend-implement-loop non-blocking (safety already gated above)"
+fi
 
 if ! command -v dotnet >/dev/null 2>&1; then
   echo "warning: dotnet SDK not installed — skipping restore/build/test"
