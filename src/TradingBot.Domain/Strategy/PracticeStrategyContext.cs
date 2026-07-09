@@ -16,7 +16,10 @@ public sealed record PracticeStrategyContext(
     bool NewsDay = false,
     /// <summary>Symbol regulatory warning / halt-style flag from data layer.</summary>
     bool SymbolWarningActive = false,
-    /// <summary>Optional candle series for candle-aware strategies (CERS). Null → fail-closed hold.</summary>
+    /// <summary>
+    /// Chart / cache candles for bar strategies (CERS etc.). Cap at display bar count.
+    /// Null when harness has not attached a series yet — CERS fails closed (hold).
+    /// </summary>
     IReadOnlyList<CandlePoint>? Candles = null,
     /// <summary>Optional open CERS long for exit evaluation. Null = flat.</summary>
     CersOpenPosition? CersPosition = null)

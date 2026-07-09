@@ -27,22 +27,25 @@ public class AppHarnessTests
         Assert.Equal(StockMarketKind.비전마린, harness.Session.StockKind);
         Assert.Equal(new[] { WatchlistCatalog.VmarSymbol }, harness.Session.ResolveWatchSymbols());
         Assert.Equal(WatchlistCatalog.VmarSymbol, harness.Session.ResolveFocusSymbol());
-        Assert.Equal(VmarOneMinuteScalpPreset.Strategy, harness.Session.Strategy);
-        Assert.Equal(ChartTimeframe.분봉15, harness.Session.Timeframe);
+        // Owner primary: CERS on 1m (replaces prior 일분분할스캘프 / 15m default).
+        Assert.Equal(CersPreset.Strategy, harness.Session.Strategy);
+        Assert.Equal(CersPreset.Timeframe, harness.Session.Timeframe);
+        Assert.Equal(TradingStrategyKind.CERS비용회귀, harness.Session.Strategy);
+        Assert.Equal(ChartTimeframe.분봉1, harness.Session.Timeframe);
         Assert.False(harness.IsLiveSubmissionEnabled);
         Assert.True(harness.GetEvidenceCounts().LiveBlocked);
     }
 
     [Fact]
-    public void SetStockKind_vmar_applies_scalp_preset_and_keeps_live_locked()
+    public void SetStockKind_vmar_applies_cers_preset_and_keeps_live_locked()
     {
         var harness = CreateTestHarness();
         harness.SetStockKind(StockMarketKind.비전마린);
         Assert.Equal(StockMarketKind.비전마린, harness.Session.StockKind);
         Assert.Equal(WatchlistCatalog.VmarSymbol, harness.Session.ResolveFocusSymbol());
         Assert.Equal(new[] { WatchlistCatalog.VmarSymbol }, harness.Session.ResolveWatchSymbols());
-        Assert.Equal(VmarOneMinuteScalpPreset.Strategy, harness.Session.Strategy);
-        Assert.Equal(VmarOneMinuteScalpPreset.Timeframe, harness.Session.Timeframe);
+        Assert.Equal(CersPreset.Strategy, harness.Session.Strategy);
+        Assert.Equal(CersPreset.Timeframe, harness.Session.Timeframe);
         Assert.False(harness.IsLiveSubmissionEnabled);
 
         harness.SetStockKind(StockMarketKind.스페이스X);
@@ -114,10 +117,17 @@ public class AppHarnessTests
         var plan = harness.GetActiveBracketPlan();
         Assert.Equal(WatchlistCatalog.VmarSymbol, plan.Symbol);
         Assert.Equal("LIMIT", plan.OrderType);
+        Assert.True(plan.IsValid, plan.OwnerMessage);
         Assert.True(plan.EntryLimit > 0m);
         Assert.True(plan.StopPrice < plan.EntryLimit);
         Assert.True(plan.TakeProfitPrice > plan.EntryLimit);
-        Assert.Contains("실주문 잠금", plan.OwnerMessage, StringComparison.Ordinal);
+        // Default CERS: SL = entry × (1 − 1.2%).
+        Assert.Equal(
+            plan.EntryLimit * (1m - (decimal)CersPreset.StopLossPct),
+            plan.StopPrice);
+        Assert.True(
+            plan.OwnerMessage.Contains("실주문 잠금", StringComparison.Ordinal)
+            || plan.OwnerMessage.Contains("실주문", StringComparison.Ordinal));
         Assert.False(harness.IsLiveSubmissionEnabled);
     }
 
@@ -497,7 +507,7 @@ public class AppHarnessTests
             {
                 StockKind = StockMarketKind.비전마린,
                 FocusSymbol = WatchlistCatalog.VmarSymbol,
-                Strategy = VmarOneMinuteScalpPreset.Strategy,
+                Strategy = CersPreset.Strategy,
                 Timeframe = timeframe,
             });
     }
