@@ -22,6 +22,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool _suppressSelectionEcho;
     private IReadOnlyList<CandlePoint> _chartCandles = Array.Empty<CandlePoint>();
     private string _baseOhlcStatusLine = "—";
+    private CancellationTokenSource? _tradeLoopCts;
 
     public MainWindowViewModel()
         : this(AppHarness.CreateDefault())
@@ -47,32 +48,16 @@ public partial class MainWindowViewModel : ViewModelBase
 
         // Suppress selection handlers during initial harness/VM bind-up.
         _suppressSelectionEcho = true;
-        if (_harness.IsLiveSubmissionEnabled)
-        {
-            _harness.SetStockKind(StockMarketKind.스페이스X);
-            SelectedStockKind = StockMarketKind.스페이스X.ToString();
-            SelectedSymbol = WatchlistCatalog.SpaceXSymbol;
-            _harness.SetFocusSymbol(WatchlistCatalog.SpaceXSymbol);
-            SelectedTimeframe = ChartTimeframeCatalog.UiLabel(SpacexOfficialStrategyPreset.Timeframe);
-            _harness.SetTimeframe(SpacexOfficialStrategyPreset.Timeframe);
-            SelectedStrategy = SpacexOfficialStrategyPreset.Strategy.ToString();
-            _harness.SetStrategy(SpacexOfficialStrategyPreset.Strategy);
-            OfficialStrategyLabel = SpacexOfficialStrategyPreset.OwnerSummary;
-            RecommendedStrategyNote = SpacexOfficialStrategyPreset.OwnerSummary;
-        }
-        else
-        {
-            // Owner primary practice: VMAR + CERS (exact backtest params · live still gated).
-            _harness.SetStockKind(StockMarketKind.비전마린);
-            _harness.SetCersPreset();
-            SelectedStockKind = StockMarketKind.비전마린.ToString();
-            SelectedSymbol = WatchlistCatalog.VmarSymbol;
-            _harness.SetFocusSymbol(WatchlistCatalog.VmarSymbol);
-            SelectedStrategy = CersPreset.Strategy.ToString();
-            SelectedTimeframe = ChartTimeframeCatalog.UiLabel(CersPreset.Timeframe);
-            OfficialStrategyLabel = CersPreset.OwnerSummary;
-            RecommendedStrategyNote = CersPreset.OwnerSummary;
-        }
+        // Owner primary: VMAR + CERS for practice and live-capable host (live still gated).
+        _harness.SetStockKind(StockMarketKind.비전마린);
+        _harness.SetCersPreset();
+        SelectedStockKind = StockMarketKind.비전마린.ToString();
+        SelectedSymbol = WatchlistCatalog.VmarSymbol;
+        _harness.SetFocusSymbol(WatchlistCatalog.VmarSymbol);
+        SelectedStrategy = CersPreset.Strategy.ToString();
+        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(CersPreset.Timeframe);
+        OfficialStrategyLabel = CersPreset.OwnerSummary;
+        RecommendedStrategyNote = CersPreset.OwnerSummary;
 
         _suppressSelectionEcho = false;
         SyncStockKindChips();
@@ -86,6 +71,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySafetyPills();
         ApplyLiveUiLabels();
         SafetyHeadline = ResolveSafetyHeadline();
+        RefreshLiveGateUi();
         ChartSubtitle = "토스 실봉 로딩 중… · 한국시간(KST)";
         _ = BootstrapRealDataAsync();
     }
@@ -201,6 +187,11 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private bool _canStart = true;
     [ObservableProperty] private bool _canStop;
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private bool _liveOwnerConfirm;
+    [ObservableProperty] private string _liveGateChecklistText = string.Empty;
+    [ObservableProperty] private string _lastLiveRouteText = "실주문 대기";
+    [ObservableProperty] private string _liveLoopStatusText = "루프 중지";
+    [ObservableProperty] private bool _isLiveModeUi;
     [ObservableProperty] private bool _newsDay;
     [ObservableProperty] private string _contingencyLabel = string.Empty;
     [ObservableProperty] private string _newsStatus = "뉴스 대기";
@@ -351,6 +342,15 @@ public partial class MainWindowViewModel : ViewModelBase
             (StockMarketKind.비전마린, true) => "토스 · VMAR 실거래",
             _ => "토스 · VMAR 자동매매",
         };
+
+    partial void OnLiveOwnerConfirmChanged(bool value)
+    {
+        _harness.LiveManualApproval = value;
+        RefreshLiveGateUi();
+        StatusLine = value
+            ? "오너 승인 ON · 실거래 시작 가능(게이트 통과 시)"
+            : "오너 승인 OFF · 실주문 시작 차단";
+    }
 
     partial void OnSelectedStrategyChanged(string value)
     {
@@ -517,17 +517,97 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task StartAsync()
     {
+        if (_harness.SettingsWouldAllowLiveRouting && !LiveOwnerConfirm)
+        {
+            StatusLine = "실거래 거부 · 「실주문 승인」 체크 필수 · 실주문 없음";
+            RefreshLiveGateUi();
+            return;
+        }
+
+        _harness.LiveManualApproval = LiveOwnerConfirm;
         StatusLine = _harness.StartAutoTrade();
         ApplyPanel(_harness.GetAutoTradePanel());
+        StartTradeLoop();
         await RefreshAsync().ConfigureAwait(true);
+        RefreshLiveGateUi();
     }
 
     [RelayCommand]
     private async Task StopAsync()
     {
+        StopTradeLoop();
         StatusLine = _harness.StopAutoTrade();
         ApplyPanel(_harness.GetAutoTradePanel());
+        LiveLoopStatusText = "루프 중지";
         await RefreshAsync().ConfigureAwait(true);
+        RefreshLiveGateUi();
+    }
+
+    private void StartTradeLoop()
+    {
+        StopTradeLoop();
+        _tradeLoopCts = new CancellationTokenSource();
+        var token = _tradeLoopCts.Token;
+        LiveLoopStatusText = _harness.SettingsWouldAllowLiveRouting
+            ? "실거래 루프 15s"
+            : "연습 루프 15s";
+        _ = RunTradeLoopAsync(token);
+    }
+
+    private void StopTradeLoop()
+    {
+        try
+        {
+            _tradeLoopCts?.Cancel();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        _tradeLoopCts?.Dispose();
+        _tradeLoopCts = null;
+    }
+
+    private async Task RunTradeLoopAsync(CancellationToken token)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
+            while (await timer.WaitForNextTickAsync(token).ConfigureAwait(true))
+            {
+                if (!CanStop || token.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                await RefreshAsync().ConfigureAwait(true);
+                RefreshLiveGateUi();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // expected on stop
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                LiveLoopStatusText = "루프 종료";
+            }
+        }
+    }
+
+    private void RefreshLiveGateUi()
+    {
+        IsLiveModeUi = _harness.SettingsWouldAllowLiveRouting || _harness.IsLiveSubmissionEnabled;
+        LiveGateChecklistText = string.Join(" · ", _harness.GetLiveGateChecklistLines());
+        LastLiveRouteText = _harness.LastLiveRouteMessage;
+        if (_harness.LiveAcceptedCount + _harness.LiveBlockedCount > 0)
+        {
+            LastLiveRouteText =
+                $"{_harness.LastLiveRouteMessage} · ok={_harness.LiveAcceptedCount} block={_harness.LiveBlockedCount}";
+        }
     }
 
     private void ApplyPanel(AutoTradePanelSnapshot p)
@@ -633,6 +713,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         ContingencyLabel = GateStatusPill;
         ApplyLiveUiLabels();
+        RefreshLiveGateUi();
     }
 
     private string ResolveSafetyHeadline() =>

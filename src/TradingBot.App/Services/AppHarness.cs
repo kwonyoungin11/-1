@@ -24,7 +24,7 @@ public sealed record AppTradingEvidenceSummary(
 }
 
 /// <summary>
-/// Mac 앱 조합 루트. 차트·자동매매 연습 세션. 실주문 HTTP 없음.
+/// Mac 앱 조합 루트. 차트·자동매매. 실주문은 게이트+오너승인 후에만 Toss HTTP.
 /// 버블 크기 = 체결 규모(수량×가격).
 /// </summary>
 public sealed class AppHarness
@@ -59,6 +59,10 @@ public sealed class AppHarness
     private readonly INewsFeed _newsFeed;
     private IReadOnlyList<NewsHeadline> _lastNews = Array.Empty<NewsHeadline>();
     private string _newsStatus = "뉴스 대기";
+    private bool _liveManualApproval;
+    private string _lastLiveRouteMessage = "실주문 대기";
+    private int _liveAcceptedCount;
+    private int _liveBlockedCount;
 
     /// <summary>
     /// Max candles shown on the chart (UI density). Toss still pages at
@@ -231,21 +235,13 @@ public sealed class AppHarness
             transport);
 
         var session = new AutoTradeSessionService();
-        if (liveHost)
-        {
-            session.StockKind = StockMarketKind.스페이스X;
-            session.FocusSymbol = WatchlistCatalog.SpaceXSymbol;
-            session.Strategy = SpacexOfficialStrategyPreset.Strategy;
-            session.Timeframe = SpacexOfficialStrategyPreset.Timeframe;
-        }
-        else
-        {
-            // Owner primary strategy: CERS cost-aware mean reversion on 1m (practice · live gated).
-            session.StockKind = StockMarketKind.비전마린;
-            session.FocusSymbol = WatchlistCatalog.VmarSymbol;
-            session.Strategy = CersPreset.Strategy;
-            session.Timeframe = CersPreset.Timeframe;
-        }
+        // Owner primary: CERS on VMAR for both practice and live-capable host.
+        // Live still requires AllowLiveOrders + kill off + ORDER_MODE=live + healthy data gate.
+        session.StockKind = StockMarketKind.비전마린;
+        session.FocusSymbol = WatchlistCatalog.VmarSymbol;
+        session.Strategy = CersPreset.Strategy;
+        session.Timeframe = CersPreset.Timeframe;
+        _ = liveHost; // session profile identical; routing differs via SettingsWouldAllowLiveRouting
 
         self = new AppHarness(
             settings,
@@ -338,6 +334,38 @@ public sealed class AppHarness
         set => _newsDay = value;
     }
 
+    /// <summary>Owner cockpit checkbox: required for live gate ManualApprovalPresent.</summary>
+    public bool LiveManualApproval
+    {
+        get => _liveManualApproval;
+        set => _liveManualApproval = value;
+    }
+
+    public string LastLiveRouteMessage => _lastLiveRouteMessage;
+    public int LiveAcceptedCount => _liveAcceptedCount;
+    public int LiveBlockedCount => _liveBlockedCount;
+
+    /// <summary>Human-readable live gate checklist for UI (no secrets).</summary>
+    public IReadOnlyList<string> GetLiveGateChecklistLines()
+    {
+        var lines = new List<string>
+        {
+            Flag("ALLOW_LIVE_ORDERS", _settings.AllowLiveOrders),
+            Flag("KILL_SWITCH off", !_settings.KillSwitch),
+            Flag("ORDER_MODE=live", _settings.OrderMode == OrderMode.Live),
+            Flag("TOSS HTTP", _tossOptions.AllowLiveHttp),
+            Flag("클라이언트 자격증명", _tossOptions.HasClientCredentials),
+            Flag("토스 읽기 연결", _isLiveReadOnlyConnected),
+            Flag("오너 수동 승인 체크", _liveManualApproval),
+            Flag("실주문 제출 가능(설정)", IsLiveSubmissionEnabled),
+            Flag("실거래 라우팅 활성", SettingsWouldAllowLiveRouting),
+        };
+        return lines;
+
+        static string Flag(string name, bool ok) => (ok ? "OK  " : "BLOCK ") + name;
+    }
+
+
     /// <summary>Set from Toss warnings (or tests). Blocks new entries when true.</summary>
     public bool SymbolWarningActive
     {
@@ -387,8 +415,15 @@ public sealed class AppHarness
             }
         }
 
+        var liveCapable = SettingsWouldAllowLiveRouting
+            && _tossOptions.AllowLiveHttp
+            && _tossOptions.HasClientCredentials
+            && _gatedLiveRouter is GatedLiveOrderRouter;
+
         return new LiveOrderContext
         {
+            ManualApprovalPresent = _liveManualApproval,
+            LiveImplementationEnabled = liveCapable,
             HasUnknownState = false,
             HasMissingData = _settings.OrderMode == OrderMode.Live
                 && _lastConnectionStatus != ConnectionStatus.LiveReadOnlyConnected,
@@ -433,7 +468,22 @@ public sealed class AppHarness
 
     public string StartAutoTrade()
     {
+        if (SettingsWouldAllowLiveRouting && !_liveManualApproval)
+        {
+            var blocked =
+                "실거래 시작 거부 · 오너 수동 승인 체크 필요 · 실주문 없음";
+            _audit.Append(new AuditEntry(DateTimeOffset.UtcNow, "session", blocked, "auto_start_blocked"));
+            _lastLiveRouteMessage = blocked;
+            return blocked;
+        }
+
         _ = _session.TryStart(out var msg);
+        if (SettingsWouldAllowLiveRouting)
+        {
+            msg = $"실거래 세션 시작 · CERS/VMAR · {msg} · 토스 주문 게이트 활성";
+            _lastLiveRouteMessage = "실거래 루프 대기 · 신호 시 게이트 통과 후 전송";
+        }
+
         _audit.Append(new AuditEntry(DateTimeOffset.UtcNow, "session", msg, "auto_start"));
         return msg;
     }
@@ -983,10 +1033,26 @@ public sealed class AppHarness
                     var liveResult = await _gatedLiveRouter
                         .RouteAsync(item.Candidate, cancellationToken)
                         .ConfigureAwait(false);
+                    if (liveResult.Accepted)
+                    {
+                        _liveAcceptedCount++;
+                        _lastLiveRouteMessage =
+                            $"실주문 전송 · {item.Candidate.Symbol} {item.Candidate.Side} qty={item.Candidate.Quantity} · {liveResult.Message}";
+                    }
+                    else
+                    {
+                        _liveBlockedCount++;
+                        var blockHint = liveResult.Blocks.Count > 0
+                            ? string.Join(",", liveResult.Blocks.Select(b => b.Code))
+                            : "gate";
+                        _lastLiveRouteMessage =
+                            $"실주문 차단 · {blockHint} · {liveResult.Message}";
+                    }
+
                     _audit.Append(new AuditEntry(
                         DateTimeOffset.UtcNow,
                         "orders",
-                        liveResult.Message,
+                        SecretRedactor.RedactMessage(liveResult.Message),
                         liveResult.Accepted ? "live_accepted" : "live_blocked"));
                     continue;
                 }

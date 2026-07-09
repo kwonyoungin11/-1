@@ -317,6 +317,23 @@
                        TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                        ToolTip.Tip="{Binding GateStatusPill}"/>
           </Border>
+          <!-- Live trading checklist (owner must confirm before real orders) -->
+          <Border Classes="metric-3d" Background="#FFEBEE" Padding="8,6" BorderBrush="#EF9A9A"
+                  IsVisible="{Binding IsLiveModeUi}">
+            <StackPanel Spacing="4">
+              <TextBlock Classes="caption-3d" Text="실거래 게이트" Foreground="#B71C1C"/>
+              <TextBlock Text="{Binding LiveGateChecklistText}" FontSize="10" Foreground="#B71C1C"
+                         TextWrapping="Wrap" LineHeight="14"
+                         ToolTip.Tip="{Binding LiveGateChecklistText}"/>
+              <CheckBox IsChecked="{Binding LiveOwnerConfirm}"
+                        Content="실주문 승인 — 손실 가능 · CERS 신호 시 토스 주문"
+                        FontSize="12" FontWeight="Bold" Foreground="#B71C1C"/>
+              <TextBlock Text="{Binding LastLiveRouteText}" FontSize="10" Foreground="#6D4C41"
+                         TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                         ToolTip.Tip="{Binding LastLiveRouteText}"/>
+              <TextBlock Text="{Binding LiveLoopStatusText}" FontSize="10" Foreground="#5D4037"/>
+            </StackPanel>
+          </Border>
           <TextBlock Text="{Binding SafetyNote}" FontSize="10" Foreground="#64748B"
                      TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                      ToolTip.Tip="{Binding SafetyNote}"/>

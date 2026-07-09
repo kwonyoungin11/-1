@@ -30,6 +30,17 @@ public sealed class LiveOrderGate
             blocks.Add(BlockedReason.OrderModeNotLive);
         }
 
+        // Owner must explicitly confirm in the cockpit before any live transport call.
+        if (!context.ManualApprovalPresent)
+        {
+            blocks.Add(BlockedReason.ManualApprovalMissing);
+        }
+
+        if (!context.LiveImplementationEnabled)
+        {
+            blocks.Add(BlockedReason.LiveImplementationDisabled);
+        }
+
         if (context.HasUnknownState)
         {
             blocks.Add(BlockedReason.UnknownState);
@@ -55,7 +66,7 @@ public sealed class LiveOrderGate
 }
 
 /// <summary>Runtime context for live eligibility (expand as features land).</summary>
-public sealed class LiveOrderContext
+public sealed record LiveOrderContext
 {
     public bool ManualApprovalPresent { get; init; }
     public bool HasUnknownState { get; init; }
@@ -63,6 +74,6 @@ public sealed class LiveOrderContext
     public bool HasStaleMarketData { get; init; }
     public bool HasApiError { get; init; }
 
-    /// <summary>Must remain false until live readiness checklist is complete.</summary>
+    /// <summary>True when owner-enabled live host + transport is wired (still gate-checked).</summary>
     public bool LiveImplementationEnabled { get; init; }
 }
