@@ -15,7 +15,11 @@ public sealed record PracticeStrategyContext(
     /// <summary>Owner news-day: halve size, no aggressive reprice (not auto news trading).</summary>
     bool NewsDay = false,
     /// <summary>Symbol regulatory warning / halt-style flag from data layer.</summary>
-    bool SymbolWarningActive = false)
+    bool SymbolWarningActive = false,
+    /// <summary>Optional candle series for candle-aware strategies (CERS). Null → fail-closed hold.</summary>
+    IReadOnlyList<CandlePoint>? Candles = null,
+    /// <summary>Optional open CERS long for exit evaluation. Null = flat.</summary>
+    CersOpenPosition? CersPosition = null)
 {
     /// <summary>Safe practice defaults (100k equity, 1% risk, 2% stop, 3% max daily loss).</summary>
     public static PracticeStrategyContext CreateSafeDefaults() => new();

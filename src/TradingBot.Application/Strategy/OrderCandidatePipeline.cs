@@ -68,7 +68,8 @@ public sealed class OrderCandidatePipeline
                 quote,
                 signalBaseQuantity,
                 nowUtc,
-                practice?.TrendFollow);
+                practice?.TrendFollow,
+                practice);
 
             if (!signal.IsActionable || signal.Side is not (SignalSide.Buy or SignalSide.Sell))
             {
