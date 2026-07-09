@@ -13,6 +13,7 @@
 - 화면 지도: `docs/cockpit/SCREEN_MAP.md`
 - 와이어프레임: `docs/cockpit/WIREFRAME.md`
 - 오너 시나리오: `docs/cockpit/OWNER_WALKTHROUGH.md`
+- 종목 전환 칩(VMAR/SPCX): `docs/cockpit/STOCK_SWITCH_UI.md`
 
 ## 이 UI는 무엇인가?
 
