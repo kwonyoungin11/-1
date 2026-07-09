@@ -10,6 +10,18 @@ public class TradingSafetyDefaultsTests
         Assert.False(TradingSafetyDefaults.AllowLiveOrders);
         Assert.True(TradingSafetyDefaults.KillSwitch);
         Assert.Equal(OrderMode.DryRun, TradingSafetyDefaults.OrderMode);
+        Assert.True(TradingSafetyDefaults.MarketDataMaxStalenessSeconds > 0);
+        Assert.Equal(5, TradingSafetyDefaults.MarketDataMaxStalenessSeconds);
+    }
+
+    [Fact]
+    public void Live_orders_remain_blocked_by_default_constants()
+    {
+        // Invariant: hard-coded defaults must never open a live path.
+        Assert.False(TradingSafetyDefaults.AllowLiveOrders);
+        Assert.True(TradingSafetyDefaults.KillSwitch);
+        Assert.NotEqual(OrderMode.Live, TradingSafetyDefaults.OrderMode);
+        Assert.Equal(OrderMode.DryRun, TradingSafetyDefaults.OrderMode);
     }
 
     [Fact]
@@ -19,6 +31,22 @@ public class TradingSafetyDefaultsTests
         Assert.False(settings.AllowLiveOrders);
         Assert.True(settings.KillSwitch);
         Assert.Equal(OrderMode.DryRun, settings.OrderMode);
+        Assert.Equal(
+            TradingSafetyDefaults.MarketDataMaxStalenessSeconds,
+            settings.MarketDataMaxStalenessSeconds);
+        Assert.NotEqual(OrderMode.Live, settings.OrderMode);
+    }
+
+    [Fact]
+    public void New_TradingSafetySettings_uses_fail_closed_property_defaults()
+    {
+        var settings = new TradingSafetySettings();
+        Assert.False(settings.AllowLiveOrders);
+        Assert.True(settings.KillSwitch);
+        Assert.Equal(OrderMode.DryRun, settings.OrderMode);
+        Assert.Equal(
+            TradingSafetyDefaults.MarketDataMaxStalenessSeconds,
+            settings.MarketDataMaxStalenessSeconds);
     }
 
     [Fact]
