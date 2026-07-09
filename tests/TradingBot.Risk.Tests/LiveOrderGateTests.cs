@@ -18,6 +18,8 @@ public class LiveOrderGateTests
         bool stale = false,
         bool apiError = false) => new()
     {
+        ManualApprovalPresent = true,
+        LiveImplementationEnabled = true,
         HasUnknownState = unknown,
         HasMissingData = missing,
         HasStaleMarketData = stale,
@@ -55,6 +57,24 @@ public class LiveOrderGateTests
 
         Assert.True(decision.Allowed);
         Assert.Empty(decision.Blocks);
+    }
+
+    [Fact]
+    public void Open_settings_without_manual_approval_blocks()
+    {
+        var ctx = HealthyContext() with { ManualApprovalPresent = false };
+        var decision = new LiveOrderGate().Evaluate(LiveLookingSettings(), ctx);
+        Assert.True(decision.IsBlocked);
+        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.ManualApprovalMissing.Code);
+    }
+
+    [Fact]
+    public void Open_settings_without_live_implementation_flag_blocks()
+    {
+        var ctx = HealthyContext() with { LiveImplementationEnabled = false };
+        var decision = new LiveOrderGate().Evaluate(LiveLookingSettings(), ctx);
+        Assert.True(decision.IsBlocked);
+        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.LiveImplementationDisabled.Code);
     }
 
     [Fact]
@@ -133,7 +153,7 @@ public class LiveOrderGateTests
         var settings = LiveLookingSettings();
         var decision = new RiskGate().EvaluateForCandidate(
             settings,
-            new LiveOrderContext());
+            HealthyContext());
 
         Assert.True(decision.Allowed);
     }
