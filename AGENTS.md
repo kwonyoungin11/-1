@@ -148,3 +148,9 @@ See `docs/LIVE_READINESS_CHECKLIST.md`. Until every item is evidenced: **live re
 - 상세: `docs/WORKTREE_POLICY.md`
 - 새 작업실: `bash scripts/grok/new-worktree.sh <이름> [브랜치]`
 
+## 개발 루프 필수 (오너 확정 2026-07-09)
+
+- 구현 작업 후 병합 전 `bash scripts/grok/dev-loop.sh` (또는 동일 게이트) 통과.
+- 실패 시 수정 후 재검증. 최대 시도 한도 준수. safety BLOCK은 우회 금지.
+- **실주문 루프와 혼동 금지.** 상세: `docs/DEV_LOOP.md`
+

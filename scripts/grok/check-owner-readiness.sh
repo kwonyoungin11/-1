@@ -15,6 +15,10 @@ required=(
   docs/TOSS_OPENAPI_NOTES.md
   docs/MACOS_SETUP.md
   docs/INCIDENT_RESPONSE.md
+  docs/DEV_LOOP.md
+  docs/WORKTREE_POLICY.md
+  docs/plans/MASTER_PLAN.md
+  scripts/grok/dev-loop.sh
   .agents/state/CURRENT_STATE.md
   scripts/grok/check-secrets.sh
   scripts/grok/check-trading-safety.sh

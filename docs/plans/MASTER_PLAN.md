@@ -41,3 +41,22 @@
 1. Phase 1 상세 플랜 (`docs/plans/PHASE_01_cockpit.md`)
 2. cockpit 와이어/상태 모델 오너 확인
 3. Phase 2 read-only Toss 상세 플랜
+
+## 개발 루프 (오너 확정 2026-07-09)
+
+모든 Phase 구현은 **개발 루프**로 검증한다. 상세: `docs/DEV_LOOP.md`
+
+| Phase | 루프 통과 조건 (추가) |
+|-------|----------------------|
+| 0 하네스 | secret + safety + test PASS |
+| 1 cockpit | 위 + 오너가 화면 구조 승인 (주관 게이트는 오너) |
+| 2 읽기 연결 | 위 + mock/contract test, 주문 API 미호출 |
+| 3 신호·리스크 | 위 + risk gate unit tests |
+| 4 dry-run | 위 + dry-run 시나리오 test |
+| 5 paper | 위 + paper ledger 검증 (기간은 오너 합의) |
+| 6 readiness | 위 + LIVE_READINESS 체크리스트 증거 |
+| 7 실거래 | **개발 루프만으로 열지 않음** — 별도 오너 승인 + 체크리스트 |
+| 8 운영 | 장애 리허설 문서 + 스캔 |
+
+**규칙:** Phase 7 실주문 자동화 루프는 이 문서의 개발 루프와 다르다. 개발 루프 성공 ≠ 실거래 허용.
+

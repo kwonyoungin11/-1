@@ -45,3 +45,14 @@ git worktree remove .worktrees/<이름>
 - Grok 에이전트는 구현 작업을 **worktree 경로에서** 수행한다.
 - 보고 시 어느 worktree/브랜치에서 작업했는지 명시한다.
 - main 직접 수정이 필요하면 오너 승인 후, 가능하면 즉시 worktree로 이전한다.
+
+## 개발 루프
+
+worktree에서 작업이 끝나면 병합 전 개발 루프 검증을 돌린다.
+
+```bash
+bash scripts/grok/dev-loop.sh
+```
+
+상세: `docs/DEV_LOOP.md`
+
