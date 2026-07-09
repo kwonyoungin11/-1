@@ -11,6 +11,7 @@ public static class StrategyCatalog
         TradingStrategyKind.평균회귀,
         TradingStrategyKind.모멘텀돌파,
         TradingStrategyKind.일분분할스캘프,
+        TradingStrategyKind.CERS비용회귀,
     ];
 
     public static IReadOnlyList<string> Labels { get; } =
@@ -33,6 +34,8 @@ public static class StrategyCatalog
             "강한 돌파 구간 보조 · 수량↑ · 거짓 돌파·수수료 주의 · 투자 조언 아님",
         TradingStrategyKind.일분분할스캘프 =>
             "VMAR 분할매수·분할매도 연습(기본 15m) · 수수료 주의 · dry-run/paper · 투자 조언 아님",
+        TradingStrategyKind.CERS비용회귀 =>
+            "CERS 비용인식 평균회귀 · 1m · 엣지>2×왕복비용 · SL 1.2% · dry-run/paper · 실주문 게이트 · 투자 조언 아님",
         _ => "전략",
     };
 
@@ -45,6 +48,7 @@ public static class StrategyCatalog
         TradingStrategyKind.평균회귀 => 2m,
         TradingStrategyKind.모멘텀돌파 => 3m,
         TradingStrategyKind.일분분할스캘프 => 6m, // 3 legs × 2 shares
+        TradingStrategyKind.CERS비용회귀 => 2m,
         _ => 1m,
     };
 }
