@@ -49,6 +49,17 @@ run_safety_gates() {
   return "$failed"
 }
 
+# Non-blocking informational: LOOP_STOP token for recommend→implement agents.
+# Does not fail the dev loop; safety is already gated above.
+run_loop_stop_info() {
+  if [[ ! -f ./scripts/grok/check-recommend-implement-loop.sh ]]; then
+    return 0
+  fi
+  echo ""
+  echo "--- info: check-recommend-implement-loop (non-blocking) ---"
+  bash ./scripts/grok/check-recommend-implement-loop.sh || true
+}
+
 run_dotnet_gates() {
   if ! command -v dotnet >/dev/null 2>&1; then
     echo "warning: dotnet not installed — skipping build/test"
@@ -77,6 +88,7 @@ while [[ "$attempt" -le "$MAX_ATTEMPTS" ]]; do
   fi
 
   if run_dotnet_gates; then
+    run_loop_stop_info
     echo ""
     echo "DEV_LOOP_RESULT=SUCCESS"
     echo "attempts_used=$attempt"
