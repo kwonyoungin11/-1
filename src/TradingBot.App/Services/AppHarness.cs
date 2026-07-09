@@ -786,10 +786,11 @@ public sealed class AppHarness
         CancellationToken cancellationToken = default)
     {
         var focus = _session.ResolveFocusSymbol();
+        var modeLabel = IsLiveSubmissionEnabled ? "실거래" : "연습(게이트 잠금)";
         _audit.Append(new AuditEntry(
             DateTimeOffset.UtcNow,
             "system",
-            $"데스크톱 콕핏 갱신 — 토스 읽기 · {focus} · 실주문 게이트 잠금",
+            $"데스크톱 콕핏 갱신 — 토스 읽기 · {focus} · {modeLabel}",
             "app_boot"));
 
         var liveDecision = _liveOrderGate.Evaluate(_settings, BuildLiveOrderContext());

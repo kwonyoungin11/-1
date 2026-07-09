@@ -4,297 +4,355 @@
         xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="920"
+        mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="900"
         x:Class="TradingBot.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Classes="glass-root"
-        Width="1400" Height="920"
-        MinWidth="1100" MinHeight="760"
-        Background="#F1F5F9"
+        Width="1440" Height="900"
+        MinWidth="1280" MinHeight="860"
+        Background="#F0F3FA"
         ExtendClientAreaToDecorationsHint="True"
         Title="{Binding Title}">
 
-  <Design.DataContext>
-    <vm:MainWindowViewModel/>
-  </Design.DataContext>
-
   <!--
-    Layout system (8px grid):
-    Row0 header Auto · Row1 chart * MinHeight · Row2 dock Auto MaxHeight with internal scroll
-    No text clipping: Wrap + ToolTip for long strings · ScrollViewers where needed
+    TradingView Ultimate Supercharts-inspired cockpit (light theme).
+    Layout: Auto / * / Auto — no ScrollViewer, no mid-glyph clip.
+    Chart card: header + status (Auto×2) + price 70% / volume 15% / RSI 15%.
   -->
-  <!-- Bottom dock fixed height so ScrollViewer actually scrolls (Avalonia needs constrained height) -->
-  <Grid RowDefinitions="Auto,*,260" Margin="16,36,16,12">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="10,30,10,8">
 
-    <!-- ===== HEADER ===== -->
-    <Border Background="#FFFFFF" CornerRadius="16" Padding="18,14" Margin="0,0,0,12"
-            BorderBrush="#E2E8F0" BorderThickness="1" BoxShadow="0 2 12 0 #0A000000">
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-        <StackPanel Spacing="4" MinWidth="0">
-          <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold" Foreground="#0F172A"
+    <!-- Top bar (safety pills outside chart card) -->
+    <Border Classes="glass-bar" Padding="12,8" Margin="0,0,0,8">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="2" MinWidth="0" VerticalAlignment="Center">
+          <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="Bold" Foreground="#131722"
+                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+          <TextBlock Text="{Binding OfficialStrategyLabel}" FontSize="11" Foreground="#2962FF"
                      TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                     ToolTip.Tip="{Binding Title}"/>
-          <TextBlock Text="{Binding SafetyHeadline}" FontSize="11" Foreground="#64748B"
-                     TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
-                     ToolTip.Tip="{Binding SafetyHeadline}"/>
-          <TextBlock Text="{Binding OfficialStrategyLabel}" FontSize="11" FontWeight="SemiBold"
-                     Foreground="#1D4ED8" TextWrapping="Wrap" MaxLines="2"
-                     TextTrimming="CharacterEllipsis"
                      ToolTip.Tip="{Binding OfficialStrategyLabel}"/>
         </StackPanel>
-        <WrapPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" ItemSpacing="6">
-          <Border Classes="pill-lock"><TextBlock Text="실주문 잠금"/></Border>
-          <Border Classes="pill-ok"><TextBlock Text="{Binding ConnectionPill}"/></Border>
-          <Border Classes="pill-mode"><TextBlock Text="SPCX"/></Border>
-          <Border Classes="pill-mode"><TextBlock Text="KST"/></Border>
-        </WrapPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Border Classes="pill-kill" Padding="9,4"><TextBlock Text="{Binding KillSwitchPill}"/></Border>
+          <Border Classes="pill-lock" Padding="9,4"><TextBlock Text="{Binding LiveLockPill}"/></Border>
+          <Border Classes="pill-mode" Padding="9,4"><TextBlock Text="{Binding OrderModePill}"/></Border>
+          <Border Classes="pill-ok" Padding="9,4"><TextBlock Text="{Binding ConnectionPill}"/></Border>
+          <Border Classes="pill-ok" Padding="9,4"><TextBlock Text="{Binding DataSourcePill}"/></Border>
+          <Border Classes="pill-mode" Padding="9,4"><TextBlock Text="{Binding BotStatePill}"/></Border>
+          <Border Classes="pill-mode" Padding="9,4"><TextBlock Text="VMAR"/></Border>
+          <Border Classes="pill-mode" Padding="9,4"><TextBlock Text="KST"/></Border>
+        </StackPanel>
       </Grid>
     </Border>
 
-    <!-- ===== CHART (dominant) ===== -->
-    <Border Grid.Row="1" Background="#FFFFFF" CornerRadius="16" Padding="12"
-            Margin="0,0,0,12" BorderBrush="#E2E8F0" BorderThickness="1"
-            MinHeight="440" BoxShadow="0 2 16 0 #0A000000">
-      <Grid RowDefinitions="Auto,*,Auto" MinHeight="420">
-        <!-- Chart chrome -->
-        <Grid ColumnDefinitions="*,Auto" Margin="4,0,4,8">
-          <StackPanel Spacing="3" MinWidth="0">
-            <TextBlock Text="{Binding ChartTitle}" FontSize="15" FontWeight="SemiBold" Foreground="#0F172A"/>
-            <TextBlock Text="{Binding ChartSubtitle}" FontSize="11" Foreground="#64748B"
-                       TextWrapping="Wrap"/>
-            <TextBlock Text="{Binding IndicatorLegend}" FontSize="11" Foreground="#475569"
-                       TextWrapping="Wrap"/>
-            <TextBlock Text="{Binding LastPriceLabel}" FontSize="12" FontWeight="SemiBold"
-                       Foreground="#0F172A" TextWrapping="Wrap"/>
+    <!-- Superchart card: chrome (2 Auto) + price 70% / volume 15% / RSI 15% -->
+    <Border Grid.Row="1" Classes="glass-card-deep" Padding="10" Margin="0,0,0,8" MinHeight="460">
+      <Grid RowDefinitions="Auto,Auto,7*,1.5*,1.5*">
+
+        <!-- Row 0: ChartTitle + one large price + change + TF ladder + DataSourcePill -->
+        <Grid ColumnDefinitions="*,Auto" Margin="4,2,4,0">
+          <StackPanel Orientation="Horizontal" Spacing="10" MinWidth="0">
+            <TextBlock Text="{Binding ChartTitle}" FontSize="14" FontWeight="Bold" Foreground="#131722"
+                       VerticalAlignment="Bottom"/>
+            <TextBlock Text="{Binding LastCloseText}" FontSize="28" FontWeight="Bold" Foreground="#131722"
+                       FontFamily="Menlo, Monaco, Consolas, monospace" VerticalAlignment="Bottom"/>
+            <TextBlock Text="{Binding ChangeText}" FontSize="16" FontWeight="Bold" Margin="0,0,0,4"
+                       VerticalAlignment="Bottom"
+                       Classes.up="{Binding ChangeIsPositive}"
+                       Classes.down="{Binding !ChangeIsPositive}"/>
           </StackPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0">
-            <Border Classes="pill-mode" Padding="10,5"><TextBlock Text="Crosshair"/></Border>
-            <Border Classes="pill-mode" Padding="10,5"><TextBlock Text="15m"/></Border>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <ItemsControl ItemsSource="{Binding TimeframeChips}" MaxWidth="360">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TimeframeChipVm">
+                  <Button Classes="tf-btn"
+                          Classes.selected="{Binding IsSelected}"
+                          Content="{Binding Label}"
+                          Command="{Binding SelectCommand}"
+                          ToolTip.Tip="{Binding Label, StringFormat=시간봉 {0}}"/>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Border Classes="metric-3d" Background="#E8F5E9" Padding="8,4" BorderBrush="#A5D6A7">
+              <TextBlock Text="{Binding DataSourcePill}" FontSize="11" FontWeight="Bold" Foreground="#2E7D32"/>
+            </Border>
+            <Border Classes="metric-3d" Background="#E3F2FD" Padding="8,4" BorderBrush="#90CAF9">
+              <TextBlock Text="줌 연동" FontSize="11" FontWeight="Bold" Foreground="#1565C0"/>
+            </Border>
           </StackPanel>
         </Grid>
 
-        <!-- Price -->
-        <lvc:CartesianChart Grid.Row="1"
-                            Series="{Binding Series}"
-                            XAxes="{Binding XAxes}"
-                            YAxes="{Binding YAxes}"
-                            Sections="{Binding Sections}"
-                            DrawMarginFrame="{Binding DrawMarginFrame}"
-                            DrawMargin="{Binding DrawMargin}"
-                            TooltipPosition="Top"
-                            FindingStrategy="CompareOnlyX"
-                            ZoomMode="X"
-                            AnimationsSpeed="0:0:0"
-                            LegendPosition="Hidden"
-                            Background="#FFFFFF"
-                            MinHeight="280"/>
+        <!-- Row 1: OHLCV status + watermark + RSI/legend + optional meta -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="4,2,4,4">
+          <StackPanel Orientation="Horizontal" Spacing="8" MinWidth="0" VerticalAlignment="Center">
+            <TextBlock Classes="status-line" Text="{Binding OhlcStatusLine}"
+                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center"
+                       ToolTip.Tip="{Binding OhlcStatusLine}"/>
+            <TextBlock Text="{Binding HighLowText}" FontSize="11" Foreground="#787B86" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding BarCountText}" FontSize="11" Foreground="#787B86" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding LastBarTimeText}" FontSize="11" Foreground="#787B86" VerticalAlignment="Center"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Border Classes="metric-3d" Padding="6,2"
+                    Background="#FFF8E1" BorderBrush="#FFE082"
+                    IsVisible="{Binding ShowChartWatermark}">
+              <TextBlock Text="{Binding ChartWatermarkLabel}" FontSize="10" FontWeight="Bold" Foreground="#E65100"/>
+            </Border>
+            <TextBlock Text="{Binding RsiStatusText}" FontSize="10" FontWeight="SemiBold" Foreground="#7B1FA2"
+                       VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       MaxWidth="140" ToolTip.Tip="{Binding RsiStatusText}"/>
+            <TextBlock Text="{Binding IndicatorLegend}" FontSize="10" Foreground="#9598A1"
+                       VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       MaxWidth="220" ToolTip.Tip="{Binding IndicatorLegend}"/>
+          </StackPanel>
+        </Grid>
 
-        <!-- Volume -->
-        <lvc:CartesianChart Grid.Row="2"
-                            Series="{Binding VolumeSeries}"
-                            XAxes="{Binding VolumeXAxes}"
-                            YAxes="{Binding VolumeYAxes}"
-                            DrawMarginFrame="{Binding VolumeDrawMarginFrame}"
-                            DrawMargin="{Binding VolumeDrawMargin}"
-                            TooltipPosition="Top"
-                            FindingStrategy="CompareOnlyX"
-                            ZoomMode="X"
-                            AnimationsSpeed="0:0:0"
-                            LegendPosition="Hidden"
-                            Background="#FFFFFF"
-                            Height="110"
-                            Margin="0,6,0,0"/>
+        <!-- Price pane (~70%) -->
+        <Grid Grid.Row="2">
+          <lvc:CartesianChart x:Name="PriceChart"
+                              Series="{Binding Series}"
+                              XAxes="{Binding XAxes}"
+                              YAxes="{Binding YAxes}"
+                              Sections="{Binding Sections}"
+                              DrawMarginFrame="{Binding DrawMarginFrame}"
+                              DrawMargin="{Binding DrawMargin}"
+                              TooltipPosition="Top"
+                              FindingStrategy="CompareOnlyX"
+                              ZoomMode="X"
+                              AnimationsSpeed="0:0:0"
+                              LegendPosition="Hidden"
+                              Background="#FFFFFF"
+                              PointerMoved="OnPriceChartPointerMoved"
+                              PointerExited="OnPriceChartPointerExited"/>
+          <TextBlock Classes="pane-label" Text="가격" ZIndex="1"/>
+          <Border x:Name="LastPriceBadge"
+                  Classes="last-price-axis-badge"
+                  Classes.up="{Binding LastPriceAxisBadgeIsUp}"
+                  Classes.down="{Binding !LastPriceAxisBadgeIsUp}"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Top"
+                  Margin="0,0,4,0"
+                  ZIndex="2"
+                  IsHitTestVisible="False">
+            <TextBlock Text="{Binding LastPriceAxisBadge}"
+                       FontFamily="Menlo, Monaco, Consolas, monospace"
+                       FontSize="11"
+                       FontWeight="Bold"/>
+          </Border>
+        </Grid>
+
+        <!-- Volume pane (~15%, fills grid cell — no fixed Height) -->
+        <Border Grid.Row="3" Classes="pane-sep" ClipToBounds="True">
+          <Grid>
+            <lvc:CartesianChart x:Name="VolumeChart"
+                                Series="{Binding VolumeSeries}"
+                                XAxes="{Binding VolumeXAxes}"
+                                YAxes="{Binding VolumeYAxes}"
+                                DrawMarginFrame="{Binding VolumeDrawMarginFrame}"
+                                DrawMargin="{Binding VolumeDrawMargin}"
+                                TooltipPosition="Top"
+                                FindingStrategy="CompareOnlyX"
+                                ZoomMode="X"
+                                AnimationsSpeed="0:0:0"
+                                LegendPosition="Hidden"
+                                Background="#FFFFFF"
+                                PointerMoved="OnPriceChartPointerMoved"
+                                PointerExited="OnPriceChartPointerExited"/>
+            <TextBlock Classes="pane-label" Text="거래량" ZIndex="1"/>
+          </Grid>
+        </Border>
+
+        <!-- RSI pane (~15%, fills grid cell — no fixed Height) -->
+        <Border Grid.Row="4" Classes="pane-sep" ClipToBounds="True">
+          <Grid>
+            <lvc:CartesianChart x:Name="RsiChart"
+                                Series="{Binding RsiSeries}"
+                                XAxes="{Binding RsiXAxes}"
+                                YAxes="{Binding RsiYAxes}"
+                                Sections="{Binding RsiSections}"
+                                DrawMarginFrame="{Binding RsiDrawMarginFrame}"
+                                DrawMargin="{Binding RsiDrawMargin}"
+                                TooltipPosition="Top"
+                                FindingStrategy="CompareOnlyX"
+                                ZoomMode="X"
+                                AnimationsSpeed="0:0:0"
+                                LegendPosition="Hidden"
+                                Background="#FFFFFF"
+                                PointerMoved="OnPriceChartPointerMoved"
+                                PointerExited="OnPriceChartPointerExited"/>
+            <TextBlock Classes="pane-label" Text="RSI" ZIndex="1"/>
+          </Grid>
+        </Border>
       </Grid>
     </Border>
 
-    <!-- ===== BOTTOM DOCK (fixed 260px height → scroll works; no bottom clip) ===== -->
-    <Border Grid.Row="2" Background="#FFFFFF" CornerRadius="16" Padding="10"
-            BorderBrush="#E2E8F0" BorderThickness="1"
-            BoxShadow="0 2 12 0 #0A000000" ClipToBounds="True">
-      <ScrollViewer VerticalScrollBarVisibility="Visible"
-                    HorizontalScrollBarVisibility="Disabled"
-                    AllowAutoHide="False">
-        <Grid ColumnDefinitions="1.2*,1.15*,0.85*,1.15*" ColumnSpacing="12"
-              Margin="4" VerticalAlignment="Top">
+    <!-- Bottom dock: 3D cards -->
+    <Grid Grid.Row="2" ColumnDefinitions="1.2*,1.25*,0.85*,1.1*" ColumnSpacing="8">
 
-          <!-- Col0 Strategy — own scroll so nothing is cropped -->
-          <Border Background="#F8FAFC" CornerRadius="12" Padding="0"
-                  BorderBrush="#E2E8F0" BorderThickness="1" VerticalAlignment="Top">
-            <ScrollViewer MaxHeight="230" VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled" Padding="12">
-            <StackPanel Spacing="6">
-              <TextBlock Classes="section" Text="전략 · 시간봉"/>
-              <Grid ColumnDefinitions="64,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
-                <TextBlock Classes="sub" Text="시간봉" VerticalAlignment="Center"/>
-                <ComboBox Grid.Column="1" ItemsSource="{Binding TimeframeOptions}"
-                          SelectedItem="{Binding SelectedTimeframe}" HorizontalAlignment="Stretch"/>
-                <TextBlock Grid.Row="1" Classes="sub" Text="전략" VerticalAlignment="Center"/>
-                <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding StrategyOptions}"
-                          SelectedItem="{Binding SelectedStrategy}" HorizontalAlignment="Stretch"/>
-                <TextBlock Grid.Row="2" Classes="sub" Text="종목" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding WatchSymbolsText}"
-                           FontWeight="Bold" FontSize="14" Foreground="#0F172A"/>
-              </Grid>
-              <TextBlock Text="{Binding StrategyDescription}" FontSize="11" Foreground="#1D4ED8"
-                         TextWrapping="Wrap" LineHeight="15"
-                         ToolTip.Tip="{Binding StrategyDescription}"/>
-              <CheckBox IsChecked="{Binding NewsDay}" Content="뉴스데이 (사이즈 50%)"/>
-              <Border Background="#FFF7ED" CornerRadius="8" Padding="8" BorderBrush="#FED7AA" BorderThickness="1">
-                <TextBlock Text="{Binding ContingencyLabel}" FontSize="11" Foreground="#C2410C"
-                           TextWrapping="Wrap" LineHeight="15"
-                           ToolTip.Tip="{Binding ContingencyLabel}"/>
-              </Border>
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Classes="glass-btn" Content="자동매매 시작"
-                        Command="{Binding StartCommand}" IsEnabled="{Binding CanStart}"/>
-                <Button Classes="glass-btn-stop" Content="종료"
-                        Command="{Binding StopCommand}" IsEnabled="{Binding CanStop}"/>
-                <Button Classes="glass-btn" Content="새로고침"
-                        Command="{Binding RefreshCommand}" IsEnabled="{Binding !IsBusy}"/>
-              </StackPanel>
-              <TextBlock Text="{Binding ConnectionLabel}" Classes="sub" TextWrapping="Wrap"
-                         ToolTip.Tip="{Binding ConnectionLabel}"/>
-              <TextBlock Text="{Binding StatusLine}" Classes="sub" TextWrapping="Wrap"
-                         ToolTip.Tip="{Binding StatusLine}"/>
-            </StackPanel>
-            </ScrollViewer>
+      <Border Classes="glass-card" Padding="12,10">
+        <StackPanel Spacing="7">
+          <TextBlock Classes="caption-3d" Text="전략"/>
+          <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="5" RowDefinitions="Auto,Auto" RowSpacing="6">
+            <TextBlock Classes="sub" Text="전략" VerticalAlignment="Center"/>
+            <ComboBox Grid.Column="1" MinHeight="30" FontSize="12"
+                      ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding SelectedStrategy}"/>
+            <TextBlock Grid.Column="2" Classes="sub" Text="{Binding SelectedTimeframe, StringFormat=봉 · {0}}"
+                       VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#2962FF" FontWeight="Bold"/>
+            <TextBlock Grid.Row="1" Classes="sub" Text="종목" VerticalAlignment="Center"/>
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding WatchSymbolsText}"
+                       FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+            <CheckBox Grid.Row="1" Grid.Column="2"
+                      IsChecked="{Binding NewsDay}" Content="뉴스데이 50%" FontSize="12"/>
+          </Grid>
+          <TextBlock Text="{Binding StrategyDescription}" FontSize="11" Foreground="#2962FF"
+                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding StrategyDescription}"/>
+          <Border Classes="metric-3d" Background="#FFF8E1" Padding="8,5" BorderBrush="#FFE082">
+            <TextBlock Text="{Binding GateStatusPill}" FontSize="11" Foreground="#E65100" FontWeight="Bold"
+                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding GateStatusPill}"/>
           </Border>
+          <TextBlock Text="{Binding SafetyNote}" FontSize="10" Foreground="#64748B"
+                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding SafetyNote}"/>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Border Classes="btn-3d">
+              <Button Classes="glass-btn" Content="연습 시작"
+                      Command="{Binding StartCommand}" IsEnabled="{Binding CanStart}"/>
+            </Border>
+            <Border Classes="btn-3d-stop">
+              <Button Classes="glass-btn-stop" Content="중지"
+                      Command="{Binding StopCommand}" IsEnabled="{Binding CanStop}"/>
+            </Border>
+            <Border Classes="btn-3d-ghost">
+              <Button Classes="glass-btn-ghost" Content="새로고침"
+                      Command="{Binding RefreshCommand}" IsEnabled="{Binding !IsBusy}"/>
+            </Border>
+            <TextBlock Text="{Binding ConnectionLabel}" Classes="sub" VerticalAlignment="Center" Margin="4,0,0,0"
+                       MaxWidth="120" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding ConnectionLabel}"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
 
-          <!-- Col1 Bracket -->
-          <Border Grid.Column="1" Background="#F8FAFC" CornerRadius="12" Padding="0"
-                  BorderBrush="#E2E8F0" BorderThickness="1" VerticalAlignment="Top">
-            <ScrollViewer MaxHeight="230" VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled" Padding="12">
-            <StackPanel Spacing="5">
-              <TextBlock Classes="section" Text="지정가 · 익절 · 손절"/>
-              <TextBlock Text="{Binding OrderTypeLabel}" FontSize="11" Foreground="#2563EB"
-                         TextWrapping="Wrap"/>
-              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
-                    RowSpacing="5" ColumnSpacing="10">
-                <TextBlock Classes="sub" Text="ENTRY" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" FontSize="15" FontWeight="Bold" Foreground="#2563EB"
-                           Text="{Binding EntryLimitLabel}" TextWrapping="Wrap"/>
-                <TextBlock Grid.Row="1" Classes="sub" Text="SL" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="1" Grid.Column="1" FontSize="15" FontWeight="Bold" Foreground="#F23645"
-                           Text="{Binding StopLossLabel}"/>
-                <TextBlock Grid.Row="2" Classes="sub" Text="TP" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="2" Grid.Column="1" FontSize="15" FontWeight="Bold" Foreground="#089981"
-                           Text="{Binding TakeProfitLabel}"/>
-                <TextBlock Grid.Row="3" Classes="sub" Text="수량"/>
-                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding QuantityPlanLabel}" TextWrapping="Wrap"/>
-                <TextBlock Grid.Row="4" Classes="sub" Text="리스크"/>
-                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding RiskAmountLabel}" TextWrapping="Wrap"/>
-                <TextBlock Grid.Row="5" Classes="sub" Text="R:R"/>
-                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding RewardRiskLabel}"/>
-                <TextBlock Grid.Row="6" Classes="sub" Text="수수료"/>
-                <TextBlock Grid.Row="6" Grid.Column="1" Foreground="#B45309"
-                           Text="{Binding CommissionLabel}" TextWrapping="Wrap"/>
-                <TextBlock Grid.Row="7" Classes="sub" Text="R:R 순"/>
-                <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding NetRrLabel}"/>
-                <TextBlock Grid.Row="8" Classes="sub" Text="ATR"/>
-                <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding AtrLabel}" TextWrapping="Wrap"/>
-              </Grid>
-              <Border Background="#FFFFFF" CornerRadius="8" Padding="8" BorderBrush="#E2E8F0" BorderThickness="1">
-                <TextBlock Text="{Binding BracketSummary}" FontSize="10" Foreground="#475569"
-                           TextWrapping="Wrap" LineHeight="14"
-                           ToolTip.Tip="{Binding BracketSummary}"/>
-              </Border>
-            </StackPanel>
-            </ScrollViewer>
-          </Border>
-
-          <!-- Col2 Balance -->
-          <Border Grid.Column="2" Background="#F8FAFC" CornerRadius="12" Padding="12"
-                  BorderBrush="#E2E8F0" BorderThickness="1" VerticalAlignment="Top">
-            <StackPanel Spacing="8">
-              <TextBlock Classes="section" Text="잔액"/>
-              <TextBlock Text="{Binding BalanceLabel}" FontSize="15" FontWeight="Bold"
-                         Foreground="#0F172A" TextWrapping="Wrap"
-                         ToolTip.Tip="{Binding BalanceLabel}"/>
-              <TextBlock Classes="sub" Text="{Binding SessionStatusLabel, StringFormat=상태 · {0}}"/>
-              <Separator Background="#E2E8F0" Height="1" Margin="0,2"/>
-              <TextBlock Classes="section" Text="수익률"/>
-              <TextBlock Text="{Binding ReturnRateLabel}" FontSize="24" FontWeight="Bold"
-                         Foreground="#089981"/>
-              <TextBlock Classes="sub" Text="세션 · 투자 조언 아님" TextWrapping="Wrap"/>
-            </StackPanel>
-          </Border>
-
-          <!-- Col3 Legend + News -->
-          <Grid Grid.Column="3" RowDefinitions="Auto,*" MinWidth="200" MaxHeight="230"
-                VerticalAlignment="Top">
-            <Border Background="#F8FAFC" CornerRadius="12" Padding="10" Margin="0,0,0,8"
-                    BorderBrush="#E2E8F0" BorderThickness="1">
-              <StackPanel Spacing="4">
-                <TextBlock Classes="section" Text="차트 범례"/>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Rectangle Width="16" Height="2" Fill="#2563EB" VerticalAlignment="Center"/>
-                  <TextBlock Classes="sub" Text="ENTRY"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Rectangle Width="16" Height="2" Fill="#F23645" VerticalAlignment="Center"/>
-                  <TextBlock Classes="sub" Text="SL"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Rectangle Width="16" Height="2" Fill="#089981" VerticalAlignment="Center"/>
-                  <TextBlock Classes="sub" Text="TP"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Ellipse Width="10" Height="10" Fill="#66089981" VerticalAlignment="Center"/>
-                  <TextBlock Classes="sub" Text="버블=대금"/>
-                </StackPanel>
+      <Border Grid.Column="1" Classes="glass-card" Padding="12,10">
+        <StackPanel Spacing="7">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="caption-3d" Text="지정가 브래킷 (계획)"/>
+            <TextBlock Grid.Column="1" Text="{Binding OrderTypeLabel}" FontSize="10" FontWeight="Bold"
+                       Foreground="#2962FF" VerticalAlignment="Center"/>
+          </Grid>
+          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+            <Border Classes="metric-3d" Background="#E3F2FD" Padding="8,6" BorderBrush="#90CAF9">
+              <StackPanel>
+                <TextBlock Text="진입가" FontSize="10" FontWeight="Bold" Foreground="#2962FF"/>
+                <TextBlock Text="{Binding EntryLimitLabel}" FontSize="17" FontWeight="Bold" Foreground="#2962FF"
+                           FontFamily="Menlo, Monaco, Consolas, monospace"/>
               </StackPanel>
             </Border>
-
-            <Border Grid.Row="1" Background="#F8FAFC" CornerRadius="12" Padding="10"
-                    BorderBrush="#E2E8F0" BorderThickness="1">
-              <DockPanel LastChildFill="True">
-                <StackPanel DockPanel.Dock="Top" Spacing="3" Margin="0,0,0,6">
-                  <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Classes="section" Text="SPCX 뉴스" VerticalAlignment="Center"/>
-                    <Button Grid.Column="1" Classes="glass-btn" Content="갱신"
-                            Padding="8,4" FontSize="11"
-                            Command="{Binding RefreshNewsOnlyCommand}"/>
-                  </Grid>
-                  <TextBlock Text="{Binding NewsStatus}" FontSize="10" Foreground="#64748B"
-                             TextWrapping="Wrap" LineHeight="13"
-                             ToolTip.Tip="{Binding NewsStatus}"/>
-                </StackPanel>
-                <ListBox ItemsSource="{Binding NewsItems}"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         Padding="0"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto">
-                  <ListBox.Styles>
-                    <Style Selector="ListBoxItem">
-                      <Setter Property="Padding" Value="0"/>
-                      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                      <Setter Property="Margin" Value="0,0,0,5"/>
-                    </Style>
-                  </ListBox.Styles>
-                  <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="vm:NewsItemRow">
-                      <Border Background="#FFFFFF" CornerRadius="8" Padding="8"
-                              BorderBrush="#E2E8F0" BorderThickness="1">
-                        <StackPanel Spacing="3">
-                          <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold"
-                                     Foreground="#0F172A" TextWrapping="Wrap" LineHeight="14"
-                                     ToolTip.Tip="{Binding Title}"/>
-                          <TextBlock FontSize="10" Foreground="#B91C1C" FontWeight="SemiBold"
-                                     Text="{Binding Badge}"/>
-                          <TextBlock Text="{Binding Meta}" FontSize="10" Foreground="#64748B"
-                                     TextWrapping="Wrap"/>
-                        </StackPanel>
-                      </Border>
-                    </DataTemplate>
-                  </ListBox.ItemTemplate>
-                </ListBox>
-              </DockPanel>
+            <Border Grid.Column="1" Classes="metric-3d" Background="#FFEBEE" Padding="8,6" BorderBrush="#EF9A9A">
+              <StackPanel>
+                <TextBlock Text="손절가" FontSize="10" FontWeight="Bold" Foreground="#F23645"/>
+                <TextBlock Text="{Binding StopLossLabel}" FontSize="17" FontWeight="Bold" Foreground="#F23645"
+                           FontFamily="Menlo, Monaco, Consolas, monospace"/>
+              </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Classes="metric-3d" Background="#E8F5E9" Padding="8,6" BorderBrush="#A5D6A7">
+              <StackPanel>
+                <TextBlock Text="익절가" FontSize="10" FontWeight="Bold" Foreground="#089981"/>
+                <TextBlock Text="{Binding TakeProfitLabel}" FontSize="17" FontWeight="Bold" Foreground="#089981"
+                           FontFamily="Menlo, Monaco, Consolas, monospace"/>
+              </StackPanel>
             </Border>
           </Grid>
-        </Grid>
-      </ScrollViewer>
-    </Border>
+          <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="6" RowDefinitions="Auto,Auto" RowSpacing="4">
+            <TextBlock Classes="sub" Text="수량"/>
+            <TextBlock Grid.Column="1" FontWeight="Bold" Text="{Binding QuantityPlanLabel}"/>
+            <TextBlock Grid.Column="2" Classes="sub" Text="리스크"/>
+            <TextBlock Grid.Column="3" FontWeight="SemiBold" Text="{Binding RiskAmountLabel}"/>
+            <TextBlock Grid.Row="1" Classes="sub" Text="수수료"/>
+            <TextBlock Grid.Row="1" Grid.Column="1" Foreground="#B45309" FontWeight="SemiBold" Text="{Binding CommissionLabel}"/>
+            <TextBlock Grid.Row="1" Grid.Column="2" Classes="sub" Text="R:R"/>
+            <TextBlock Grid.Row="1" Grid.Column="3" FontWeight="SemiBold" Text="{Binding RewardRiskLabel}"/>
+          </Grid>
+          <TextBlock Text="{Binding BracketSummary}" FontSize="11" Foreground="#787B86"
+                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding BracketSummary}"/>
+        </StackPanel>
+      </Border>
+
+      <Border Grid.Column="2" Classes="glass-card" Padding="12,10">
+        <StackPanel Spacing="5" VerticalAlignment="Center">
+          <TextBlock Classes="caption-3d" Text="잔액 · 상태"/>
+          <TextBlock Text="{Binding BalanceLabel}" FontSize="16" FontWeight="Bold" Foreground="#131722"
+                     FontFamily="Menlo, Monaco, Consolas, monospace"
+                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding BalanceLabel}"/>
+          <TextBlock Classes="sub" Text="{Binding BotStatePill, StringFormat=봇 · {0}}"/>
+          <TextBlock Classes="sub" Text="{Binding GateStatusPill}"
+                     TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding GateStatusPill}"/>
+          <TextBlock Classes="caption-3d" Margin="0,6,0,0" Text="세션 수익률"/>
+          <TextBlock Text="{Binding ReturnRateLabel}" FontSize="22" FontWeight="Bold" Foreground="#089981"
+                     FontFamily="Menlo, Monaco, Consolas, monospace"/>
+          <TextBlock Classes="sub" Text="연습 세션 기준 · 수익 보장 아님"/>
+        </StackPanel>
+      </Border>
+
+      <Grid Grid.Column="3" RowDefinitions="Auto,*" RowSpacing="8">
+        <Border Classes="glass-card" Padding="12,10">
+          <StackPanel Spacing="3">
+            <TextBlock Classes="caption-3d" Text="범례"/>
+            <TextBlock FontSize="11" Foreground="#434651" FontWeight="SemiBold"
+                       Text="진입 파랑 · 손절 빨강 · 익절 초록 · 거래량SMA 주황 · RSI 보라"/>
+            <TextBlock FontSize="10" Foreground="#787B86" Text="버블=대금 · 줌=가격+거래량+RSI 동시"/>
+          </StackPanel>
+        </Border>
+        <Border Grid.Row="1" Classes="glass-card" Padding="12,10">
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="caption-3d" Text="뉴스"/>
+              <Border Grid.Column="1" Classes="btn-3d-ghost">
+                <Button Classes="glass-btn-ghost" Content="뉴스 갱신" Padding="10,5" FontSize="11"
+                        Command="{Binding RefreshNewsOnlyCommand}"/>
+              </Border>
+            </Grid>
+            <TextBlock Text="{Binding NewsStatus}" FontSize="10" Foreground="#787B86"
+                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding NewsStatus}"/>
+            <ItemsControl ItemsSource="{Binding NewsItems}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:NewsItemRow">
+                  <Border Classes="metric-3d" Background="#F8F9FD" Padding="8,6" Margin="0,0,0,4"
+                          BorderBrush="#E0E3EB">
+                    <StackPanel Spacing="1">
+                      <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold" Foreground="#131722"
+                                 TextWrapping="Wrap" MaxLines="2" LineHeight="14"
+                                 TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}"/>
+                      <TextBlock Text="{Binding Meta}" FontSize="9" Foreground="#9598A1"
+                                 TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </Grid>
   </Grid>
+
+  <Window.Styles>
+    <Style Selector="TextBlock.up">
+      <Setter Property="Foreground" Value="#089981"/>
+    </Style>
+    <Style Selector="TextBlock.down">
+      <Setter Property="Foreground" Value="#F23645"/>
+    </Style>
+  </Window.Styles>
 </Window>

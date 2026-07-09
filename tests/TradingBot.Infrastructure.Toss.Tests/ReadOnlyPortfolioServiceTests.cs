@@ -10,7 +10,6 @@ public class ReadOnlyPortfolioServiceTests
     public async Task Mock_service_returns_connected_snapshot_without_live_orders()
     {
         var svc = ReadOnlyPortfolioService.CreateMock();
-        // 타 심볼 요청해도 유니버스는 SPCX 강제
         var snap = await svc.GetSnapshotAsync(new[] { "AAPL", "MSFT" }, CancellationToken.None);
 
         Assert.Equal(ConnectionStatus.MockConnected, snap.ConnectionStatus);
@@ -22,6 +21,29 @@ public class ReadOnlyPortfolioServiceTests
         Assert.Equal("USD", snap.CashCurrency);
         Assert.Equal(1500.25m, snap.MarketValueUsdDecimal);
         Assert.Contains(snap.BlockMessages, m => m.Contains("주문 API 미사용", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Mock_service_accepts_vmar_in_watchlist()
+    {
+        var svc = ReadOnlyPortfolioService.CreateMock();
+        var snap = await svc.GetSnapshotAsync(new[] { "VMAR" }, CancellationToken.None);
+
+        Assert.Equal(ConnectionStatus.MockConnected, snap.ConnectionStatus);
+        Assert.Single(snap.Quotes);
+        Assert.Equal(WatchlistCatalog.VmarSymbol, snap.Quotes[0].Symbol);
+        Assert.Contains(snap.BlockMessages, m => m.Contains("주문 API 미사용", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Mock_service_accepts_spcx_and_vmar_together()
+    {
+        var svc = ReadOnlyPortfolioService.CreateMock();
+        var snap = await svc.GetSnapshotAsync(new[] { "SPCX", "VMAR", "AAPL" }, CancellationToken.None);
+
+        Assert.Equal(2, snap.Quotes.Count);
+        Assert.Contains(snap.Quotes, q => q.Symbol == WatchlistCatalog.SpaceXSymbol);
+        Assert.Contains(snap.Quotes, q => q.Symbol == WatchlistCatalog.VmarSymbol);
     }
 
     [Fact]

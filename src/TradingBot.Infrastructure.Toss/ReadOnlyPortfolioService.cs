@@ -52,16 +52,16 @@ public sealed class ReadOnlyPortfolioService : IReadOnlyPortfolioService
     {
         ArgumentNullException.ThrowIfNull(watchSymbols);
 
-        // SpaceX-only: force SPCX for market quotes even if caller passes others.
+        // Known universe only (SPCX / VMAR). Unknown tickers dropped; empty → PrimarySymbol.
         var symbols = watchSymbols
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s => s.Trim().ToUpperInvariant())
-            .Where(s => s.Equals(WatchlistCatalog.SpaceXSymbol, StringComparison.Ordinal))
-            .Distinct(StringComparer.Ordinal)
+            .Select(WatchlistCatalog.NormalizeKnownSymbol)
+            .Where(s => s is not null)
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (symbols.Length == 0)
         {
-            symbols = [WatchlistCatalog.SpaceXSymbol];
+            symbols = [WatchlistCatalog.PrimarySymbol];
         }
 
         try

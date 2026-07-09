@@ -12,17 +12,18 @@ using TradingBot.Domain;
 namespace TradingBot.App.ViewModels;
 
 /// <summary>
-/// Premium TradingView-light chart builder: dual pane, KST axes, crosshair, sections.
+/// Premium TradingView-light chart builder: price + volume + RSI panes, KST axes, crosshair, sections.
 /// </summary>
 public static class ChartPresentationBuilder
 {
     public static readonly SKColor TvUp = SKColor.Parse("#089981");
     public static readonly SKColor TvDown = SKColor.Parse("#F23645");
-    public static readonly SKColor TvGrid = SKColor.Parse("#F0F3FA");
+    public static readonly SKColor TvGrid = SKColor.Parse("#E6EAF2");
     public static readonly SKColor TvAxis = SKColor.Parse("#787B86");
     public static readonly SKColor TvEntry = SKColor.Parse("#2962FF");
     public static readonly SKColor TvBg = SKColor.Parse("#FFFFFF");
     public static readonly SKColor Crosshair = SKColor.Parse("#9598A1");
+    public static readonly SKColor TvRsi = SKColor.Parse("#7E57C2");
 
     private static readonly SKColor[] IndicatorColors =
     [
@@ -46,14 +47,40 @@ public static class ChartPresentationBuilder
         Margin PriceMargin,
         Margin VolumeMargin,
         string LastPriceLabel,
-        string IndicatorLegend);
+        string IndicatorLegend,
+        string LastCloseText = "",
+        string ChangeText = "",
+        bool ChangeIsPositive = true,
+        string BarCountText = "",
+        string LastBarTimeText = "",
+        string HighLowText = "",
+        string OpenText = "",
+        string VolumeText = "",
+        string StatusLineText = "",
+        string LastPriceTag = "",
+        bool LastPriceIsUp = true,
+        string WatermarkText = "",
+        ISeries[]? RsiSeries = null,
+        Axis[]? RsiXAxes = null,
+        Axis[]? RsiYAxes = null,
+        DrawMarginFrame? RsiFrame = null,
+        Margin? RsiMargin = null,
+        string RsiStatusText = "",
+        RectangularSection[]? RsiSections = null,
+        string LastPriceAxisBadge = "",
+        bool LastPriceAxisBadgeIsUp = true,
+        double LastPriceYFraction = 0,
+        double LastPriceYMin = 0,
+        double LastPriceYMax = 0,
+        double LastCloseValue = 0);
 
     public static ChartBundle Build(
         IReadOnlyList<CandlePoint> candles,
         IReadOnlyList<TradeMarker> markers,
         IReadOnlyList<ChartIndicatorLine> indicators,
         TradeBracketPlan bracket,
-        ChartTimeframe timeframe)
+        ChartTimeframe timeframe,
+        string? dataSourceWatermark = null)
     {
         ArgumentNullException.ThrowIfNull(candles);
         ArgumentNullException.ThrowIfNull(markers);
@@ -68,13 +95,17 @@ public static class ChartPresentationBuilder
         var barDuration = ChartTimeframeCatalog.BarDuration(timeframe);
         var includeDate = timeframe is ChartTimeframe.일봉 or ChartTimeframe.주봉
                           || barDuration.TotalHours >= 1;
+        // Density: typical 40–120 bar windows keep body width in [8, 14] (TV-like).
         var maxBarWidth = candles.Count switch
         {
-            > 140 => 3.5,
-            > 100 => 5.0,
-            > 70 => 7.0,
-            > 40 => 9.0,
-            _ => 12.0,
+            > 300 => 3.0,
+            > 220 => 4.5,
+            > 160 => 6.0,
+            > 120 => 7.5,
+            > 90 => 9.0,
+            > 60 => 11.0,
+            > 40 => 12.5,
+            _ => 13.5,
         };
 
         // Store wall-clock as KST DateTime so axes/tooltips read in Korean time.
@@ -86,20 +117,15 @@ public static class ChartPresentationBuilder
             })
             .ToArray();
 
-        // Bubbles: only top volume quintile to reduce clutter
+        // Bubbles: only top 3% notional to reduce clutter
         var notionals = candles.Select(c => c.Volume * c.Close).ToArray();
+        var topBubbleCount = notionals.Length == 0
+            ? 0
+            : Math.Max(1, (int)Math.Ceiling(notionals.Length * 0.03));
         var threshold = notionals.Length == 0
             ? 0
-            : notionals.OrderByDescending(v => v).Skip(Math.Max(0, notionals.Length / 5)).FirstOrDefault();
-        var strongMarkers = markers
-            .Where((_, i) => i < candles.Count && candles[i].Volume * candles[i].Close >= threshold * 0.99)
-            .ToList();
-        if (strongMarkers.Count == 0)
-        {
-            strongMarkers = markers.Take(Math.Min(12, markers.Count)).ToList();
-        }
+            : notionals.OrderByDescending(v => v).Skip(topBubbleCount - 1).FirstOrDefault();
 
-        // Prefer markers aligned by time if counts differ
         var buyBubbles = BuildBubbles(markers, candles, TradeMarkerSide.매수, threshold);
         var sellBubbles = BuildBubbles(markers, candles, TradeMarkerSide.매도, threshold);
 
@@ -107,7 +133,6 @@ public static class ChartPresentationBuilder
         {
             try
             {
-                // FinancialPoint: date is on the X (secondary in LC2 financial)
                 var x = p.Coordinate.SecondaryValue;
                 if (x <= 0)
                 {
@@ -122,20 +147,25 @@ public static class ChartPresentationBuilder
             }
         };
 
+        var upStrokeColor = Darken(TvUp, 0.82f);
+        var downStrokeColor = Darken(TvDown, 0.82f);
+        var seriesName = string.IsNullOrWhiteSpace(bracket.Symbol)
+            ? WatchlistCatalog.PrimarySymbol
+            : bracket.Symbol;
         var candleSeries = new CandlesticksSeries<FinancialPoint>
         {
-            Name = "SPCX",
+            Name = seriesName,
             Values = financial,
             UpFill = new SolidColorPaint(TvUp),
-            UpStroke = new SolidColorPaint(TvUp) { StrokeThickness = 1 },
+            UpStroke = new SolidColorPaint(upStrokeColor) { StrokeThickness = 1.25f },
             DownFill = new SolidColorPaint(TvDown),
-            DownStroke = new SolidColorPaint(TvDown) { StrokeThickness = 1 },
+            DownStroke = new SolidColorPaint(downStrokeColor) { StrokeThickness = 1.25f },
             MaxBarWidth = maxBarWidth,
             ZIndex = 2,
+            AnimationsSpeed = TimeSpan.Zero,
             XToolTipLabelFormatter = xTipFin,
             YToolTipLabelFormatter = p =>
             {
-                // Show OHLC-ish from point if available
                 if (p.Context.DataSource is FinancialPoint fp)
                 {
                     return $"O {fp.Open:N2}  H {fp.High:N2}  L {fp.Low:N2}  C {fp.Close:N2}";
@@ -147,10 +177,21 @@ public static class ChartPresentationBuilder
 
         var series = new List<ISeries> { candleSeries };
 
+        // When any EMA overlay is present, draw only EMA9 + EMA21 (drop SMA clutter).
+        var hasEma = indicators.Any(i =>
+            i.Name.StartsWith("EMA", StringComparison.OrdinalIgnoreCase));
+        var drawnIndicators = hasEma
+            ? indicators
+                .Where(i =>
+                    i.Name.Equals("EMA9", StringComparison.OrdinalIgnoreCase)
+                    || i.Name.Equals("EMA21", StringComparison.OrdinalIgnoreCase))
+                .ToList()
+            : indicators.ToList();
+
         var legend = new List<string>();
-        for (var i = 0; i < indicators.Count; i++)
+        for (var i = 0; i < drawnIndicators.Count; i++)
         {
-            var line = indicators[i];
+            var line = drawnIndicators[i];
             var color = IndicatorColors[i % IndicatorColors.Length];
             var pts = new List<DateTimePoint>();
             for (var j = 0; j < candles.Count; j++)
@@ -169,7 +210,7 @@ public static class ChartPresentationBuilder
                 GeometrySize = 0,
                 LineSmoothness = 0,
                 Fill = null,
-                Stroke = new SolidColorPaint(color) { StrokeThickness = 1.5f },
+                Stroke = new SolidColorPaint(color) { StrokeThickness = 1.0f },
                 ZIndex = 4 + i,
                 XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
                 YToolTipLabelFormatter = p => $"{line.Name} {p.Coordinate.PrimaryValue:N2}",
@@ -177,8 +218,11 @@ public static class ChartPresentationBuilder
             legend.Add(line.Name);
         }
 
-        // Last price dashed line
+        // Last price dashed line — TV direction color (up green / down red)
         var lastClose = candles[^1].Close;
+        var prevClose = candles.Count > 1 ? candles[^2].Close : candles[0].Open;
+        var lastPriceIsUp = lastClose >= prevClose;
+        var lastLineColor = lastPriceIsUp ? TvUp : TvDown;
         var t0 = KoreaTime.ToKstDateTime(candles[0].Time);
         var t1 = KoreaTime.ToKstDateTime(candles[^1].Time);
         series.Add(new LineSeries<DateTimePoint>
@@ -191,15 +235,17 @@ public static class ChartPresentationBuilder
             },
             GeometrySize = 0,
             Fill = null,
-            Stroke = new SolidColorPaint(Crosshair)
+            Stroke = new SolidColorPaint(lastLineColor)
             {
                 StrokeThickness = 1,
                 PathEffect = new DashEffect([4, 4]),
             },
             ZIndex = 3,
             IsVisibleAtLegend = false,
+            IsHoverable = false,
+            AnimationsSpeed = TimeSpan.Zero,
             XToolTipLabelFormatter = _ => string.Empty,
-            YToolTipLabelFormatter = p => $"Last {p.Coordinate.PrimaryValue:N2}",
+            YToolTipLabelFormatter = _ => string.Empty,
         });
 
         if (bracket.EntryLimit > 0m)
@@ -220,30 +266,34 @@ public static class ChartPresentationBuilder
             legend.Add("TP");
         }
 
-        // Bubbles: softer, no raw W in tooltip
+        // Bubbles: visual volume-notional markers; not in find-set (avoids bogus crosshair Y)
         series.Add(new ScatterSeries<WeightedPoint>
         {
             Name = "대금↑",
             Values = buyBubbles,
-            MinGeometrySize = 5,
-            GeometrySize = 22,
-            Fill = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x38)),
+            MinGeometrySize = 3,
+            GeometrySize = 10,
+            Fill = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x18)),
             Stroke = null,
             ZIndex = 8,
-            XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
-            YToolTipLabelFormatter = p => $"대금↑ {p.Coordinate.PrimaryValue:N2}",
+            IsHoverable = false,
+            AnimationsSpeed = TimeSpan.Zero,
+            XToolTipLabelFormatter = _ => string.Empty,
+            YToolTipLabelFormatter = _ => string.Empty,
         });
         series.Add(new ScatterSeries<WeightedPoint>
         {
             Name = "대금↓",
             Values = sellBubbles,
-            MinGeometrySize = 5,
-            GeometrySize = 22,
-            Fill = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x38)),
+            MinGeometrySize = 3,
+            GeometrySize = 10,
+            Fill = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x18)),
             Stroke = null,
             ZIndex = 8,
-            XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
-            YToolTipLabelFormatter = p => $"대금↓ {p.Coordinate.PrimaryValue:N2}",
+            IsHoverable = false,
+            AnimationsSpeed = TimeSpan.Zero,
+            XToolTipLabelFormatter = _ => string.Empty,
+            YToolTipLabelFormatter = _ => string.Empty,
         });
 
         // Volume pane
@@ -263,31 +313,151 @@ public static class ChartPresentationBuilder
             }
         }
 
-        var volSeries = new ISeries[]
+        var volSmaPts = BuildVolumeSma(candles, period: 20);
+
+        var volSeriesList = new List<ISeries>
         {
             new ColumnSeries<DateTimePoint>
             {
-                Name = "거래량+",
+                Name = "Vol+",
                 Values = volUp,
-                Fill = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x88)),
+                Fill = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x90)),
                 Stroke = null,
                 MaxBarWidth = maxBarWidth,
-                Padding = 0.4,
+                Padding = 0.08,
                 XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
-                YToolTipLabelFormatter = p => FormatVolume(p.Coordinate.PrimaryValue),
+                YToolTipLabelFormatter = p => $"Vol {FormatVolume(p.Coordinate.PrimaryValue)}",
+                AnimationsSpeed = TimeSpan.Zero,
             },
             new ColumnSeries<DateTimePoint>
             {
-                Name = "거래량-",
+                Name = "Vol-",
                 Values = volDown,
-                Fill = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x88)),
+                Fill = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x90)),
                 Stroke = null,
                 MaxBarWidth = maxBarWidth,
-                Padding = 0.4,
+                Padding = 0.08,
                 XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
-                YToolTipLabelFormatter = p => FormatVolume(p.Coordinate.PrimaryValue),
+                YToolTipLabelFormatter = p => $"Vol {FormatVolume(p.Coordinate.PrimaryValue)}",
+                AnimationsSpeed = TimeSpan.Zero,
             },
         };
+        if (volSmaPts.Count > 0)
+        {
+            volSeriesList.Add(new LineSeries<DateTimePoint>
+            {
+                Name = "Vol SMA20",
+                Values = volSmaPts,
+                GeometrySize = 0,
+                LineSmoothness = 0,
+                Fill = null,
+                Stroke = new SolidColorPaint(SKColor.Parse("#F59E0B")) { StrokeThickness = 1.2f },
+                ZIndex = 5,
+                AnimationsSpeed = TimeSpan.Zero,
+                XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
+                YToolTipLabelFormatter = p => $"SMA20 {FormatVolume(p.Coordinate.PrimaryValue)}",
+            });
+        }
+
+        var volSeries = volSeriesList.ToArray();
+
+        // RSI pane (Wilder 14) — separate scale 0–100
+        var closes = candles.Select(c => c.Close).ToArray();
+        var rsiValues = ChartIndicatorCalculator.Rsi(closes, 14);
+        var rsiPts = new List<DateTimePoint>();
+        double? lastRsi = null;
+        for (var i = 0; i < candles.Count; i++)
+        {
+            if (i < rsiValues.Count && rsiValues[i] is double rv && !double.IsNaN(rv))
+            {
+                rsiPts.Add(new DateTimePoint(KoreaTime.ToKstDateTime(candles[i].Time), rv));
+                lastRsi = rv;
+            }
+        }
+
+        var rsiSeriesList = new List<ISeries>();
+        if (rsiPts.Count > 0)
+        {
+            rsiSeriesList.Add(new LineSeries<DateTimePoint>
+            {
+                Name = "RSI14",
+                Values = rsiPts,
+                GeometrySize = 0,
+                LineSmoothness = 0,
+                Fill = null,
+                Stroke = new SolidColorPaint(TvRsi) { StrokeThickness = 1.5f },
+                ZIndex = 4,
+                AnimationsSpeed = TimeSpan.Zero,
+                XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
+                YToolTipLabelFormatter = p => $"RSI {p.Coordinate.PrimaryValue:N1}",
+            });
+        }
+
+        // Dashed guide lines at 30 / 70
+        rsiSeriesList.Add(new LineSeries<DateTimePoint>
+        {
+            Name = "RSI30",
+            Values = new[]
+            {
+                new DateTimePoint(t0, 30),
+                new DateTimePoint(t1, 30),
+            },
+            GeometrySize = 0,
+            Fill = null,
+            Stroke = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x90))
+            {
+                StrokeThickness = 1,
+                PathEffect = new DashEffect([4, 4]),
+            },
+            ZIndex = 2,
+            IsVisibleAtLegend = false,
+            IsHoverable = false,
+            AnimationsSpeed = TimeSpan.Zero,
+            XToolTipLabelFormatter = _ => string.Empty,
+            YToolTipLabelFormatter = _ => string.Empty,
+        });
+        rsiSeriesList.Add(new LineSeries<DateTimePoint>
+        {
+            Name = "RSI70",
+            Values = new[]
+            {
+                new DateTimePoint(t0, 70),
+                new DateTimePoint(t1, 70),
+            },
+            GeometrySize = 0,
+            Fill = null,
+            Stroke = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x90))
+            {
+                StrokeThickness = 1,
+                PathEffect = new DashEffect([4, 4]),
+            },
+            ZIndex = 2,
+            IsVisibleAtLegend = false,
+            IsHoverable = false,
+            AnimationsSpeed = TimeSpan.Zero,
+            XToolTipLabelFormatter = _ => string.Empty,
+            YToolTipLabelFormatter = _ => string.Empty,
+        });
+
+        var rsiSeries = rsiSeriesList.ToArray();
+        var rsiSections = new RectangularSection[]
+        {
+            new()
+            {
+                Yi = 0,
+                Yj = 30,
+                Fill = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x12)),
+            },
+            new()
+            {
+                Yi = 70,
+                Yj = 100,
+                Fill = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x12)),
+            },
+        };
+        var rsiStatusText = lastRsi is double lr
+            ? $"RSI14 {lr:N1}"
+            : "RSI14 —";
 
         var priceMin = candles.Min(c => c.Low);
         var priceMax = candles.Max(c => c.High);
@@ -315,9 +485,12 @@ public static class ChartPresentationBuilder
         var crossLabelBg = new SKColor(0x29, 0x62, 0xFF, 0xE6).AsLvcColor();
         var crossLabelPaint = new SolidColorPaint(SKColors.White);
 
-        Axis MakeX(bool showLabels) => new()
+        // Triple-pane time axes: same scale + bidirectional Min/Max sync so zoom/pan stay locked.
+        Axis MakeTimeAxis(bool showLabels) => new()
         {
-            LabelsPaint = showLabels ? new SolidColorPaint(TvAxis) : new SolidColorPaint(SKColors.Transparent),
+            LabelsPaint = showLabels
+                ? new SolidColorPaint(TvAxis)
+                : new SolidColorPaint(SKColors.Transparent),
             SeparatorsPaint = grid,
             ShowSeparatorLines = true,
             TextSize = 10,
@@ -330,8 +503,25 @@ public static class ChartPresentationBuilder
             CrosshairLabelsPaint = crossLabelPaint,
             CrosshairLabelsBackground = crossLabelBg,
             CrosshairSnapEnabled = true,
-            CrosshairPadding = new LiveChartsCore.Drawing.Padding(6, 4),
+            CrosshairPadding = new LiveChartsCore.Drawing.Padding(4, 2),
+            AnimationsSpeed = TimeSpan.Zero,
         };
+
+        // Time labels only on bottom RSI pane (volume sits mid-stack).
+        var priceX = MakeTimeAxis(showLabels: false);
+        var volumeX = MakeTimeAxis(showLabels: false);
+        var rsiX = MakeTimeAxis(showLabels: true);
+        LinkTimeAxes(priceX, volumeX, rsiX);
+
+        var yMin = priceMin - pad;
+        var yMax = priceMax + pad;
+        if (yMax <= yMin)
+        {
+            yMax = yMin + 1;
+        }
+
+        var priceStep = NicePriceStep(yMax - yMin, targetTicks: 4);
+        var priceSeparators = CapSeparators(BuildEvenSeparators(yMin, yMax, priceStep), maxCount: 5);
 
         var priceY = new Axis
         {
@@ -345,15 +535,22 @@ public static class ChartPresentationBuilder
             ShowSeparatorLines = true,
             TextSize = 10,
             Labeler = v => v.ToString("N2"),
-            MinLimit = priceMin - pad,
-            MaxLimit = priceMax + pad,
+            MinLimit = yMin,
+            MaxLimit = yMax,
+            MinStep = priceStep,
+            ForceStepToMin = true,
+            CustomSeparators = priceSeparators,
+            LabelsDensity = 0,
             CrosshairPaint = crossPaint,
             CrosshairLabelsPaint = crossLabelPaint,
             CrosshairLabelsBackground = crossLabelBg,
             CrosshairSnapEnabled = true,
             CrosshairPadding = new LiveChartsCore.Drawing.Padding(6, 4),
+            AnimationsSpeed = TimeSpan.Zero,
         };
 
+        var volCeil = volMax * 1.12;
+        var volStep = NicePriceStep(volCeil, targetTicks: 3);
         var volY = new Axis
         {
             Position = AxisPosition.End,
@@ -363,7 +560,39 @@ public static class ChartPresentationBuilder
             TextSize = 9,
             Labeler = FormatVolume,
             MinLimit = 0,
-            MaxLimit = volMax * 1.15,
+            MaxLimit = volCeil,
+            MinStep = volStep,
+            ForceStepToMin = true,
+            CustomSeparators = CapSeparators(BuildEvenSeparators(0, volCeil, volStep), maxCount: 4),
+            LabelsDensity = 0,
+            CrosshairPaint = null,
+            CrosshairLabelsPaint = null,
+            IsVisible = true,
+            AnimationsSpeed = TimeSpan.Zero,
+        };
+
+        var rsiY = new Axis
+        {
+            Position = AxisPosition.End,
+            LabelsPaint = new SolidColorPaint(TvAxis),
+            SeparatorsPaint = new SolidColorPaint(TvGrid)
+            {
+                StrokeThickness = 1,
+                PathEffect = new DashEffect([3, 4]),
+            },
+            ShowSeparatorLines = true,
+            TextSize = 9,
+            Labeler = v => v.ToString("N0"),
+            MinLimit = 0,
+            MaxLimit = 100,
+            MinStep = 50,
+            ForceStepToMin = true,
+            CustomSeparators = new double[] { 0, 30, 70, 100 },
+            LabelsDensity = 0,
+            CrosshairPaint = null,
+            CrosshairLabelsPaint = null,
+            IsVisible = true,
+            AnimationsSpeed = TimeSpan.Zero,
         };
 
         // Sections: risk zone (stop→entry), reward zone (entry→tp)
@@ -390,15 +619,41 @@ public static class ChartPresentationBuilder
 
         var last = candles[^1];
         var first = candles[0];
-        var chg = first.Close > 0 ? (last.Close - first.Close) / first.Close * 100.0 : 0;
+        var prevOrFirst = candles.Count > 1 ? candles[^2] : first;
+        var sessionHigh = candles.Max(c => c.High);
+        var sessionLow = candles.Min(c => c.Low);
+        // Change vs previous bar (same basis as FormatOhlcStatus), not window first.
+        var chgBase = prevOrFirst.Close;
+        var chg = chgBase > 0 ? (last.Close - chgBase) / chgBase * 100.0 : 0;
         var lastKst = KoreaTime.FormatAxis(last.Time, includeDate: true);
-        var lastLabel =
-            $"종가 {last.Close:N2}  구간 {chg:+0.00;-0.00;0}%  {candles.Count}봉  {lastKst} KST\n" +
-            $"ENTRY {bracket.EntryLimit:N2}   SL {bracket.StopPrice:N2}   TP {bracket.TakeProfitPrice:N2}";
+        var lastCloseText = last.Close.ToString("N2");
+        var lastPriceTag = lastCloseText;
+        var changeText = chg.ToString("+0.00;-0.00;0.00") + "%";
+        var barCountText = $"{candles.Count}봉";
+        var highLowText = $"H {sessionHigh:N2}  L {sessionLow:N2}";
+        var openText = last.Open.ToString("N2");
+        var volumeText = FormatVolume(last.Volume);
+        var statusLine = FormatOhlcStatus(last, prevOrFirst);
+        var lastLabel = statusLine;
 
+        // Avalonia Y: 0=top, 1=bottom. Pin last-price badge to close within padded scale.
+        var ySpan = yMax - yMin;
+        var lastPriceYFraction = ySpan > 0
+            ? Math.Clamp((yMax - last.Close) / ySpan, 0.02, 0.98)
+            : 0.5;
+
+        var watermark = string.IsNullOrWhiteSpace(dataSourceWatermark)
+            ? string.Empty
+            : dataSourceWatermark.Trim();
         var legendText = legend.Count == 0
-            ? "프리미엄 차트 · Crosshair · Sections · KST"
-            : string.Join(" · ", legend) + " · KST · Crosshair";
+            ? "KST · zoom-sync"
+            : string.Join(" · ", legend);
+        if (watermark.Length > 0)
+        {
+            legendText = string.IsNullOrEmpty(legendText)
+                ? watermark
+                : legendText + " · " + watermark;
+        }
 
         var frame = new DrawMarginFrame
         {
@@ -406,20 +661,167 @@ public static class ChartPresentationBuilder
             Stroke = new SolidColorPaint(TvGrid) { StrokeThickness = 1 },
         };
 
+        const float leftM = 8f;
+        const float rightM = 72f;
+
         return new ChartBundle(
             PriceSeries: series.ToArray(),
             VolumeSeries: volSeries,
-            PriceXAxes: [MakeX(showLabels: false)],
+            PriceXAxes: [priceX],
             PriceYAxes: [priceY],
-            VolumeXAxes: [MakeX(showLabels: true)],
+            VolumeXAxes: [volumeX],
             VolumeYAxes: [volY],
             PriceSections: sections.ToArray(),
             PriceFrame: frame,
             VolumeFrame: frame,
-            PriceMargin: new Margin(8, 10, 52, 4),
-            VolumeMargin: new Margin(8, 4, 52, 22),
+            PriceMargin: new Margin(leftM, 6, rightM, 2),
+            // Volume mid-pane: no X labels → tight bottom; RSI bottom holds time labels.
+            VolumeMargin: new Margin(leftM, 2, rightM, 4),
             LastPriceLabel: lastLabel,
-            IndicatorLegend: legendText);
+            IndicatorLegend: legendText,
+            LastCloseText: lastCloseText,
+            ChangeText: changeText,
+            ChangeIsPositive: chg >= 0,
+            BarCountText: barCountText,
+            LastBarTimeText: lastKst + " KST",
+            HighLowText: highLowText,
+            OpenText: openText,
+            VolumeText: volumeText,
+            StatusLineText: statusLine,
+            LastPriceTag: lastPriceTag,
+            LastPriceIsUp: lastPriceIsUp,
+            WatermarkText: watermark,
+            RsiSeries: rsiSeries,
+            RsiXAxes: [rsiX],
+            RsiYAxes: [rsiY],
+            RsiFrame: frame,
+            RsiMargin: new Margin(leftM, 2, rightM, 14),
+            RsiStatusText: rsiStatusText,
+            RsiSections: rsiSections,
+            LastPriceAxisBadge: lastPriceTag,
+            LastPriceAxisBadgeIsUp: lastPriceIsUp,
+            LastPriceYFraction: lastPriceYFraction,
+            LastPriceYMin: yMin,
+            LastPriceYMax: yMax,
+            LastCloseValue: last.Close);
+    }
+
+    private static List<DateTimePoint> BuildVolumeSma(IReadOnlyList<CandlePoint> candles, int period)
+    {
+        var pts = new List<DateTimePoint>();
+        if (candles.Count < period || period < 2)
+        {
+            return pts;
+        }
+
+        double sum = 0;
+        for (var i = 0; i < candles.Count; i++)
+        {
+            sum += Math.Max(0, candles[i].Volume);
+            if (i >= period)
+            {
+                sum -= Math.Max(0, candles[i - period].Volume);
+            }
+
+            if (i >= period - 1)
+            {
+                var avg = sum / period;
+                pts.Add(new DateTimePoint(KoreaTime.ToKstDateTime(candles[i].Time), avg));
+            }
+        }
+
+        return pts;
+    }
+
+    /// <summary>
+    /// Bidirectional Min/Max sync across price / volume / RSI time axes (re-entrancy safe).
+    /// </summary>
+    private static void LinkTimeAxes(params Axis[] axes)
+    {
+        if (axes.Length < 2)
+        {
+            return;
+        }
+
+        var syncing = false;
+        const double epsilon = 1e-9;
+
+        void SyncFrom(Axis source)
+        {
+            if (syncing)
+            {
+                return;
+            }
+
+            var min = source.MinLimit;
+            var max = source.MaxLimit;
+
+            syncing = true;
+            try
+            {
+                foreach (var target in axes)
+                {
+                    if (ReferenceEquals(target, source))
+                    {
+                        continue;
+                    }
+
+                    var minDiffers = !NullableDoubleEquals(min, target.MinLimit, epsilon);
+                    var maxDiffers = !NullableDoubleEquals(max, target.MaxLimit, epsilon);
+                    if (!minDiffers && !maxDiffers)
+                    {
+                        continue;
+                    }
+
+                    if (min is double minV && max is double maxV)
+                    {
+                        target.SetLimits(minV, maxV, notify: true);
+                    }
+                    else
+                    {
+                        if (minDiffers)
+                        {
+                            target.MinLimit = min;
+                        }
+
+                        if (maxDiffers)
+                        {
+                            target.MaxLimit = max;
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                syncing = false;
+            }
+        }
+
+        foreach (var axis in axes)
+        {
+            axis.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName is nameof(Axis.MinLimit) or nameof(Axis.MaxLimit))
+                {
+                    SyncFrom(axis);
+                }
+            };
+        }
+    }
+
+    private static bool NullableDoubleEquals(double? x, double? y, double epsilon)
+    {
+        if (x is null && y is null)
+        {
+            return true;
+        }
+
+        if (x is null || y is null)
+        {
+            return false;
+        }
+
+        return Math.Abs(x.Value - y.Value) <= epsilon;
     }
 
     private static ChartBundle Empty() => new(
@@ -434,8 +836,33 @@ public static class ChartPresentationBuilder
         new DrawMarginFrame(),
         new Margin(10),
         new Margin(10),
-        string.Empty,
-        string.Empty);
+        LastPriceLabel: "차트 데이터 없음",
+        IndicatorLegend: string.Empty,
+        LastCloseText: "—",
+        ChangeText: "—",
+        ChangeIsPositive: true,
+        BarCountText: "0봉",
+        LastBarTimeText: string.Empty,
+        HighLowText: string.Empty,
+        OpenText: string.Empty,
+        VolumeText: string.Empty,
+        StatusLineText: "차트 데이터 없음 · 새로고침 또는 연결 확인",
+        LastPriceTag: string.Empty,
+        LastPriceIsUp: true,
+        WatermarkText: string.Empty,
+        RsiSeries: Array.Empty<ISeries>(),
+        RsiXAxes: Array.Empty<Axis>(),
+        RsiYAxes: Array.Empty<Axis>(),
+        RsiFrame: new DrawMarginFrame(),
+        RsiMargin: new Margin(10),
+        RsiStatusText: "RSI14 —",
+        RsiSections: Array.Empty<RectangularSection>(),
+        LastPriceAxisBadge: string.Empty,
+        LastPriceAxisBadgeIsUp: true,
+        LastPriceYFraction: 0,
+        LastPriceYMin: 0,
+        LastPriceYMax: 0,
+        LastCloseValue: 0);
 
     private static WeightedPoint[] BuildBubbles(
         IReadOnlyList<TradeMarker> markers,
@@ -443,7 +870,6 @@ public static class ChartPresentationBuilder
         TradeMarkerSide side,
         double threshold)
     {
-        // Prefer candle-aligned volume filter
         var list = new List<WeightedPoint>();
         if (markers.Count == candles.Count)
         {
@@ -455,7 +881,7 @@ public static class ChartPresentationBuilder
                     continue;
                 }
 
-                if (candles[i].Volume * candles[i].Close < threshold * 0.85 && threshold > 0)
+                if (threshold > 0 && candles[i].Volume * candles[i].Close < threshold)
                 {
                     continue;
                 }
@@ -500,6 +926,8 @@ public static class ChartPresentationBuilder
                 PathEffect = dash ? new DashEffect([6, 4]) : null,
             },
             ZIndex = 12,
+            IsHoverable = true,
+            AnimationsSpeed = TimeSpan.Zero,
             XToolTipLabelFormatter = _ => string.Empty,
             YToolTipLabelFormatter = _ => $"{name} {price:N2}",
         };
@@ -514,7 +942,6 @@ public static class ChartPresentationBuilder
                 x = p.Coordinate.PrimaryValue;
             }
 
-            // reject weight-like tiny values mistaken for ticks
             if (x < TimeSpan.FromDays(365).Ticks)
             {
                 return string.Empty;
@@ -528,8 +955,24 @@ public static class ChartPresentationBuilder
         }
     }
 
-    private static string FormatVolume(double v)
+    private static SKColor Darken(SKColor color, float factor)
     {
+        factor = Math.Clamp(factor, 0f, 1f);
+        return new SKColor(
+            (byte)(color.Red * factor),
+            (byte)(color.Green * factor),
+            (byte)(color.Blue * factor),
+            color.Alpha);
+    }
+
+    /// <summary>TradingView-style volume axis / status formatting (shipped helper).</summary>
+    public static string FormatVolume(double v)
+    {
+        if (v >= 1_000_000_000)
+        {
+            return $"{v / 1_000_000_000:0.##}B";
+        }
+
         if (v >= 1_000_000)
         {
             return $"{v / 1_000_000:0.#}M";
@@ -541,5 +984,169 @@ public static class ChartPresentationBuilder
         }
 
         return v.ToString("N0");
+    }
+
+    public static string FormatOhlcStatus(CandlePoint last, CandlePoint? prevOrFirst)
+    {
+        ArgumentNullException.ThrowIfNull(last);
+        var baseline = prevOrFirst ?? last;
+        var chg = baseline.Close > 0
+            ? (last.Close - baseline.Close) / baseline.Close * 100.0
+            : 0;
+        var changeText = chg.ToString("+0.00;-0.00;0.00") + "%";
+        var volumeText = FormatVolume(last.Volume);
+        return
+            $"O {last.Open:N2}  H {last.High:N2}  L {last.Low:N2}  C {last.Close:N2}  " +
+            $"{changeText}  Vol {volumeText}";
+    }
+
+    public static string ResolveHoverOhlcStatus(
+        IReadOnlyList<CandlePoint> candles,
+        DateTimeOffset hoverTime)
+    {
+        ArgumentNullException.ThrowIfNull(candles);
+        if (candles.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var bestIdx = 0;
+        var bestSeconds = double.MaxValue;
+        for (var i = 0; i < candles.Count; i++)
+        {
+            var seconds = Math.Abs((candles[i].Time - hoverTime).TotalSeconds);
+            if (seconds < bestSeconds)
+            {
+                bestSeconds = seconds;
+                bestIdx = i;
+            }
+        }
+
+        var maxSeconds = MaxHoverSnapSeconds(candles);
+        if (bestSeconds > maxSeconds)
+        {
+            return string.Empty;
+        }
+
+        CandlePoint? prev = bestIdx > 0 ? candles[bestIdx - 1] : null;
+        return FormatOhlcStatus(candles[bestIdx], prev);
+    }
+
+    public static (string Text, bool IsUp) FormatLastPriceAxisBadge(
+        CandlePoint last,
+        CandlePoint? previous)
+    {
+        ArgumentNullException.ThrowIfNull(last);
+        var text = last.Close.ToString("N2");
+        var baseline = previous?.Close ?? last.Open;
+        var isUp = last.Close >= baseline;
+        return (text, isUp);
+    }
+
+    private static double MaxHoverSnapSeconds(IReadOnlyList<CandlePoint> candles)
+    {
+        if (candles.Count < 2)
+        {
+            return TimeSpan.FromHours(12).TotalSeconds;
+        }
+
+        double sum = 0;
+        var gaps = 0;
+        for (var i = 1; i < candles.Count; i++)
+        {
+            var gap = Math.Abs((candles[i].Time - candles[i - 1].Time).TotalSeconds);
+            if (gap <= 0)
+            {
+                continue;
+            }
+
+            sum += gap;
+            gaps++;
+        }
+
+        if (gaps == 0)
+        {
+            return TimeSpan.FromHours(12).TotalSeconds;
+        }
+
+        return (sum / gaps) * 1.5;
+    }
+
+    public static double NicePriceStep(double range, int targetTicks = 6)
+    {
+        if (range <= 0 || double.IsNaN(range) || double.IsInfinity(range))
+        {
+            return 0.5;
+        }
+
+        targetTicks = Math.Clamp(targetTicks, 2, 12);
+        var rough = range / targetTicks;
+        if (rough <= 0)
+        {
+            return 0.5;
+        }
+
+        var exp = Math.Floor(Math.Log10(rough));
+        var baseStep = Math.Pow(10, exp);
+        var mantissa = rough / baseStep;
+        double nice = mantissa switch
+        {
+            < 1.5 => 1,
+            < 3.5 => 2,
+            < 7.5 => 5,
+            _ => 10,
+        };
+        return nice * baseStep;
+    }
+
+    public static double[] BuildEvenSeparators(double min, double max, double step)
+    {
+        if (step <= 0 || max < min)
+        {
+            return [min, max];
+        }
+
+        var start = Math.Floor(min / step) * step;
+        if (start < min - step * 1e-9)
+        {
+            start += step;
+        }
+
+        var list = new List<double>(12);
+        for (var v = start; v <= max + step * 1e-9 && list.Count < 24; v += step)
+        {
+            list.Add(Math.Round(v, 10));
+        }
+
+        if (list.Count == 0)
+        {
+            list.Add(min);
+            list.Add(max);
+        }
+
+        return list.ToArray();
+    }
+
+    public static double[] CapSeparators(double[] separators, int maxCount)
+    {
+        ArgumentNullException.ThrowIfNull(separators);
+        if (separators.Length <= maxCount || maxCount < 2)
+        {
+            return separators;
+        }
+
+        var result = new double[maxCount];
+        result[0] = separators[0];
+        result[^1] = separators[^1];
+        var inner = maxCount - 2;
+        for (var i = 1; i <= inner; i++)
+        {
+            var t = (double)i / (inner + 1);
+            var idx = (int)Math.Round(t * (separators.Length - 1));
+            idx = Math.Clamp(idx, 1, separators.Length - 2);
+            result[i] = separators[idx];
+        }
+
+        return result;
     }
 }

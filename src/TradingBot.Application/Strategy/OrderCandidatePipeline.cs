@@ -100,42 +100,113 @@ public sealed class OrderCandidatePipeline
             }
 
             var side = signal.Side == SignalSide.Buy ? "BUY" : "SELL";
-            var clientOrderId = ClientOrderIdFactory.CreateUnique(signal.Symbol, side, nowUtc);
-            var candidate = new OrderCandidate(
-                Symbol: signal.Symbol,
-                Side: side,
-                OrderType: "LIMIT",
-                Quantity: qty,
-                LimitPrice: price,
-                ClientOrderId: clientOrderId,
-                CreatedAtUtc: nowUtc);
 
-            positions.TryGetValue(signal.Symbol, out var pos);
-
-            var ctx = new CandidateRiskContext
+            // 일분분할스캘프: total qty → stepped LIMIT legs (fail-closed if empty).
+            if (strategy == TradingStrategyKind.일분분할스캘프)
             {
-                Symbol = signal.Symbol,
-                Quantity = qty,
-                LimitPrice = price,
-                CurrentPositionQuantity = pos,
-                DayStartEquity = practice?.DayStartEquity,
-                CurrentEquity = practice?.CurrentEquity,
-                QuoteTimestampUtc = quote.TimestampUtc,
-                NowUtc = nowUtc,
-                HasMissingData = price is null || qty <= 0,
-                MarketSessionOpen = marketSessionOpen,
-                MarketSessionKnown = marketSessionKnown,
-                MarketSessionOwnerMessage = sessionOwnerMessage,
-            };
+                if (price is not decimal splitPrice || splitPrice <= 0m || qty <= 0m)
+                {
+                    continue;
+                }
 
-            var risk = _riskGate.EvaluateOrderCandidate(settings, ctx);
-            var status = risk.Allowed
-                ? "후보 허용 (실주문 아님 — dry-run/paper 가능)"
-                : $"risk 차단: {string.Join(", ", risk.Blocks.Select(b => b.Code))}";
+                var legs = SplitOrderLegPlanner.Plan(
+                    side,
+                    qty,
+                    splitPrice,
+                    legCount: VmarOneMinuteScalpPreset.LegCount,
+                    stepPercent: VmarOneMinuteScalpPreset.PriceStepPercent);
 
-            results.Add(new EvaluatedOrderCandidate(candidate, signal, risk, status));
+                if (legs.Count == 0)
+                {
+                    continue;
+                }
+
+                positions.TryGetValue(signal.Symbol, out var splitPos);
+                foreach (var leg in legs)
+                {
+                    results.Add(EvaluateCandidate(
+                        settings,
+                        signal,
+                        side,
+                        leg.Quantity,
+                        leg.LimitPrice,
+                        nowUtc,
+                        quote,
+                        splitPos,
+                        marketSessionOpen,
+                        marketSessionKnown,
+                        sessionOwnerMessage,
+                        practice));
+                }
+
+                continue;
+            }
+
+            // Default: single candidate per actionable quote.
+            positions.TryGetValue(signal.Symbol, out var pos);
+            results.Add(EvaluateCandidate(
+                settings,
+                signal,
+                side,
+                qty,
+                price,
+                nowUtc,
+                quote,
+                pos,
+                marketSessionOpen,
+                marketSessionKnown,
+                sessionOwnerMessage,
+                practice));
         }
 
         return results;
+    }
+
+    private EvaluatedOrderCandidate EvaluateCandidate(
+        TradingSafetySettings settings,
+        StrategySignal signal,
+        string side,
+        decimal qty,
+        decimal? price,
+        DateTimeOffset nowUtc,
+        QuoteSnapshot quote,
+        decimal positionQty,
+        bool marketSessionOpen,
+        bool marketSessionKnown,
+        string? sessionOwnerMessage,
+        PracticeStrategyContext? practice)
+    {
+        var clientOrderId = ClientOrderIdFactory.CreateUnique(signal.Symbol, side, nowUtc);
+        var candidate = new OrderCandidate(
+            Symbol: signal.Symbol,
+            Side: side,
+            OrderType: "LIMIT",
+            Quantity: qty,
+            LimitPrice: price,
+            ClientOrderId: clientOrderId,
+            CreatedAtUtc: nowUtc);
+
+        var ctx = new CandidateRiskContext
+        {
+            Symbol = signal.Symbol,
+            Quantity = qty,
+            LimitPrice = price,
+            CurrentPositionQuantity = positionQty,
+            DayStartEquity = practice?.DayStartEquity,
+            CurrentEquity = practice?.CurrentEquity,
+            QuoteTimestampUtc = quote.TimestampUtc,
+            NowUtc = nowUtc,
+            HasMissingData = price is null || qty <= 0,
+            MarketSessionOpen = marketSessionOpen,
+            MarketSessionKnown = marketSessionKnown,
+            MarketSessionOwnerMessage = sessionOwnerMessage,
+        };
+
+        var risk = _riskGate.EvaluateOrderCandidate(settings, ctx);
+        var status = risk.Allowed
+            ? "후보 허용 (실주문 아님 — dry-run/paper 가능)"
+            : $"risk 차단: {string.Join(", ", risk.Blocks.Select(b => b.Code))}";
+
+        return new EvaluatedOrderCandidate(candidate, signal, risk, status);
     }
 }

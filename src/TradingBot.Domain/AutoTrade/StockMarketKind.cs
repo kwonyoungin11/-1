@@ -1,8 +1,11 @@
 namespace TradingBot.Domain;
 
-/// <summary>대상 주식 종류. 스페이스X(SPCX) 단일 유니버스만 사용.</summary>
+/// <summary>대상 주식 종류. 스페이스X(SPCX) + 비전마린(VMAR) 연습 유니버스.</summary>
 public enum StockMarketKind
 {
-    /// <summary>스페이스X 상장 티커 SPCX 전용 (그 외 종목 제거).</summary>
+    /// <summary>스페이스X 상장 티커 SPCX.</summary>
     스페이스X = 0,
+
+    /// <summary>비전 마린 테크놀로지 티커 VMAR — 1분봉 분할매매 연습.</summary>
+    비전마린 = 1,
 }

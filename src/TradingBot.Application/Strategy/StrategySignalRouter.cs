@@ -25,6 +25,7 @@ public sealed class StrategySignalRouter
         new TrendFollowSignalGenerator(trendFollowParameters),
         new MeanReversionSignalGenerator(),
         new MomentumBreakoutSignalGenerator(),
+        new OneMinuteSplitScalpSignalGenerator(),
     ];
 
     public StrategySignal Generate(

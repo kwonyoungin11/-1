@@ -14,6 +14,15 @@ public class StrategySolidDomainChecksTests
     }
 
     [Fact]
+    public void Vmar_universe_is_ok()
+    {
+        Assert.True(StrategySolidDomainChecks.IsVmarUniverseOk());
+        var symbols = WatchlistCatalog.ResolveSymbols(StockMarketKind.비전마린);
+        Assert.Single(symbols);
+        Assert.Equal(WatchlistCatalog.VmarSymbol, symbols[0]);
+    }
+
+    [Fact]
     public void Core3_alias_maps_to_spacex()
     {
         Assert.True(StrategySolidDomainChecks.IsCore3UniverseOk());
@@ -35,9 +44,13 @@ public class StrategySolidDomainChecksTests
     }
 
     [Fact]
-    public void AllDomainChecksOk_is_true_on_current_codebase()
+    public void AllDomainChecksOk_requires_both_universes_and_sizer_and_trend()
     {
         Assert.True(StrategySolidDomainChecks.AllDomainChecksOk());
+        Assert.True(StrategySolidDomainChecks.IsSpacexUniverseOk());
+        Assert.True(StrategySolidDomainChecks.IsVmarUniverseOk());
+        Assert.True(StrategySolidDomainChecks.IsPositionRiskSizerOk());
+        Assert.True(StrategySolidDomainChecks.IsTrendFollowParametersOk());
     }
 
     [Fact]
@@ -54,9 +67,11 @@ public class StrategySolidDomainChecksTests
             .ToList();
 
         var trend = ChartIndicatorCalculator.ForStrategy(candles, TradingStrategyKind.추세추종);
-        Assert.Equal(2, trend.Count);
+        Assert.Equal(4, trend.Count);
         Assert.Contains(trend, l => l.Name == "SMA20");
         Assert.Contains(trend, l => l.Name == "SMA60");
+        Assert.Contains(trend, l => l.Name == "EMA9");
+        Assert.Contains(trend, l => l.Name == "EMA21");
 
         var mean = ChartIndicatorCalculator.ForStrategy(candles, TradingStrategyKind.평균회귀);
         Assert.Equal(3, mean.Count);

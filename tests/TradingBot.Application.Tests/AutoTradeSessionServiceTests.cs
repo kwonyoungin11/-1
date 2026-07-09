@@ -11,25 +11,26 @@ public class AutoTradeSessionServiceTests
         var s = new AutoTradeSessionService();
         Assert.True(s.TryStart(out var msg));
         Assert.Contains("실주문", msg, StringComparison.Ordinal);
-        Assert.Contains("SPCX", msg, StringComparison.Ordinal);
+        Assert.Contains("VMAR", msg, StringComparison.Ordinal);
         Assert.Equal(AutoTradeSessionStatus.실행중, s.Status);
         Assert.True(s.TryStop(out _));
         Assert.Equal(AutoTradeSessionStatus.중지, s.Status);
     }
 
     [Fact]
-    public void Panel_has_spacex_fields()
+    public void Panel_has_vmar_default_fields()
     {
         var s = new AutoTradeSessionService();
-        s.StockKind = StockMarketKind.스페이스X;
-        s.Strategy = TradingStrategyKind.추세추종;
-        s.Timeframe = ChartTimeframe.분봉1;
+        s.StockKind = StockMarketKind.비전마린;
+        s.Strategy = TradingStrategyKind.일분분할스캘프;
+        s.Timeframe = ChartTimeframe.분봉15;
         var p = s.ToPanelSnapshot();
-        Assert.Equal("스페이스X", p.StockKindLabel);
-        Assert.Equal("추세추종", p.StrategyLabel);
+        Assert.Equal("비전마린", p.StockKindLabel);
+        Assert.Equal("일분분할스캘프", p.StrategyLabel);
         Assert.Contains("잔액", p.BalanceLabel, StringComparison.Ordinal);
         Assert.Contains("%", p.ReturnRateLabel, StringComparison.Ordinal);
-        Assert.Equal(WatchlistCatalog.SpaceXSymbol, p.FocusSymbol);
+        Assert.Equal(WatchlistCatalog.VmarSymbol, p.FocusSymbol);
+        Assert.Contains("VMAR", p.SafetyNote, StringComparison.Ordinal);
         Assert.True(p.CanStart);
     }
 
@@ -58,9 +59,10 @@ public class AutoTradeSessionServiceTests
     }
 
     [Fact]
-    public void Watch_and_focus_are_always_spcx()
+    public void Watch_accepts_known_symbols_and_rejects_unknown_focus()
     {
         var s = new AutoTradeSessionService { StockKind = StockMarketKind.스페이스X };
+        s.FocusSymbol = WatchlistCatalog.SpaceXSymbol;
         s.ApplyExternalWatchSymbols(["TSLA", "AAPL", "SPCX"]);
         var watch = s.ResolveWatchSymbols();
         Assert.Single(watch);
@@ -69,6 +71,25 @@ public class AutoTradeSessionServiceTests
 
         s.FocusSymbol = "TSLA";
         Assert.Equal(WatchlistCatalog.SpaceXSymbol, s.ResolveFocusSymbol());
+
+        s.FocusSymbol = "vmar";
+        Assert.Equal(WatchlistCatalog.VmarSymbol, s.ResolveFocusSymbol());
+
+        s.ApplyExternalWatchSymbols(["VMAR", "AAPL"]);
+        Assert.Equal(new[] { WatchlistCatalog.VmarSymbol }, s.ResolveWatchSymbols());
+    }
+
+    [Fact]
+    public void Vmar_stock_kind_resolves_vmar_watch()
+    {
+        var s = new AutoTradeSessionService();
+        s.StockKind = StockMarketKind.비전마린;
+        s.FocusSymbol = WatchlistCatalog.VmarSymbol;
+        Assert.Equal(new[] { WatchlistCatalog.VmarSymbol }, s.ResolveWatchSymbols());
+        Assert.Equal(WatchlistCatalog.VmarSymbol, s.ResolveFocusSymbol());
+        Assert.True(s.TryStart(out var msg));
+        Assert.Contains("VMAR", msg, StringComparison.Ordinal);
+        Assert.Contains("실주문", msg, StringComparison.Ordinal);
     }
 
     [Fact]

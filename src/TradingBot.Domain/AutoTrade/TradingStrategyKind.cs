@@ -19,4 +19,7 @@ public enum TradingStrategyKind
 
     /// <summary>변동 큰 구간에서 규모↑ 돌파 후보 (연습 · 버블 크게).</summary>
     모멘텀돌파 = 4,
+
+    /// <summary>1분봉 분할매수·분할매도 스캘프 연습 (VMAR 등 · 수수료 주의).</summary>
+    일분분할스캘프 = 5,
 }

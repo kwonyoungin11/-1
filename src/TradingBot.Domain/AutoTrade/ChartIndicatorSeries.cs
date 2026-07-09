@@ -12,9 +12,9 @@ public sealed record ChartIndicatorLine(
 public static class ChartIndicatorCalculator
 {
     /// <summary>
-    /// 전략별 기본 보조지표 세트.
-    /// 추세추종 → SMA20/SMA60; 평균회귀 → 볼린저; 모멘텀 → SMA10 + 종가 모멘텀 밴드;
-    /// 단순연습 → SMA20; 관망 → SMA20.
+    /// Strategy overlay set for chart price scale.
+    /// 추세추종 → SMA20/SMA60 + EMA9/EMA21 (price-scale safe; RSI is public API only).
+    /// 평균회귀 → Bollinger; 모멘텀 → SMA10 + rolling high; 단순연습/관망 → SMA20.
     /// </summary>
     public static IReadOnlyList<ChartIndicatorLine> ForStrategy(
         IReadOnlyList<CandlePoint> candles,
@@ -34,6 +34,8 @@ public static class ChartIndicatorCalculator
             [
                 new ChartIndicatorLine("SMA20", Sma(closes, 20)),
                 new ChartIndicatorLine("SMA60", Sma(closes, 60)),
+                new ChartIndicatorLine("EMA9", Ema(closes, 9)),
+                new ChartIndicatorLine("EMA21", Ema(closes, 21)),
             ],
             TradingStrategyKind.평균회귀 => Bollinger(closes, period: 20, stdMult: 2.0),
             TradingStrategyKind.모멘텀돌파 =>
@@ -87,6 +89,109 @@ public static class ChartIndicatorCalculator
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Exponential moving average. Seed = SMA of first <paramref name="period"/> closes;
+    /// subsequent bars use k = 2/(period+1). Null until seed index (period-1).
+    /// </summary>
+    public static IReadOnlyList<double?> Ema(IReadOnlyList<double> closes, int period)
+    {
+        ArgumentNullException.ThrowIfNull(closes);
+        if (period <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(period));
+        }
+
+        var n = closes.Count;
+        var result = new double?[n];
+        if (n < period)
+        {
+            return result;
+        }
+
+        double sum = 0;
+        for (var i = 0; i < period; i++)
+        {
+            sum += closes[i];
+        }
+
+        var ema = sum / period;
+        var seedIndex = period - 1;
+        result[seedIndex] = ema;
+
+        var k = 2.0 / (period + 1);
+        for (var i = seedIndex + 1; i < n; i++)
+        {
+            ema = closes[i] * k + ema * (1.0 - k);
+            result[i] = ema;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Wilder RSI (0–100). Average gain/loss seeded over first <paramref name="period"/>
+    /// changes; then smoothed with Wilder. Null until index <paramref name="period"/>
+    /// (needs period deltas). Public for future RSI pane; not overlaid on price scale.
+    /// </summary>
+    public static IReadOnlyList<double?> Rsi(IReadOnlyList<double> closes, int period = 14)
+    {
+        ArgumentNullException.ThrowIfNull(closes);
+        if (period <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(period));
+        }
+
+        var n = closes.Count;
+        var result = new double?[n];
+        // Need period changes → first RSI at index == period.
+        if (n <= period)
+        {
+            return result;
+        }
+
+        double gainSum = 0;
+        double lossSum = 0;
+        for (var i = 1; i <= period; i++)
+        {
+            var change = closes[i] - closes[i - 1];
+            if (change >= 0)
+            {
+                gainSum += change;
+            }
+            else
+            {
+                lossSum -= change;
+            }
+        }
+
+        var avgGain = gainSum / period;
+        var avgLoss = lossSum / period;
+        result[period] = WilderRsiFromAverages(avgGain, avgLoss);
+
+        for (var i = period + 1; i < n; i++)
+        {
+            var change = closes[i] - closes[i - 1];
+            var gain = change > 0 ? change : 0.0;
+            var loss = change < 0 ? -change : 0.0;
+            avgGain = (avgGain * (period - 1) + gain) / period;
+            avgLoss = (avgLoss * (period - 1) + loss) / period;
+            result[i] = WilderRsiFromAverages(avgGain, avgLoss);
+        }
+
+        return result;
+    }
+
+    private static double WilderRsiFromAverages(double avgGain, double avgLoss)
+    {
+        if (avgLoss == 0.0)
+        {
+            return avgGain == 0.0 ? 50.0 : 100.0;
+        }
+
+        var rs = avgGain / avgLoss;
+        return 100.0 - (100.0 / (1.0 + rs));
     }
 
     public static IReadOnlyList<ChartIndicatorLine> Bollinger(

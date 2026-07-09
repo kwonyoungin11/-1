@@ -397,12 +397,12 @@ public partial class MainWindowViewModel : ViewModelBase
         ChartSubtitle = ChartTimeframeCatalog.TryParse(SelectedTimeframe, out var tfApply)
             ? ChartTimeframeCatalog.Describe(tfApply) + " · 버블=거래대금"
             : ChartSubtitle;
-        SafetyHeadline = SafetyHeadlineText;
+        SafetyHeadline = ResolveSafetyHeadline();
         if (!SafetyNote.Contains("실주문", StringComparison.Ordinal))
         {
             SafetyNote = string.IsNullOrWhiteSpace(SafetyNote)
-                ? $"토스 실데이터 · {focus} · 실주문 게이트 잠금 · dry-run only."
-                : $"{SafetyNote} 실주문 게이트 잠금.";
+                ? ResolveDefaultSafetyNote(focus)
+                : $"{SafetyNote} {ResolveSafetyNoteSuffix()}";
         }
 
         ApplySafetyPills();
@@ -436,16 +436,20 @@ public partial class MainWindowViewModel : ViewModelBase
                 _ => report.SettingsOrderMode,
             };
         LiveLockPill = _harness.IsLiveSubmissionEnabled
-            ? "실주문 경로 존재 — 게이트 확인"
+            ? "실거래 ON · 자동주문 가능"
             : "실주문 잠금";
 
         if (report.SettingsKillSwitch)
         {
             GateStatusPill = "진입 차단 · 킬스위치 ON";
         }
+        else if (_harness.IsLiveSubmissionEnabled)
+        {
+            GateStatusPill = "실거래 활성 · 토스 주문 전송 가능";
+        }
         else if (report.SettingsAllowLiveOrders || string.Equals(report.SettingsOrderMode, "Live", StringComparison.OrdinalIgnoreCase))
         {
-            GateStatusPill = "설정 위험 · live 플래그 감지 · 실주문 아님";
+            GateStatusPill = "live 설정 감지 · 연결/데이터 확인 필요";
         }
         else
         {
@@ -455,6 +459,19 @@ public partial class MainWindowViewModel : ViewModelBase
 
         ContingencyLabel = GateStatusPill;
     }
+
+    private string ResolveSafetyHeadline() =>
+        _harness.IsLiveSubmissionEnabled
+            ? "실거래 모드 — 자동매매 시 토스에 실주문 전송 · 투자 조언 아님"
+            : SafetyHeadlineText;
+
+    private string ResolveDefaultSafetyNote(string focus) =>
+        _harness.IsLiveSubmissionEnabled
+            ? $"토스 실데이터 · {focus} · 실거래 모드 · 자동주문 활성."
+            : $"토스 실데이터 · {focus} · 실주문 게이트 잠금 · dry-run only.";
+
+    private string ResolveSafetyNoteSuffix() =>
+        _harness.IsLiveSubmissionEnabled ? "실거래 모드." : "실주문 게이트 잠금.";
 
     private static string ShortDataSourcePill(string label)
     {

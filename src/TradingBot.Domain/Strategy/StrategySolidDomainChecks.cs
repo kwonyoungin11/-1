@@ -7,7 +7,7 @@ namespace TradingBot.Domain;
 /// </summary>
 public static class StrategySolidDomainChecks
 {
-    /// <summary>스페이스X 단일 유니버스: enum + ResolveSymbols = [SPCX].</summary>
+    /// <summary>스페이스X 유니버스: enum + ResolveSymbols = [SPCX].</summary>
     public static bool IsSpacexUniverseOk()
     {
         if (!Enum.IsDefined(StockMarketKind.스페이스X))
@@ -22,6 +22,24 @@ public static class StrategySolidDomainChecks
         }
 
         return symbols[0].Equals(WatchlistCatalog.SpaceXSymbol, StringComparison.Ordinal);
+    }
+
+    /// <summary>비전마린 유니버스: enum + ResolveSymbols = [VMAR].</summary>
+    public static bool IsVmarUniverseOk()
+    {
+        if (!Enum.IsDefined(StockMarketKind.비전마린))
+        {
+            return false;
+        }
+
+        var symbols = WatchlistCatalog.ResolveSymbols(StockMarketKind.비전마린);
+        if (symbols is null || symbols.Count != 1)
+        {
+            return false;
+        }
+
+        return symbols[0].Equals(WatchlistCatalog.VmarSymbol, StringComparison.Ordinal)
+            && WatchlistCatalog.IsKnownSymbol(WatchlistCatalog.VmarSymbol);
     }
 
     /// <summary>하위 호환 별칭 — 코어3 제거 후 스페이스X 검사로 연결.</summary>
@@ -49,9 +67,10 @@ public static class StrategySolidDomainChecks
             && p.MinMomentumScore > 0m;
     }
 
-    /// <summary>All Domain-only strategy-solid pieces pass.</summary>
+    /// <summary>All Domain-only strategy-solid pieces pass (both universes + sizer + trend).</summary>
     public static bool AllDomainChecksOk() =>
         IsSpacexUniverseOk()
+        && IsVmarUniverseOk()
         && IsPositionRiskSizerOk()
         && IsTrendFollowParametersOk();
 }

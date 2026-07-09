@@ -90,7 +90,7 @@ public static class LimitOrderLifecyclePolicy
             return Decide(
                 WorkingOrderAction.CancelAndStandDown,
                 WorkingOrderReason.KillSwitchOrDailyLoss,
-                "킬스위치/일손실 — 미체결 취소 · 신규 금지 · 실주문 경로와 무관한 정책 평가");
+                "킬스위치/일손실 · 신규 금지");
         }
 
         if (dataStale)
@@ -220,7 +220,7 @@ public static class LimitOrderLifecyclePolicy
             return Decide(
                 WorkingOrderAction.BlockNewEntries,
                 WorkingOrderReason.KillSwitchOrDailyLoss,
-                "신규 진입 차단 — 킬스위치/일손실");
+                "진입 차단 · 킬스위치/일손실");
         }
 
         if (dataStale)

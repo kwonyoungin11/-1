@@ -20,8 +20,7 @@ public static class SpacexOfficialStrategyPreset
 
     /// <summary>Owner-facing one-liner (Korean).</summary>
     public static string OwnerSummary =>
-        "최종 전략: 추세추종 · 15m(대안 60m) · 지정가 LIMIT · ATR×1.5 손절 · 2R 익절 · 1% 리스크 · " +
-        "수수료 반영 · 1m 스캘핑·평균회귀 기본 비권장 · 실주문 잠금 · 투자 조언 아님";
+        "최종 추세추종 · 15m · LIMIT · ATR×1.5 SL · 2R TP · 1% 리스크 · 실주문 잠금 · 투자조언 아님";
 
     public static string RationaleBullets =>
         "SPCX 포스트IPO 고변동·조정/박스 혼재 → 추세 프레임+넓은 손절. " +

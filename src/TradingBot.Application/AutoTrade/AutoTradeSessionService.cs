@@ -13,10 +13,10 @@ public sealed class AutoTradeSessionService
 
     private readonly object _gate = new();
     private AutoTradeSessionStatus _status = AutoTradeSessionStatus.중지;
-    private StockMarketKind _stockKind = StockMarketKind.스페이스X;
-    private TradingStrategyKind _strategy = SpacexOfficialStrategyPreset.Strategy;
-    private ChartTimeframe _timeframe = SpacexOfficialStrategyPreset.Timeframe;
-    private string? _focusSymbol = WatchlistCatalog.SpaceXSymbol;
+    private StockMarketKind _stockKind = StockMarketKind.비전마린;
+    private TradingStrategyKind _strategy = VmarOneMinuteScalpPreset.Strategy;
+    private ChartTimeframe _timeframe = VmarOneMinuteScalpPreset.Timeframe;
+    private string? _focusSymbol = WatchlistCatalog.VmarSymbol;
     private decimal _startingBalance = DefaultPracticeStartingBalance;
     private decimal _balance = DefaultPracticeStartingBalance;
     private decimal _realizedPnl;
@@ -52,7 +52,10 @@ public sealed class AutoTradeSessionService
         set { lock (_gate) { _timeframe = value; } }
     }
 
-    /// <summary>차트·포커스 종목. 항상 SPCX 강제.</summary>
+    /// <summary>
+    /// 차트·포커스 종목. 알려진 심볼(카탈로그)만 수락·정규화.
+    /// 미지 심볼은 거부(이전 값 유지). 실주문 경로 아님.
+    /// </summary>
     public string? FocusSymbol
     {
         get { lock (_gate) { return _focusSymbol; } }
@@ -60,8 +63,12 @@ public sealed class AutoTradeSessionService
         {
             lock (_gate)
             {
-                // 단일 유니버스: 외부 입력이 있어도 SPCX 고정
-                _focusSymbol = WatchlistCatalog.SpaceXSymbol;
+                var normalized = WatchlistCatalog.NormalizeKnownSymbol(value);
+                if (normalized is not null)
+                {
+                    _focusSymbol = normalized;
+                }
+                // unknown → keep previous (fail-closed for free-form tickers)
             }
         }
     }
@@ -110,20 +117,31 @@ public sealed class AutoTradeSessionService
     }
 
     /// <summary>
-    /// 외부 워치 심볼(보유 + 카탈로그 합집합 등). 비우면 카탈로그로 복귀.
+    /// 외부 워치 심볼(보유 + 카탈로그 합집합 등).
+    /// 알려진 심볼이 있으면 그것만 사용; 없으면 현재 stock kind 카탈로그.
     /// </summary>
     public void ApplyExternalWatchSymbols(string[] symbols)
     {
         ArgumentNullException.ThrowIfNull(symbols);
         lock (_gate)
         {
-            // 스페이스X 전용: 외부 보유 목록에 SPCX가 있으면 SPCX만, 없으면 카탈로그(SPCX).
-            var hasSpcx = symbols.Any(s =>
-                !string.IsNullOrWhiteSpace(s)
-                && s.Trim().Equals(WatchlistCatalog.SpaceXSymbol, StringComparison.OrdinalIgnoreCase));
-            _externalWatchSymbols = hasSpcx
-                ? [WatchlistCatalog.SpaceXSymbol]
-                : [WatchlistCatalog.SpaceXSymbol];
+            var known = symbols
+                .Select(WatchlistCatalog.NormalizeKnownSymbol)
+                .Where(s => s is not null)
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (known.Length > 0)
+            {
+                _externalWatchSymbols = known;
+                return;
+            }
+
+            var catalog = WatchlistCatalog.ResolveSymbols(_stockKind).ToArray();
+            _externalWatchSymbols = catalog.Length > 0
+                ? catalog
+                : [WatchlistCatalog.VmarSymbol];
         }
     }
 
@@ -165,7 +183,23 @@ public sealed class AutoTradeSessionService
         }
     }
 
-    private string ResolveFocusSymbolUnlocked() => WatchlistCatalog.SpaceXSymbol;
+    private string ResolveFocusSymbolUnlocked()
+    {
+        if (!string.IsNullOrWhiteSpace(_focusSymbol)
+            && WatchlistCatalog.IsKnownSymbol(_focusSymbol))
+        {
+            return WatchlistCatalog.NormalizeKnownSymbol(_focusSymbol)
+                   ?? CatalogPrimaryOrVmar();
+        }
+
+        return CatalogPrimaryOrVmar();
+    }
+
+    private string CatalogPrimaryOrVmar()
+    {
+        var catalog = WatchlistCatalog.ResolveSymbols(_stockKind);
+        return catalog.Count > 0 ? catalog[0] : WatchlistCatalog.VmarSymbol;
+    }
 
     public bool TryStart(out string ownerMessage)
     {
@@ -178,8 +212,9 @@ public sealed class AutoTradeSessionService
             }
 
             _status = AutoTradeSessionStatus.실행중;
+            var focus = ResolveFocusSymbolUnlocked();
             ownerMessage =
-                $"자동매매 시작 · SPCX · {_strategy} · 시간봉 {_timeframe} · 실주문은 잠금(게이트) 유지.";
+                $"자동매매 시작 · {focus} · {_strategy} · 시간봉 {_timeframe} · 실주문은 잠금(게이트) 유지.";
             return true;
         }
     }
@@ -256,7 +291,7 @@ public sealed class AutoTradeSessionService
                 CanStart = _status == AutoTradeSessionStatus.중지,
                 CanStop = _status == AutoTradeSessionStatus.실행중,
                 SafetyNote =
-                    "토스증권 실데이터 · 종목 SPCX 전용 · 실주문은 오너 잠금 해제 전 차단. 버블=체결 규모.",
+                    $"토스증권 실데이터 · {focus} 연습 콕핏 · 실주문은 오너 잠금 해제 전 차단. 버블=체결 규모.",
             };
         }
     }

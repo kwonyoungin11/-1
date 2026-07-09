@@ -144,7 +144,7 @@ public static class TradeBracketPlanner
                 StopSource: source,
                 IsValid: false,
                 OwnerMessage:
-                    "수량 0 (리스크 예산 < 1주 손절) · 지정가 계획만 표시 · 실주문 잠금 · 투자 조언 아님");
+                    "수량 0 · 잔액 부족(1주도 불가) · 계획만 표시");
         }
 
         var riskAmt = size.Quantity * stopDistance;

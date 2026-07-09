@@ -37,9 +37,15 @@
     </Style>
     <Style Selector="TextBlock.section">
       <Setter Property="FontSize" Value="12"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Foreground" Value="#334155"/>
-      <Setter Property="LetterSpacing" Value="0.3"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="#0F172A"/>
+      <Setter Property="LetterSpacing" Value="0.4"/>
+    </Style>
+    <Style Selector="TextBlock.caption-3d">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="#1E293B"/>
+      <Setter Property="LetterSpacing" Value="0.6"/>
     </Style>
     <Style Selector="TextBlock.section-blue">
       <Setter Property="FontSize" Value="12"/>
@@ -63,17 +69,32 @@
 
     <Style Selector="Border.glass-bar">
       <Setter Property="Background" Value="#FFFFFF"/>
-      <Setter Property="BorderBrush" Value="#E2E8F0"/>
+      <Setter Property="BorderBrush" Value="#D8DEE9"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="12"/>
-      <Setter Property="BoxShadow" Value="0 4 16 0 #14000000"/>
+      <Setter Property="BoxShadow" Value="0 6 18 0 #1A000000, 0 1 0 0 #FFFFFF"/>
     </Style>
     <Style Selector="Border.glass-card">
       <Setter Property="Background" Value="#FFFFFF"/>
-      <Setter Property="BorderBrush" Value="#E2E8F0"/>
+      <Setter Property="BorderBrush" Value="#D8DEE9"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="12"/>
-      <Setter Property="BoxShadow" Value="0 2 12 0 #0F000000"/>
+      <Setter Property="BoxShadow" Value="0 8 22 0 #22000000, 0 2 4 0 #14000000, 0 1 0 0 #FFFFFF"/>
+    </Style>
+    <Style Selector="Border.glass-card-deep">
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#CBD5E1"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="BoxShadow" Value="0 10 28 0 #28000000, 0 3 8 0 #18000000, 0 1 0 0 #FFFFFF"/>
+    </Style>
+    <Style Selector="Border.metric-3d">
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="BoxShadow" Value="0 3 8 0 #18000000, 0 1 0 0 #FFFFFF"/>
+    </Style>
+    <Style Selector="Border.pill-3d">
+      <Setter Property="BoxShadow" Value="0 2 5 0 #16000000, 0 1 0 0 #FFFFFF"/>
     </Style>
     <Style Selector="Border.glass-danger">
       <Setter Property="Background" Value="#FEF2F2"/>
@@ -100,6 +121,7 @@
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="999"/>
       <Setter Property="Padding" Value="10,5"/>
+      <Setter Property="BoxShadow" Value="0 2 6 0 #22000000, 0 1 0 0 #FFFFFF"/>
     </Style>
     <Style Selector="Border.pill-lock">
       <Setter Property="Background" Value="#FEF2F2"/>
@@ -107,6 +129,7 @@
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="999"/>
       <Setter Property="Padding" Value="10,5"/>
+      <Setter Property="BoxShadow" Value="0 2 6 0 #22000000, 0 1 0 0 #FFFFFF"/>
     </Style>
     <Style Selector="Border.pill-mode">
       <Setter Property="Background" Value="#EFF6FF"/>
@@ -114,6 +137,7 @@
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="999"/>
       <Setter Property="Padding" Value="10,5"/>
+      <Setter Property="BoxShadow" Value="0 2 6 0 #18000000, 0 1 0 0 #FFFFFF"/>
     </Style>
     <Style Selector="Border.pill-ok">
       <Setter Property="Background" Value="#ECFDF5"/>
@@ -121,6 +145,7 @@
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="999"/>
       <Setter Property="Padding" Value="10,5"/>
+      <Setter Property="BoxShadow" Value="0 2 6 0 #18000000, 0 1 0 0 #FFFFFF"/>
     </Style>
     <Style Selector="Border.pill-kill TextBlock, Border.pill-lock TextBlock">
       <Setter Property="Foreground" Value="#B91C1C"/>
@@ -138,31 +163,177 @@
       <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
 
+    <!-- BoxShadow is Border-only in Avalonia; wrap buttons with Border.btn-3d for depth -->
+    <Style Selector="Border.btn-3d">
+      <Setter Property="CornerRadius" Value="9"/>
+      <Setter Property="BoxShadow" Value="0 5 12 0 #30000000, 0 1 0 0 #50FFFFFF"/>
+      <Setter Property="Margin" Value="0,0,2,1"/>
+    </Style>
+    <Style Selector="Border.btn-3d-stop">
+      <Setter Property="CornerRadius" Value="9"/>
+      <Setter Property="BoxShadow" Value="0 4 10 0 #24000000, 0 1 0 0 #FFFFFF"/>
+      <Setter Property="Margin" Value="0,0,2,1"/>
+    </Style>
+    <Style Selector="Border.btn-3d-ghost">
+      <Setter Property="CornerRadius" Value="9"/>
+      <Setter Property="BoxShadow" Value="0 3 8 0 #1A000000, 0 1 0 0 #FFFFFF"/>
+      <Setter Property="Margin" Value="0,0,2,1"/>
+    </Style>
     <Style Selector="Button.glass-btn">
       <Setter Property="Background" Value="#2563EB"/>
       <Setter Property="Foreground" Value="White"/>
       <Setter Property="Padding" Value="14,8"/>
-      <Setter Property="CornerRadius" Value="8"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="CornerRadius" Value="9"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="BorderBrush" Value="#1D4ED8"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="FontSize" Value="12"/>
     </Style>
     <Style Selector="Button.glass-btn:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="#1D4ED8"/>
     </Style>
+    <Style Selector="Button.glass-btn:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1E40AF"/>
+    </Style>
     <Style Selector="Button.glass-btn-stop">
-      <Setter Property="Background" Value="#FFFFFF"/>
-      <Setter Property="Foreground" Value="#B45309"/>
+      <Setter Property="Background" Value="#FFF7ED"/>
+      <Setter Property="Foreground" Value="#C2410C"/>
       <Setter Property="Padding" Value="14,8"/>
-      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="CornerRadius" Value="9"/>
       <Setter Property="BorderBrush" Value="#FDBA74"/>
       <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="FontSize" Value="12"/>
+    </Style>
+    <Style Selector="Button.glass-btn-stop:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#FFEDD5"/>
+    </Style>
+    <Style Selector="Button.glass-btn-ghost">
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="Foreground" Value="#1D4ED8"/>
+      <Setter Property="Padding" Value="12,7"/>
+      <Setter Property="CornerRadius" Value="9"/>
+      <Setter Property="BorderBrush" Value="#93C5FD"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="FontSize" Value="12"/>
     </Style>
     <Style Selector="ComboBox">
       <Setter Property="Background" Value="#FFFFFF"/>
       <Setter Property="BorderBrush" Value="#CBD5E1"/>
       <Setter Property="CornerRadius" Value="8"/>
       <Setter Property="Foreground" Value="#0F172A"/>
+    </Style>
+
+    <!-- TradingView-style timeframe ladder (compact, wrap-friendly) -->
+    <Style Selector="Button.tf-btn">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="#787B86"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="6,3"/>
+      <Setter Property="MinWidth" Value="30"/>
+      <Setter Property="MinHeight" Value="24"/>
+      <Setter Property="CornerRadius" Value="4"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Margin" Value="0,0,1,0"/>
+    </Style>
+    <Style Selector="Button.tf-btn:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#F0F3FA"/>
+      <Setter Property="Foreground" Value="#131722"/>
+    </Style>
+    <Style Selector="Button.tf-btn.selected">
+      <Setter Property="Background" Value="#E3F2FD"/>
+      <Setter Property="Foreground" Value="#2962FF"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="BorderBrush" Value="#2962FF"/>
+      <Setter Property="BorderThickness" Value="0,0,0,2"/>
+      <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+    <Style Selector="Button.tf-btn.selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#BBDEFB"/>
+      <Setter Property="Foreground" Value="#2962FF"/>
+    </Style>
+
+    <!-- Last-price tag: direction-colored border (green up / red down) -->
+    <Style Selector="Border.price-tag">
+      <Setter Property="Background" Value="#F8F9FD"/>
+      <Setter Property="BorderBrush" Value="#90CAF9"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="4"/>
+      <Setter Property="Padding" Value="6,2"/>
+      <Setter Property="VerticalAlignment" Value="Bottom"/>
+      <Setter Property="Margin" Value="0,0,0,6"/>
+    </Style>
+    <Style Selector="Border.price-tag.up">
+      <Setter Property="Background" Value="#E8F5E9"/>
+      <Setter Property="BorderBrush" Value="#089981"/>
+    </Style>
+    <Style Selector="Border.price-tag.down">
+      <Setter Property="Background" Value="#FFEBEE"/>
+      <Setter Property="BorderBrush" Value="#F23645"/>
+    </Style>
+    <Style Selector="Border.price-tag TextBlock">
+      <Setter Property="Foreground" Value="#131722"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="FontFamily" Value="Menlo, Monaco, Consolas, monospace"/>
+    </Style>
+    <Style Selector="Border.price-tag.up TextBlock">
+      <Setter Property="Foreground" Value="#089981"/>
+    </Style>
+    <Style Selector="Border.price-tag.down TextBlock">
+      <Setter Property="Foreground" Value="#F23645"/>
+    </Style>
+
+    <Style Selector="Border.last-price-axis-badge">
+      <Setter Property="Background" Value="#131722"/>
+      <Setter Property="BorderBrush" Value="#131722"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="3"/>
+      <Setter Property="Padding" Value="6,3"/>
+      <Setter Property="Opacity" Value="0.92"/>
+    </Style>
+    <Style Selector="Border.last-price-axis-badge.up">
+      <Setter Property="Background" Value="#089981"/>
+      <Setter Property="BorderBrush" Value="#089981"/>
+    </Style>
+    <Style Selector="Border.last-price-axis-badge.down">
+      <Setter Property="Background" Value="#F23645"/>
+      <Setter Property="BorderBrush" Value="#F23645"/>
+    </Style>
+    <Style Selector="Border.last-price-axis-badge TextBlock">
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+
+    <!-- Pane labels: subtle, non-interactive, not covering price scale -->
+    <Style Selector="TextBlock.pane-label">
+      <Setter Property="FontSize" Value="9"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="#9598A1"/>
+      <Setter Property="IsHitTestVisible" Value="False"/>
+      <Setter Property="HorizontalAlignment" Value="Left"/>
+      <Setter Property="VerticalAlignment" Value="Top"/>
+      <Setter Property="Margin" Value="8,4,0,0"/>
+      <Setter Property="Opacity" Value="0.55"/>
+      <Setter Property="ZIndex" Value="1"/>
+    </Style>
+
+    <!-- OHLC status line: mono tabular -->
+    <Style Selector="TextBlock.status-line">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="#787B86"/>
+      <Setter Property="FontFamily" Value="Menlo, Monaco, Consolas, monospace"/>
+      <Setter Property="FontFeatures" Value="tnum"/>
+    </Style>
+
+    <!-- Volume / RSI pane top separator -->
+    <Style Selector="Border.pane-sep">
+      <Setter Property="BorderBrush" Value="#E0E3EB"/>
+      <Setter Property="BorderThickness" Value="0,1,0,0"/>
+      <Setter Property="Margin" Value="0,2,0,0"/>
+      <Setter Property="Background" Value="#FFFFFF"/>
     </Style>
   </Application.Styles>
 </Application>

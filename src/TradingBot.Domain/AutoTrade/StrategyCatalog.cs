@@ -10,6 +10,7 @@ public static class StrategyCatalog
         TradingStrategyKind.추세추종,
         TradingStrategyKind.평균회귀,
         TradingStrategyKind.모멘텀돌파,
+        TradingStrategyKind.일분분할스캘프,
     ];
 
     public static IReadOnlyList<string> Labels { get; } =
@@ -25,11 +26,13 @@ public static class StrategyCatalog
         TradingStrategyKind.단순연습전략 =>
             "파이프라인 검증용 · SPCX 실전 1순위 아님",
         TradingStrategyKind.추세추종 =>
-            "★ SPCX 권장 · 추세 방향 + LIMIT·ATR손절·2R익절 · 15m/60m 권장 · 투자 조언 아님",
+            "★ SPCX 권장 · LIMIT · ATR손절 · 2R · 15m/60m · 투자 조언 아님",
         TradingStrategyKind.평균회귀 =>
             "과열 반대 매매 · SPCX 고변동·강한 추세에선 칼날 위험 · 주의",
         TradingStrategyKind.모멘텀돌파 =>
             "강한 돌파 구간 보조 · 수량↑ · 거짓 돌파·수수료 주의 · 투자 조언 아님",
+        TradingStrategyKind.일분분할스캘프 =>
+            "VMAR 분할매수·분할매도 연습(기본 15m) · 수수료 주의 · dry-run/paper · 투자 조언 아님",
         _ => "전략",
     };
 
@@ -41,6 +44,7 @@ public static class StrategyCatalog
         TradingStrategyKind.추세추종 => 2m,
         TradingStrategyKind.평균회귀 => 2m,
         TradingStrategyKind.모멘텀돌파 => 3m,
+        TradingStrategyKind.일분분할스캘프 => 6m, // 3 legs × 2 shares
         _ => 1m,
     };
 }
