@@ -115,9 +115,17 @@ public class StockKindSwitchTests
         Assert.Equal(2, vm.Inner.StockKindOptions.Count);
         Assert.Contains("비전마린", vm.Inner.StockKindOptions);
         Assert.Contains("스페이스X", vm.Inner.StockKindOptions);
+        Assert.Equal(2, vm.Inner.StockKindChips.Count);
+        Assert.Contains(vm.Inner.StockKindChips, c => c.TickerLabel == WatchlistCatalog.VmarSymbol);
+        Assert.Contains(vm.Inner.StockKindChips, c => c.TickerLabel == WatchlistCatalog.SpaceXSymbol);
+        Assert.Equal(WatchlistCatalog.VmarSymbol, vm.Inner.FocusSymbolPill);
+        Assert.Equal("VMAR 뉴스", vm.Inner.NewsCardTitle);
+        Assert.Contains("종목 전환", vm.Inner.StockSwitchHint, StringComparison.Ordinal);
         // Default practice path: VMAR focus, live locked.
         Assert.Equal(WatchlistCatalog.VmarSymbol, harness.Session.ResolveFocusSymbol());
         Assert.False(harness.IsLiveSubmissionEnabled);
+        Assert.True(vm.Inner.StockKindChips.Single(c => c.TickerLabel == "VMAR").IsSelected);
+        Assert.False(vm.Inner.StockKindChips.Single(c => c.TickerLabel == "SPCX").IsSelected);
     }
 
     [Fact]
@@ -138,7 +146,11 @@ public class StockKindSwitchTests
         Assert.Equal(SpacexOfficialStrategyPreset.Timeframe, harness.Session.Timeframe);
         // Focus surface (symbol pill / selected symbol) follows SPCX.
         Assert.Equal(WatchlistCatalog.SpaceXSymbol, vm.Inner.SelectedSymbol);
+        Assert.Equal(WatchlistCatalog.SpaceXSymbol, vm.Inner.FocusSymbolPill);
+        Assert.Equal("SPCX 뉴스", vm.Inner.NewsCardTitle);
         Assert.Contains(WatchlistCatalog.SpaceXSymbol, vm.Inner.WatchSymbolsText, StringComparison.Ordinal);
+        Assert.True(vm.Inner.StockKindChips.Single(c => c.TickerLabel == "SPCX").IsSelected);
+        Assert.False(vm.Inner.StockKindChips.Single(c => c.TickerLabel == "VMAR").IsSelected);
         Assert.False(harness.IsLiveSubmissionEnabled);
     }
 
