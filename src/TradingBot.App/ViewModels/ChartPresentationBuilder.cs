@@ -177,14 +177,17 @@ public static class ChartPresentationBuilder
 
         var series = new List<ISeries> { candleSeries };
 
-        // When any EMA overlay is present, draw only EMA9 + EMA21 (drop SMA clutter).
+        // When any EMA overlay is present, draw EMA9 + EMA21 (drop SMA clutter).
+        // Keep CERS / CERS edge so cost-aware edge can still show with EMA21.
         var hasEma = indicators.Any(i =>
             i.Name.StartsWith("EMA", StringComparison.OrdinalIgnoreCase));
         var drawnIndicators = hasEma
             ? indicators
                 .Where(i =>
                     i.Name.Equals("EMA9", StringComparison.OrdinalIgnoreCase)
-                    || i.Name.Equals("EMA21", StringComparison.OrdinalIgnoreCase))
+                    || i.Name.Equals("EMA21", StringComparison.OrdinalIgnoreCase)
+                    || i.Name.Equals("CERS", StringComparison.OrdinalIgnoreCase)
+                    || i.Name.Equals("CERS edge", StringComparison.OrdinalIgnoreCase))
                 .ToList()
             : indicators.ToList();
 
