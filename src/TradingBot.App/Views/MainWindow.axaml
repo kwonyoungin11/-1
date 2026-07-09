@@ -18,7 +18,8 @@
     <vm:MainWindowViewModel/>
   </Design.DataContext>
 
-  <Grid RowDefinitions="Auto,*,Auto" Margin="16,36,16,14">
+  <!-- Chart row must stay dominant; bottom panel capped so chart never collapses -->
+  <Grid RowDefinitions="Auto,3*,Auto" Margin="16,36,16,14">
 
     <!-- Top bar -->
     <Border Classes="glass-card" Padding="14,10" Margin="0,0,0,10">
@@ -37,9 +38,10 @@
       </Grid>
     </Border>
 
-    <!-- Chart: price + volume panes (TradingView-like) -->
-    <Border Grid.Row="1" Classes="glass-card" Padding="8" Margin="0,0,0,10" Background="#FFFFFF">
-      <Grid RowDefinitions="Auto,*,0.38*">
+    <!-- Chart: price + volume panes (always min height) -->
+    <Border Grid.Row="1" Classes="glass-card" Padding="8" Margin="0,0,0,10" Background="#FFFFFF"
+            MinHeight="420" VerticalAlignment="Stretch">
+      <Grid RowDefinitions="Auto,2.4*,0.9*" MinHeight="400">
         <Grid ColumnDefinitions="*,Auto" Margin="6,2,6,6">
           <StackPanel Spacing="2">
             <TextBlock Classes="section" Text="{Binding ChartTitle}" FontSize="14"/>
@@ -84,9 +86,10 @@
       </Grid>
     </Border>
 
-    <!-- Bottom controls -->
-    <Border Grid.Row="2" Classes="glass-bar" Padding="14">
-      <Grid ColumnDefinitions="1.35*,1.25*,1*,0.9*" ColumnSpacing="12">
+    <!-- Bottom controls (max height + scroll so chart stays visible) -->
+    <Border Grid.Row="2" Classes="glass-bar" Padding="12" MaxHeight="300">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <Grid ColumnDefinitions="1.35*,1.25*,1*,1.05*" ColumnSpacing="12" MinHeight="200">
 
         <StackPanel Spacing="6">
           <TextBlock Classes="section" Text="전략 · 시간봉"/>
@@ -193,11 +196,12 @@
                 </Grid>
                 <TextBlock Classes="sub" Text="{Binding NewsStatus}" TextWrapping="Wrap" FontSize="10"/>
                 <TextBlock Classes="sub" TextWrapping="Wrap" FontSize="10"
-                           Text="감성 자동매매 금지 · 중요 키워드 시 뉴스데이 권장"/>
+                           Text="실헤드라인(RSS) · 감성 자동매매 금지"/>
               </StackPanel>
               <ListBox ItemsSource="{Binding NewsItems}"
                        Background="Transparent"
                        BorderThickness="0"
+                       MinHeight="120"
                        ScrollViewer.VerticalScrollBarVisibility="Auto">
                 <ListBox.ItemTemplate>
                   <DataTemplate x:DataType="vm:NewsItemRow">
@@ -221,6 +225,7 @@
           </Border>
         </Grid>
       </Grid>
+      </ScrollViewer>
     </Border>
   </Grid>
 </Window>

@@ -51,8 +51,23 @@ public partial class MainWindowViewModel : ViewModelBase
         ConnectionLabel = _harness.ConnectionLabel;
         ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel);
         SafetyHeadline = SafetyHeadlineText;
-        ChartSubtitle = "TradingView 라이트 · 버블=거래대금 · ENTRY/SL/TP · 하단 거래량";
+        ChartSubtitle = "토스 실봉 로딩 중… · 한국시간(KST)";
         Title = "SPCX 콕핏 · 최종전략 추세추종";
+        // 시작 즉시 토스 실데이터 + 실뉴스 (모의 차트에 방치하지 않음)
+        _ = BootstrapRealDataAsync();
+    }
+
+    private async Task BootstrapRealDataAsync()
+    {
+        try
+        {
+            StatusLine = "토스 실시세·실봉·뉴스 불러오는 중…";
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        catch
+        {
+            StatusLine = "초기 실데이터 로드 실패 · 새로고침 재시도";
+        }
     }
 
     public ObservableCollection<string> StockKindOptions { get; }

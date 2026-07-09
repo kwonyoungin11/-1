@@ -5,13 +5,14 @@ namespace TradingBot.Infrastructure.Toss.Tests;
 public class NewsFeedTests
 {
     [Fact]
-    public async Task Mock_feed_returns_spcx_headlines()
+    public async Task Feed_without_keys_tries_real_rss_or_empty_no_fake_titles()
     {
-        var feed = new CompositeSpaceXNewsFeed(http: null, finnhubApiKey: null);
+        var feed = CompositeSpaceXNewsFeed.FromEnvironment();
         var items = await feed.GetHeadlinesAsync("SPCX", 5, CancellationToken.None);
-        Assert.NotEmpty(items);
+        // Real RSS may succeed in CI with network; if empty, must not be fake "모의" titles
+        Assert.All(items, i => Assert.DoesNotContain("모의", i.Title, StringComparison.Ordinal));
         Assert.True(items.Count <= 5);
-        Assert.All(items, i => Assert.False(string.IsNullOrWhiteSpace(i.Title)));
+        Assert.False(string.IsNullOrWhiteSpace(feed.LastSourceNote));
     }
 
     [Fact]

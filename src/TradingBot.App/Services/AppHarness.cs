@@ -200,18 +200,21 @@ public sealed class AppHarness
                 .ConfigureAwait(false);
             _lastNews = items;
             var material = items.Count(i => i.IsMaterialEvent);
+            var sourceNote = _newsFeed is CompositeSpaceXNewsFeed c
+                ? c.LastSourceNote
+                : "feed";
             _newsStatus = items.Count == 0
-                ? "뉴스 없음"
-                : $"뉴스 {items.Count}건 · 중요표시 {material} · {KoreaTime.FormatFull(DateTimeOffset.UtcNow)}";
-            // Soft hint: material headlines can suggest news-day (owner still controls checkbox)
+                ? sourceNote
+                : $"{sourceNote} · 중요 {material} · {KoreaTime.FormatFull(DateTimeOffset.UtcNow)}";
             if (material > 0 && !_newsDay)
             {
-                _newsStatus += " · 중요 키워드 감지(뉴스데이 수동 ON 권장)";
+                _newsStatus += " · 뉴스데이 수동 ON 권장";
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _newsStatus = $"뉴스 오류 · {ex.GetType().Name}";
+            _lastNews = Array.Empty<NewsHeadline>();
+            _newsStatus = $"실뉴스 오류 · {ex.GetType().Name} · 모의 없음";
         }
     }
 

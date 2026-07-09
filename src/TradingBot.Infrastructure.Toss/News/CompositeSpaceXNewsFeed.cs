@@ -1,24 +1,36 @@
-using System.Net.Http.Json;
+using System.Globalization;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Xml.Linq;
 using TradingBot.Domain;
 
 namespace TradingBot.Infrastructure.Toss.News;
 
 /// <summary>
-/// SpaceX/SPCX news: Finnhub company-news when FINNHUB_API_KEY is set;
-/// otherwise curated mock rotating headlines (always works offline).
-/// Display/gate only — never auto-buys. Not investment advice.
+/// Real news for SPCX/SpaceX:
+/// 1) Google News RSS (no API key)
+/// 2) Finnhub company-news if FINNHUB_API_KEY set
+/// No fake "모의" headlines when live fetch fails — returns empty + caller shows status.
+/// Display/gate only. Not investment advice.
 /// </summary>
 public sealed class CompositeSpaceXNewsFeed : INewsFeed
 {
-    private readonly HttpClient? _http;
+    private readonly HttpClient _http;
     private readonly string? _finnhubKey;
-    private static int _mockTick;
+    private string _lastSourceNote = "미로드";
+
+    public string LastSourceNote => _lastSourceNote;
 
     public CompositeSpaceXNewsFeed(HttpClient? http = null, string? finnhubApiKey = null)
     {
-        _http = http;
+        _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        if (!_http.DefaultRequestHeaders.UserAgent.Any())
+        {
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "TradingBotCockpit/1.0 (SPCX research; +https://localhost)");
+        }
+
         _finnhubKey = string.IsNullOrWhiteSpace(finnhubApiKey) ? null : finnhubApiKey.Trim();
     }
 
@@ -26,12 +38,11 @@ public sealed class CompositeSpaceXNewsFeed : INewsFeed
     {
         var env = EnvFile.LoadMergedWithProcess(FindRepoRoot());
         env.TryGetValue("FINNHUB_API_KEY", out var key);
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            env.TryGetValue("TOSS_NEWS_API_KEY", out key); // optional alias, unused by Toss
-        }
-
-        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
+        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("TradingBotCockpit/1.0");
+        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/rss+xml"));
+        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
+        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return new CompositeSpaceXNewsFeed(http, key);
     }
 
@@ -40,26 +51,125 @@ public sealed class CompositeSpaceXNewsFeed : INewsFeed
         int maxCount,
         CancellationToken cancellationToken)
     {
-        var sym = string.IsNullOrWhiteSpace(symbol) ? WatchlistCatalog.SpaceXSymbol : symbol.Trim().ToUpperInvariant();
+        var sym = string.IsNullOrWhiteSpace(symbol)
+            ? WatchlistCatalog.SpaceXSymbol
+            : symbol.Trim().ToUpperInvariant();
         var take = Math.Clamp(maxCount, 1, 30);
+        var errors = new List<string>();
 
-        if (_http is not null && !string.IsNullOrWhiteSpace(_finnhubKey))
+        // 1) Google News RSS — real public headlines, no key
+        try
+        {
+            var rss = await FetchGoogleNewsRssAsync(sym, take, cancellationToken).ConfigureAwait(false);
+            if (rss.Count > 0)
+            {
+                _lastSourceNote = $"Google News RSS · {rss.Count}건 · 실헤드라인";
+                return rss;
+            }
+
+            errors.Add("Google RSS 0건");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            errors.Add($"Google RSS:{ex.GetType().Name}");
+        }
+
+        // 2) Finnhub optional
+        if (!string.IsNullOrWhiteSpace(_finnhubKey))
         {
             try
             {
-                var live = await FetchFinnhubAsync(sym, take, cancellationToken).ConfigureAwait(false);
-                if (live.Count > 0)
+                var fh = await FetchFinnhubAsync(sym, take, cancellationToken).ConfigureAwait(false);
+                if (fh.Count > 0)
                 {
-                    return live;
+                    _lastSourceNote = $"Finnhub · {fh.Count}건 · 실헤드라인";
+                    return fh;
                 }
+
+                errors.Add("Finnhub 0건");
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Fall through to mock — never crash cockpit for news.
+                errors.Add($"Finnhub:{ex.GetType().Name}");
             }
         }
+        else
+        {
+            errors.Add("Finnhub키없음");
+        }
 
-        return BuildMockHeadlines(sym, take);
+        _lastSourceNote = "실뉴스 실패 · " + string.Join(" · ", errors) + " · 모의 없음";
+        return Array.Empty<NewsHeadline>();
+    }
+
+    private async Task<IReadOnlyList<NewsHeadline>> FetchGoogleNewsRssAsync(
+        string symbol,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        // Query SpaceX + ticker for US market news
+        var q = Uri.EscapeDataString($"{symbol} OR SpaceX OR \"Space Exploration Technologies\"");
+        var url =
+            $"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en";
+
+        using var resp = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException($"Google RSS HTTP {(int)resp.StatusCode}");
+        }
+
+        var xml = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var doc = XDocument.Parse(xml);
+        var items = doc.Descendants("item").ToList();
+        if (items.Count == 0)
+        {
+            items = doc.Descendants().Where(e => e.Name.LocalName is "item" or "entry").ToList();
+        }
+
+        var list = new List<NewsHeadline>();
+        var i = 0;
+        foreach (var item in items)
+        {
+            if (list.Count >= take)
+            {
+                break;
+            }
+
+            var title = item.Element("title")?.Value
+                        ?? item.Elements().FirstOrDefault(e => e.Name.LocalName == "title")?.Value;
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                continue;
+            }
+
+            var link = item.Element("link")?.Value
+                       ?? item.Elements().FirstOrDefault(e => e.Name.LocalName == "link")?.Attribute("href")?.Value
+                       ?? item.Elements().FirstOrDefault(e => e.Name.LocalName == "link")?.Value;
+            var pub = item.Element("pubDate")?.Value
+                      ?? item.Elements().FirstOrDefault(e => e.Name.LocalName == "pubDate")?.Value
+                      ?? item.Elements().FirstOrDefault(e => e.Name.LocalName == "published")?.Value;
+            var source = item.Element("source")?.Value
+                         ?? "Google News";
+
+            DateTimeOffset published = DateTimeOffset.UtcNow;
+            if (!string.IsNullOrWhiteSpace(pub)
+                && DateTimeOffset.TryParse(pub, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var parsed))
+            {
+                published = parsed.ToUniversalTime();
+            }
+
+            list.Add(new NewsHeadline(
+                Id: $"gn-{symbol}-{i}-{published.ToUnixTimeSeconds()}",
+                Title: title.Trim(),
+                Source: source.Trim(),
+                PublishedAtUtc: published,
+                Url: string.IsNullOrWhiteSpace(link) ? null : link.Trim(),
+                IsMaterialEvent: LooksMaterial(title),
+                SymbolHint: symbol));
+            i++;
+        }
+
+        return list;
     }
 
     private async Task<IReadOnlyList<NewsHeadline>> FetchFinnhubAsync(
@@ -67,66 +177,37 @@ public sealed class CompositeSpaceXNewsFeed : INewsFeed
         int take,
         CancellationToken cancellationToken)
     {
-        // Finnhub free company-news: uses ticker; SPCX may or may not be listed.
         var to = DateTime.UtcNow.Date;
-        var from = to.AddDays(-7);
+        var from = to.AddDays(-14);
         var url =
             $"https://finnhub.io/api/v1/company-news?symbol={Uri.EscapeDataString(symbol)}" +
             $"&from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&token={Uri.EscapeDataString(_finnhubKey!)}";
 
-        using var resp = await _http!.GetAsync(url, cancellationToken).ConfigureAwait(false);
+        using var resp = await _http.GetAsync(url, cancellationToken).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
         {
-            // try SpaceX common aliases
             return Array.Empty<NewsHeadline>();
         }
 
         var json = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         var items = JsonSerializer.Deserialize<List<FinnhubNewsDto>>(json) ?? new List<FinnhubNewsDto>();
         return items
-            .Where(i => !string.IsNullOrWhiteSpace(i.Headline))
-            .OrderByDescending(i => i.Datetime)
+            .Where(x => !string.IsNullOrWhiteSpace(x.Headline))
+            .OrderByDescending(x => x.Datetime)
             .Take(take)
-            .Select(i =>
+            .Select(x =>
             {
-                var published = DateTimeOffset.FromUnixTimeSeconds(i.Datetime);
-                var title = i.Headline!.Trim();
+                var published = DateTimeOffset.FromUnixTimeSeconds(x.Datetime);
+                var title = x.Headline!.Trim();
                 return new NewsHeadline(
-                    Id: $"fh-{i.Id ?? i.Datetime}",
+                    Id: $"fh-{x.Id ?? x.Datetime}",
                     Title: title,
-                    Source: string.IsNullOrWhiteSpace(i.Source) ? "Finnhub" : i.Source!,
+                    Source: string.IsNullOrWhiteSpace(x.Source) ? "Finnhub" : x.Source!,
                     PublishedAtUtc: published,
-                    Url: i.Url,
+                    Url: x.Url,
                     IsMaterialEvent: LooksMaterial(title),
                     SymbolHint: symbol);
             })
-            .ToList();
-    }
-
-    public static IReadOnlyList<NewsHeadline> BuildMockHeadlines(string symbol, int take)
-    {
-        var tick = Interlocked.Increment(ref _mockTick);
-        var now = DateTimeOffset.UtcNow;
-        var templates = new (string Title, string Source, bool Material)[]
-        {
-            ($"{symbol}: 시장 변동성 주시 — 포스트 IPO 구간 (모의)", "MockWire", false),
-            ($"SpaceX/Starlink 관련 관측 헤드라인 샘플 #{tick} (모의)", "MockWire", false),
-            ($"{symbol} 거래량·스프레드 모니터링 (모의 피드)", "MockDesk", false),
-            ("락업·지수 이벤트 캘린더는 수동 확인 권장 (모의)", "MockDesk", true),
-            ($"{symbol}: 자동매매는 뉴스 감성 매수 금지 — 차단/축소만 (모의)", "Policy", true),
-            ("규제·경고 플래그는 토스 warnings API로 별도 확인 (모의)", "MockReg", true),
-        };
-
-        return templates
-            .Take(take)
-            .Select((t, i) => new NewsHeadline(
-                Id: $"mock-{tick}-{i}",
-                Title: t.Title,
-                Source: t.Source,
-                PublishedAtUtc: now.AddMinutes(-(i * 7 + tick % 5)),
-                Url: null,
-                IsMaterialEvent: t.Material,
-                SymbolHint: symbol))
             .ToList();
     }
 
@@ -141,7 +222,7 @@ public sealed class CompositeSpaceXNewsFeed : INewsFeed
         string[] keys =
         [
             "LOCKUP", "SEC", "HALT", "INVESTIGATION", "WARNING", "VI ",
-            "락업", "거래정지", "공시", "경고", "소송", "FDA", "CONTRACT", "LAUNCH",
+            "락업", "거래정지", "공시", "경고", "소송", "CONTRACT", "LAUNCH", "IPO",
         ];
         return keys.Any(k => t.Contains(k, StringComparison.Ordinal));
     }
