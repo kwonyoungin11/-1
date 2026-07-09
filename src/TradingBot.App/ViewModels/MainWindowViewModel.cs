@@ -99,6 +99,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private bool _newsDay;
     [ObservableProperty] private string _contingencyLabel = string.Empty;
+    [ObservableProperty] private string _newsStatus = "뉴스 대기";
+    public ObservableCollection<NewsItemRow> NewsItems { get; } = new();
 
     [ObservableProperty] private ISeries[] _series = Array.Empty<ISeries>();
     [ObservableProperty] private ISeries[] _volumeSeries = Array.Empty<ISeries>();
@@ -203,6 +205,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ConnectionLabel = _harness.ConnectionLabel;
             ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel, _harness.ConnectionLabel);
             ApplyBracket(_harness.GetActiveBracketPlan());
+            ApplyNews();
             RebuildChart();
             StatusLine = $"갱신 완료 · {ConnectionPill} · 지정가 계획 · 실주문 잠금";
         }
@@ -280,7 +283,43 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         ApplyBracket(_harness.GetActiveBracketPlan());
         ContingencyLabel = _harness.EvaluateEntryGate().OwnerMessage;
+        _ = LoadNewsOnStartAsync();
         RebuildChart();
+    }
+
+    private async Task LoadNewsOnStartAsync()
+    {
+        try
+        {
+            await _harness.RefreshNewsAsync().ConfigureAwait(true);
+            ApplyNews();
+        }
+        catch
+        {
+            NewsStatus = "뉴스 초기 로드 실패";
+        }
+    }
+
+    private void ApplyNews()
+    {
+        NewsStatus = _harness.NewsStatus;
+        NewsItems.Clear();
+        foreach (var n in _harness.LastNews)
+        {
+            NewsItems.Add(new NewsItemRow(
+                n.Title,
+                $"{n.Source} · {n.PublishedKstLabel}",
+                n.IsMaterialEvent ? "중요" : "",
+                n.Url));
+        }
+    }
+
+    [RelayCommand]
+    private async Task RefreshNewsOnlyAsync()
+    {
+        await _harness.RefreshNewsAsync().ConfigureAwait(true);
+        ApplyNews();
+        StatusLine = "뉴스 갱신 · " + NewsStatus;
     }
 
     private void ApplyBracket(TradeBracketPlan plan)
@@ -358,3 +397,6 @@ public partial class MainWindowViewModel : ViewModelBase
         ChartSubtitle = ChartTimeframeCatalog.Describe(_harness.Timeframe) + " · 한국시간(KST) · 프리미엄 차트";
     }
 }
+
+/// <summary>One row in the SPCX news card.</summary>
+public sealed record NewsItemRow(string Title, string Meta, string Badge, string? Url);

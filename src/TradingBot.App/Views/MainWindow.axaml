@@ -157,26 +157,69 @@
           </StackPanel>
         </Border>
 
-        <StackPanel Grid.Column="3" Spacing="6" VerticalAlignment="Center" MinWidth="128">
-          <TextBlock Classes="section" Text="차트 범례"/>
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <Rectangle Width="18" Height="2" Fill="#2563EB"/>
-            <TextBlock Classes="sub" Text="ENTRY" VerticalAlignment="Center"/>
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <Rectangle Width="18" Height="2" Fill="#F23645"/>
-            <TextBlock Classes="sub" Text="SL" VerticalAlignment="Center"/>
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <Rectangle Width="18" Height="2" Fill="#089981"/>
-            <TextBlock Classes="sub" Text="TP" VerticalAlignment="Center"/>
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <Ellipse Width="12" Height="12" Fill="#66089981"/>
-            <TextBlock Classes="sub" Text="버블=대금" VerticalAlignment="Center"/>
-          </StackPanel>
-          <TextBlock Classes="sub" TextWrapping="Wrap" Text="라이트 · TradingView 팔레트 · 실주문 잠금"/>
-        </StackPanel>
+        <!-- Right column: legend on top + SPCX news card below -->
+        <Grid Grid.Column="3" RowDefinitions="Auto,*" MinWidth="200">
+          <Border Classes="glass-card" Padding="10" Margin="0,0,0,8">
+            <StackPanel Spacing="5">
+              <TextBlock Classes="section" Text="차트 범례"/>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Rectangle Width="18" Height="2" Fill="#2563EB"/>
+                <TextBlock Classes="sub" Text="ENTRY" VerticalAlignment="Center"/>
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Rectangle Width="18" Height="2" Fill="#F23645"/>
+                <TextBlock Classes="sub" Text="SL" VerticalAlignment="Center"/>
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Rectangle Width="18" Height="2" Fill="#089981"/>
+                <TextBlock Classes="sub" Text="TP" VerticalAlignment="Center"/>
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Ellipse Width="12" Height="12" Fill="#66089981"/>
+                <TextBlock Classes="sub" Text="버블=대금" VerticalAlignment="Center"/>
+              </StackPanel>
+              <TextBlock Classes="sub" TextWrapping="Wrap" Text="KST · Crosshair · 실주문 잠금"/>
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Row="1" Classes="glass-card" Padding="10">
+            <DockPanel LastChildFill="True">
+              <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,6">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="section" Text="SPCX 뉴스" VerticalAlignment="Center"/>
+                  <Button Grid.Column="1" Classes="glass-btn" Content="갱신"
+                          Padding="8,4" FontSize="11"
+                          Command="{Binding RefreshNewsOnlyCommand}"/>
+                </Grid>
+                <TextBlock Classes="sub" Text="{Binding NewsStatus}" TextWrapping="Wrap" FontSize="10"/>
+                <TextBlock Classes="sub" TextWrapping="Wrap" FontSize="10"
+                           Text="감성 자동매매 금지 · 중요 키워드 시 뉴스데이 권장"/>
+              </StackPanel>
+              <ListBox ItemsSource="{Binding NewsItems}"
+                       Background="Transparent"
+                       BorderThickness="0"
+                       ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:NewsItemRow">
+                    <Border Background="#F8FAFC" CornerRadius="8" Padding="8" Margin="0,0,0,6"
+                            BorderBrush="#E2E8F0" BorderThickness="1">
+                      <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Title}" TextWrapping="Wrap" FontSize="11"
+                                   FontWeight="SemiBold" Foreground="#0F172A"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Text="{Binding Badge}" FontSize="10" Foreground="#B91C1C"
+                                     FontWeight="SemiBold"/>
+                          <TextBlock Text="{Binding Meta}" FontSize="10" Foreground="#64748B"
+                                     TextWrapping="Wrap"/>
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </DockPanel>
+          </Border>
+        </Grid>
       </Grid>
     </Border>
   </Grid>

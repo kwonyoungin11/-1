@@ -1,6 +1,7 @@
 using TradingBot.Application;
 using TradingBot.Domain;
 using TradingBot.Infrastructure.Toss;
+using TradingBot.Infrastructure.Toss.News;
 using TradingBot.Observability;
 using TradingBot.Orders;
 using TradingBot.Risk;
@@ -52,6 +53,9 @@ public sealed class AppHarness
     private IReadOnlyList<CandlePoint>? _cachedRealCandles;
     private bool _newsDay;
     private bool _symbolWarningActive;
+    private readonly INewsFeed _newsFeed;
+    private IReadOnlyList<NewsHeadline> _lastNews = Array.Empty<NewsHeadline>();
+    private string _newsStatus = "뉴스 대기";
 
     public AppHarness(
         TradingSafetySettings settings,
@@ -65,7 +69,8 @@ public sealed class AppHarness
         IAuditLog audit,
         AutoTradeSessionService session,
         TossOptions? tossOptions = null,
-        IOrderRouter? gatedLiveRouter = null)
+        IOrderRouter? gatedLiveRouter = null,
+        INewsFeed? newsFeed = null)
     {
         _settings = settings;
         _portfolio = portfolio;
@@ -83,6 +88,7 @@ public sealed class AppHarness
         // Optional gated live router (BlockedLiveOrderRouter today; GatedLiveOrderRouter when merged).
         // Registered for readiness / future wiring only — practice loop never routes here under defaults.
         _gatedLiveRouter = gatedLiveRouter;
+        _newsFeed = newsFeed ?? CompositeSpaceXNewsFeed.FromEnvironment();
     }
 
     public AutoTradeSessionService Session => _session;
@@ -174,7 +180,39 @@ public sealed class AppHarness
             audit,
             session,
             toss,
-            gatedLiveRouter: gatedLive);
+            gatedLiveRouter: gatedLive,
+            newsFeed: CompositeSpaceXNewsFeed.FromEnvironment());
+    }
+
+    public IReadOnlyList<NewsHeadline> LastNews => _lastNews;
+
+    public string NewsStatus => _newsStatus;
+
+    /// <summary>
+    /// Poll SPCX news (Finnhub if key present, else mock). Display/gate only.
+    /// </summary>
+    public async Task RefreshNewsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var items = await _newsFeed
+                .GetHeadlinesAsync(WatchlistCatalog.SpaceXSymbol, maxCount: 12, cancellationToken)
+                .ConfigureAwait(false);
+            _lastNews = items;
+            var material = items.Count(i => i.IsMaterialEvent);
+            _newsStatus = items.Count == 0
+                ? "뉴스 없음"
+                : $"뉴스 {items.Count}건 · 중요표시 {material} · {KoreaTime.FormatFull(DateTimeOffset.UtcNow)}";
+            // Soft hint: material headlines can suggest news-day (owner still controls checkbox)
+            if (material > 0 && !_newsDay)
+            {
+                _newsStatus += " · 중요 키워드 감지(뉴스데이 수동 ON 권장)";
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _newsStatus = $"뉴스 오류 · {ex.GetType().Name}";
+        }
     }
 
     /// <summary>
@@ -554,6 +592,7 @@ public sealed class AppHarness
             .ConfigureAwait(false);
         _connectionLabel = portfolio.ConnectionOwnerMessage;
         _connectionModeLabel = TossReadOnlyFactory.DescribeMode(_tossOptions);
+        await RefreshNewsAsync(cancellationToken).ConfigureAwait(false);
 
         // Live 읽기 전용일 때만 실 포트폴리오를 세션에 바인딩 (mock은 연습 유지)
         if (portfolio.ConnectionStatus == ConnectionStatus.LiveReadOnlyConnected)
