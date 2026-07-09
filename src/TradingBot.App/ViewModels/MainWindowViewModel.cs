@@ -11,15 +11,17 @@ namespace TradingBot.App.ViewModels;
 
 /// <summary>
 /// 상단 프리미엄 차트(KST) + 하단 자동매매 조작.
-/// 종목 SPCX · 최종 전략 추세추종 · 실주문 게이트 잠금.
+/// VMAR 연습 콕핏 · 실주문 게이트 잠금.
 /// </summary>
 public partial class MainWindowViewModel : ViewModelBase
 {
     private const string SafetyHeadlineText =
-        "토스증권 실데이터 · SPCX 전용 · 실주문은 게이트 잠금 · 투자 조언 아님 · 시간 KST";
+        "축: 토스 실데이터(읽기) · 실주문은 게이트·체크리스트 후 · VMAR · KST · 투자 조언 아님";
 
     private readonly AppHarness _harness;
     private bool _suppressSelectionEcho;
+    private IReadOnlyList<CandlePoint> _chartCandles = Array.Empty<CandlePoint>();
+    private string _baseOhlcStatusLine = "—";
 
     public MainWindowViewModel()
         : this(AppHarness.CreateDefault())
@@ -31,29 +33,34 @@ public partial class MainWindowViewModel : ViewModelBase
         _harness = harness ?? throw new ArgumentNullException(nameof(harness));
         StockKindOptions = new ObservableCollection<string>(WatchlistCatalog.KindLabels);
         StrategyOptions = new ObservableCollection<string>(StrategyCatalog.Labels);
-        SymbolOptions = new ObservableCollection<string> { WatchlistCatalog.SpaceXSymbol };
+        SymbolOptions = new ObservableCollection<string>
+        {
+            WatchlistCatalog.VmarSymbol,
+        };
         TimeframeOptions = new ObservableCollection<string>(ChartTimeframeCatalog.Labels);
+        TimeframeChips = new ObservableCollection<TimeframeChipVm>(
+            ChartTimeframeCatalog.Labels.Select(label => new TimeframeChipVm(label, SelectTimeframeCore)));
 
-        SelectedStockKind = StockMarketKind.스페이스X.ToString();
-        _harness.SetStockKind(StockMarketKind.스페이스X);
-        SelectedSymbol = WatchlistCatalog.SpaceXSymbol;
-        _harness.SetFocusSymbol(WatchlistCatalog.SpaceXSymbol);
-        // Official final preset
-        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(SpacexOfficialStrategyPreset.Timeframe);
-        _harness.SetTimeframe(SpacexOfficialStrategyPreset.Timeframe);
-        SelectedStrategy = SpacexOfficialStrategyPreset.Strategy.ToString();
-        _harness.SetStrategy(SpacexOfficialStrategyPreset.Strategy);
-        OfficialStrategyLabel = SpacexOfficialStrategyPreset.OwnerSummary;
-        RecommendedStrategyNote = SpacexOfficialStrategyPreset.OwnerSummary;
+        SelectedStockKind = StockMarketKind.비전마린.ToString();
+        _harness.SetStockKind(StockMarketKind.비전마린);
+        SelectedSymbol = WatchlistCatalog.VmarSymbol;
+        _harness.SetFocusSymbol(WatchlistCatalog.VmarSymbol);
+        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(VmarOneMinuteScalpPreset.Timeframe);
+        _harness.SetTimeframe(VmarOneMinuteScalpPreset.Timeframe);
+        SyncTimeframeChips();
+        SelectedStrategy = VmarOneMinuteScalpPreset.Strategy.ToString();
+        _harness.SetStrategy(VmarOneMinuteScalpPreset.Strategy);
+        OfficialStrategyLabel = VmarOneMinuteScalpPreset.OwnerSummary;
+        RecommendedStrategyNote = VmarOneMinuteScalpPreset.OwnerSummary;
 
         BuildEmptyChart();
         ApplyPanel(_harness.GetAutoTradePanel());
         ConnectionLabel = _harness.ConnectionLabel;
-        ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel);
+        ApplyConnectionAndDataPills();
+        ApplySafetyPills();
         SafetyHeadline = SafetyHeadlineText;
         ChartSubtitle = "토스 실봉 로딩 중… · 한국시간(KST)";
-        Title = "SPCX 콕핏 · 최종전략 추세추종";
-        // 시작 즉시 토스 실데이터 + 실뉴스 (모의 차트에 방치하지 않음)
+        Title = "토스 · VMAR 자동매매";
         _ = BootstrapRealDataAsync();
     }
 
@@ -74,25 +81,42 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<string> StrategyOptions { get; }
     public ObservableCollection<string> SymbolOptions { get; }
     public ObservableCollection<string> TimeframeOptions { get; }
+    public ObservableCollection<TimeframeChipVm> TimeframeChips { get; }
 
-    [ObservableProperty] private string _title = "토스 · 스페이스X 자동매매";
+    [ObservableProperty] private string _title = "토스 · VMAR 자동매매";
     [ObservableProperty] private string _safetyHeadline = string.Empty;
     [ObservableProperty] private string _statusLine = "대기";
     [ObservableProperty] private string _sessionStatusLabel = "중지";
-    [ObservableProperty] private string _watchSymbolsText = WatchlistCatalog.SpaceXSymbol;
+    [ObservableProperty] private string _watchSymbolsText = WatchlistCatalog.VmarSymbol;
     [ObservableProperty] private string _balanceLabel = string.Empty;
     [ObservableProperty] private string _returnRateLabel = string.Empty;
     [ObservableProperty] private string _safetyNote = string.Empty;
-    [ObservableProperty] private string _selectedStockKind = "스페이스X";
-    [ObservableProperty] private string _selectedStrategy = "추세추종";
-    [ObservableProperty] private string _selectedSymbol = WatchlistCatalog.SpaceXSymbol;
+    [ObservableProperty] private string _selectedStockKind = "비전마린";
+    [ObservableProperty] private string _selectedStrategy = "일분분할스캘프";
+    [ObservableProperty] private string _selectedSymbol = WatchlistCatalog.VmarSymbol;
     [ObservableProperty] private string _selectedTimeframe = "15m";
     [ObservableProperty] private string _stockKindDescription = string.Empty;
     [ObservableProperty] private string _strategyDescription = string.Empty;
-    [ObservableProperty] private string _chartTitle = "SPCX";
+    [ObservableProperty] private string _chartTitle = "VMAR";
     [ObservableProperty] private string _chartSubtitle = string.Empty;
     [ObservableProperty] private string _indicatorLegend = string.Empty;
     [ObservableProperty] private string _lastPriceLabel = string.Empty;
+    [ObservableProperty] private string _lastCloseText = "—";
+    [ObservableProperty] private string _lastPriceAxisBadge = "—";
+    [ObservableProperty] private bool _lastPriceAxisBadgeIsUp = true;
+    [ObservableProperty] private double _lastPriceYFraction;
+    [ObservableProperty] private double _lastPriceYMin;
+    [ObservableProperty] private double _lastPriceYMax;
+    [ObservableProperty] private double _lastCloseValue;
+    [ObservableProperty] private double _lastCloseX;
+    [ObservableProperty] private string _changeText = "—";
+    [ObservableProperty] private bool _changeIsPositive = true;
+    [ObservableProperty] private string _barCountText = string.Empty;
+    [ObservableProperty] private string _lastBarTimeText = string.Empty;
+    [ObservableProperty] private string _highLowText = string.Empty;
+    [ObservableProperty] private string _openText = string.Empty;
+    [ObservableProperty] private string _volumeText = string.Empty;
+    [ObservableProperty] private string _ohlcStatusLine = string.Empty;
     [ObservableProperty] private string _bracketSummary = string.Empty;
     [ObservableProperty] private string _entryLimitLabel = "—";
     [ObservableProperty] private string _stopLossLabel = "—";
@@ -105,10 +129,18 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _netRrLabel = "—";
     [ObservableProperty] private string _orderTypeLabel = "LIMIT · 지정가 계획";
     [ObservableProperty] private string _recommendedStrategyNote =
-        "SPCX 권장: 추세추종 · 15m/60m · LIMIT+ATR손절 · 1m 스캘핑 비권장(수수료) · 투자 조언 아님";
-    [ObservableProperty] private string _officialStrategyLabel = SpacexOfficialStrategyPreset.OwnerSummary;
+        VmarOneMinuteScalpPreset.OwnerSummary;
+    [ObservableProperty] private string _officialStrategyLabel = VmarOneMinuteScalpPreset.OwnerSummary;
     [ObservableProperty] private string _connectionLabel = "연결 확인 전";
-    [ObservableProperty] private string _connectionPill = "mock";
+    [ObservableProperty] private string _connectionPill = "확인중";
+    [ObservableProperty] private string _dataSourcePill = "데이터 확인중";
+    [ObservableProperty] private string _chartWatermarkLabel = string.Empty;
+    [ObservableProperty] private bool _showChartWatermark;
+    [ObservableProperty] private string _killSwitchPill = "긴급정지 ON";
+    [ObservableProperty] private string _orderModePill = "dry_run";
+    [ObservableProperty] private string _liveLockPill = "실주문 잠금";
+    [ObservableProperty] private string _gateStatusPill = "게이트 대기";
+    [ObservableProperty] private string _botStatePill = "중지";
     [ObservableProperty] private bool _canStart = true;
     [ObservableProperty] private bool _canStop;
     [ObservableProperty] private bool _isBusy;
@@ -119,15 +151,22 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty] private ISeries[] _series = Array.Empty<ISeries>();
     [ObservableProperty] private ISeries[] _volumeSeries = Array.Empty<ISeries>();
+    [ObservableProperty] private ISeries[] _rsiSeries = Array.Empty<ISeries>();
     [ObservableProperty] private Axis[] _xAxes = Array.Empty<Axis>();
     [ObservableProperty] private Axis[] _yAxes = Array.Empty<Axis>();
     [ObservableProperty] private Axis[] _volumeXAxes = Array.Empty<Axis>();
     [ObservableProperty] private Axis[] _volumeYAxes = Array.Empty<Axis>();
+    [ObservableProperty] private Axis[] _rsiXAxes = Array.Empty<Axis>();
+    [ObservableProperty] private Axis[] _rsiYAxes = Array.Empty<Axis>();
     [ObservableProperty] private RectangularSection[] _sections = Array.Empty<RectangularSection>();
+    [ObservableProperty] private RectangularSection[] _rsiSections = Array.Empty<RectangularSection>();
     [ObservableProperty] private DrawMarginFrame? _drawMarginFrame;
     [ObservableProperty] private DrawMarginFrame? _volumeDrawMarginFrame;
+    [ObservableProperty] private DrawMarginFrame? _rsiDrawMarginFrame;
     [ObservableProperty] private LiveChartsCore.Measure.Margin? _drawMargin;
     [ObservableProperty] private LiveChartsCore.Measure.Margin? _volumeDrawMargin;
+    [ObservableProperty] private LiveChartsCore.Measure.Margin? _rsiDrawMargin;
+    [ObservableProperty] private string _rsiStatusText = string.Empty;
 
     partial void OnSelectedStockKindChanged(string value)
     {
@@ -136,11 +175,27 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        _harness.SetStockKind(StockMarketKind.스페이스X);
+        if (!Enum.TryParse<StockMarketKind>(value, out var kind))
+        {
+            return;
+        }
+
+        _harness.SetStockKind(kind);
         RefreshSymbolOptions();
+
+        _suppressSelectionEcho = true;
+        SelectedStockKind = StockMarketKind.비전마린.ToString();
+        SelectedStrategy = VmarOneMinuteScalpPreset.Strategy.ToString();
+        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(VmarOneMinuteScalpPreset.Timeframe);
+        OfficialStrategyLabel = VmarOneMinuteScalpPreset.OwnerSummary;
+        RecommendedStrategyNote = VmarOneMinuteScalpPreset.OwnerSummary;
+        _suppressSelectionEcho = false;
+        SyncTimeframeChips();
+
         ApplyPanel(_harness.GetAutoTradePanel());
         RebuildChart();
-        StatusLine = "대상 · 스페이스X (SPCX) · 토스 실데이터";
+        StatusLine = $"대상 · {WatchlistCatalog.Describe(StockMarketKind.비전마린)} · 토스 실데이터";
+        _ = RefreshAsync();
     }
 
     partial void OnSelectedStrategyChanged(string value)
@@ -166,13 +221,22 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        _harness.SetFocusSymbol(WatchlistCatalog.SpaceXSymbol);
-        ChartTitle = $"SPCX · {SelectedTimeframe}";
+        if (!WatchlistCatalog.IsKnownSymbol(value))
+        {
+            return;
+        }
+
+        var focus = WatchlistCatalog.NormalizeKnownSymbol(value) ?? WatchlistCatalog.VmarSymbol;
+        _harness.SetFocusSymbol(focus);
+        ChartTitle = $"{focus} · {SelectedTimeframe}";
         RebuildChart();
+        _ = RefreshAsync();
     }
 
     partial void OnSelectedTimeframeChanged(string value)
     {
+        SyncTimeframeChips();
+
         if (_suppressSelectionEcho)
         {
             return;
@@ -181,25 +245,78 @@ public partial class MainWindowViewModel : ViewModelBase
         if (ChartTimeframeCatalog.TryParse(value, out var tf))
         {
             _harness.SetTimeframe(tf);
-            ChartTitle = $"SPCX · {ChartTimeframeCatalog.UiLabel(tf)}";
+            var focus = _harness.Session.ResolveFocusSymbol();
+            ChartTitle = $"{focus} · {ChartTimeframeCatalog.UiLabel(tf)}";
             ChartSubtitle = ChartTimeframeCatalog.Describe(tf) + " · 버블=거래대금 · TV 스타일";
             StatusLine = ChartTimeframeCatalog.NeedsAggregation(tf)
                 ? $"시간봉 · {ChartTimeframeCatalog.UiLabel(tf)} · 집계({ChartTimeframeCatalog.SourceTossInterval(tf)}→{ChartTimeframeCatalog.UiLabel(tf)}) · 불러오는 중…"
                 : $"시간봉 · {ChartTimeframeCatalog.UiLabel(tf)} · 토스 {ChartTimeframeCatalog.SourceTossInterval(tf)} · 불러오는 중…";
             RebuildChart();
-            // 실봉 로드
             _ = RefreshAsync();
+        }
+    }
+
+    public bool IsTimeframeSelected(string? tf) =>
+        !string.IsNullOrWhiteSpace(tf)
+        && string.Equals(SelectedTimeframe, tf, StringComparison.Ordinal);
+
+    [RelayCommand]
+    private void SelectTimeframe(string? label) => SelectTimeframeCore(label);
+
+    private void SelectTimeframeCore(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return;
+        }
+
+        if (!ChartTimeframeCatalog.TryParse(label, out _))
+        {
+            return;
+        }
+
+        var ui = ChartTimeframeCatalog.Labels.FirstOrDefault(l =>
+                     string.Equals(l, label, StringComparison.OrdinalIgnoreCase))
+                 ?? label;
+
+        if (string.Equals(SelectedTimeframe, ui, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        SelectedTimeframe = ui;
+    }
+
+    private void SyncTimeframeChips()
+    {
+        foreach (var chip in TimeframeChips)
+        {
+            chip.IsSelected = string.Equals(chip.Label, SelectedTimeframe, StringComparison.Ordinal);
         }
     }
 
     private void RefreshSymbolOptions()
     {
+        var focus = _harness.Session.ResolveFocusSymbol();
+        var watch = _harness.Session.ResolveWatchSymbols();
         SymbolOptions.Clear();
-        SymbolOptions.Add(WatchlistCatalog.SpaceXSymbol);
+        foreach (var s in watch)
+        {
+            if (WatchlistCatalog.IsKnownSymbol(s) && !SymbolOptions.Contains(s))
+            {
+                SymbolOptions.Add(WatchlistCatalog.NormalizeKnownSymbol(s) ?? s);
+            }
+        }
+
+        if (SymbolOptions.Count == 0)
+        {
+            SymbolOptions.Add(focus);
+        }
+
         _suppressSelectionEcho = true;
-        SelectedSymbol = WatchlistCatalog.SpaceXSymbol;
+        SelectedSymbol = SymbolOptions.Contains(focus) ? focus : SymbolOptions[0];
         _suppressSelectionEcho = false;
-        _harness.SetFocusSymbol(WatchlistCatalog.SpaceXSymbol);
+        _harness.SetFocusSymbol(SelectedSymbol);
     }
 
     [RelayCommand]
@@ -217,18 +334,21 @@ public partial class MainWindowViewModel : ViewModelBase
             _ = await _harness.GetDashboardAsync().ConfigureAwait(true);
             RefreshSymbolOptions();
             ApplyPanel(_harness.GetAutoTradePanel());
-            ConnectionLabel = _harness.ConnectionLabel;
-            ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel, _harness.ConnectionLabel);
+            ConnectionLabel = CompactConnection(_harness.ConnectionLabel);
+            ApplyConnectionAndDataPills();
             ApplyBracket(_harness.GetActiveBracketPlan());
+            ApplySafetyPills();
             ApplyNews();
             RebuildChart();
-            StatusLine = $"갱신 완료 · {ConnectionPill} · 지정가 계획 · 실주문 잠금";
+            StatusLine = $"갱신 · {DataSourcePill} · {OrderModePill} · 실주문 잠금";
         }
         catch (Exception ex)
         {
-            StatusLine = "오류 · 실주문 없음";
-            ConnectionLabel = $"읽기 연결 오류 — {ex.GetType().Name}";
+            StatusLine = "오류 · 실데이터 실패 · 실주문 없음 · fail-closed";
+            ConnectionLabel = $"연결 오류 · {ex.GetType().Name}";
             ConnectionPill = "오류";
+            DataSourcePill = "데이터 오류";
+            ApplySafetyPills();
         }
         finally
         {
@@ -256,18 +376,24 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         _suppressSelectionEcho = true;
         SessionStatusLabel = p.SessionStatusLabel;
-        WatchSymbolsText = WatchlistCatalog.SpaceXSymbol;
-        BalanceLabel = p.BalanceLabel;
-        ReturnRateLabel = p.ReturnRateLabel;
+        BotStatePill = MapBotStatePill(p.SessionStatusLabel);
+        var focus = string.IsNullOrWhiteSpace(p.FocusSymbol)
+            ? WatchlistCatalog.VmarSymbol
+            : p.FocusSymbol;
+        WatchSymbolsText = string.IsNullOrWhiteSpace(p.WatchSymbolsText)
+            ? focus
+            : p.WatchSymbolsText;
+        BalanceLabel = CompactBalance(p.BalanceLabel);
+        ReturnRateLabel = CompactReturn(p.ReturnRateLabel, p.ReturnRatePercent);
         SafetyNote = p.SafetyNote;
         CanStart = p.CanStart;
         CanStop = p.CanStop;
-        SelectedStockKind = StockMarketKind.스페이스X.ToString();
+        SelectedStockKind = p.StockKindLabel;
         SelectedStrategy = p.StrategyLabel;
-        StockKindDescription = WatchlistCatalog.Describe(StockMarketKind.스페이스X);
+        StockKindDescription = p.StockKindDescription;
         StrategyDescription = p.StrategyDescription;
-        SelectedSymbol = WatchlistCatalog.SpaceXSymbol;
-        ChartTitle = $"SPCX · {SelectedTimeframe}";
+        SelectedSymbol = focus;
+        ChartTitle = $"{focus} · {SelectedTimeframe}";
         ChartSubtitle = ChartTimeframeCatalog.TryParse(SelectedTimeframe, out var tfApply)
             ? ChartTimeframeCatalog.Describe(tfApply) + " · 버블=거래대금"
             : ChartSubtitle;
@@ -275,11 +401,99 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!SafetyNote.Contains("실주문", StringComparison.Ordinal))
         {
             SafetyNote = string.IsNullOrWhiteSpace(SafetyNote)
-                ? "토스 실데이터 · SPCX · 실주문 게이트 잠금."
+                ? $"토스 실데이터 · {focus} · 실주문 게이트 잠금 · dry-run only."
                 : $"{SafetyNote} 실주문 게이트 잠금.";
         }
 
+        ApplySafetyPills();
         _suppressSelectionEcho = false;
+    }
+
+    private void ApplyConnectionAndDataPills()
+    {
+        ConnectionPill = ShortConnectionPill(
+            _harness.ConnectionModeLabel,
+            _harness.ConnectionLabel,
+            _harness.IsLiveReadOnlyConnected);
+        DataSourcePill = _harness.ChartUsesRealCandles
+            ? "토스 실봉"
+            : _harness.IsLiveReadOnlyConnected
+                ? "실연결 · 봉 폴백"
+                : ShortDataSourcePill(_harness.ChartDataSourceLabel);
+    }
+
+    private void ApplySafetyPills()
+    {
+        var report = _harness.GetLiveReadinessReport();
+        KillSwitchPill = report.SettingsKillSwitch ? "긴급정지 ON" : "긴급정지 OFF";
+        OrderModePill = string.IsNullOrWhiteSpace(report.SettingsOrderMode)
+            ? "dry_run"
+            : report.SettingsOrderMode.ToLowerInvariant() switch
+            {
+                "dryrun" or "dry_run" => "dry_run",
+                "paper" => "paper",
+                "live" => _harness.IsLiveSubmissionEnabled ? "live" : "live(차단)",
+                _ => report.SettingsOrderMode,
+            };
+        LiveLockPill = _harness.IsLiveSubmissionEnabled
+            ? "실주문 경로 존재 — 게이트 확인"
+            : "실주문 잠금";
+
+        if (report.SettingsKillSwitch)
+        {
+            GateStatusPill = "진입 차단 · 킬스위치 ON";
+        }
+        else if (report.SettingsAllowLiveOrders || string.Equals(report.SettingsOrderMode, "Live", StringComparison.OrdinalIgnoreCase))
+        {
+            GateStatusPill = "설정 위험 · live 플래그 감지 · 실주문 아님";
+        }
+        else
+        {
+            var gate = _harness.EvaluateEntryGate();
+            GateStatusPill = CompactGate(gate.OwnerMessage);
+        }
+
+        ContingencyLabel = GateStatusPill;
+    }
+
+    private static string ShortDataSourcePill(string label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return "데이터 확인중";
+        }
+
+        if (label.Contains("실봉", StringComparison.Ordinal))
+        {
+            return "토스 실봉";
+        }
+
+        if (label.Contains("mock", StringComparison.OrdinalIgnoreCase))
+        {
+            return "mock 폴백";
+        }
+
+        return TruncateFit(label, 16);
+    }
+
+    private static string MapBotStatePill(string session)
+    {
+        if (string.IsNullOrWhiteSpace(session))
+        {
+            return "대기";
+        }
+
+        if (session.Contains("실행", StringComparison.Ordinal))
+        {
+            return "실행중(연습)";
+        }
+
+        if (session.Contains("중지", StringComparison.Ordinal))
+        {
+            return "중지";
+        }
+
+        return TruncateFit(session, 12);
     }
 
     partial void OnNewsDayChanged(bool value)
@@ -287,19 +501,113 @@ public partial class MainWindowViewModel : ViewModelBase
         _harness.NewsDay = value;
         ApplyBracket(_harness.GetActiveBracketPlan());
         var gate = _harness.EvaluateEntryGate();
-        ContingencyLabel = gate.OwnerMessage;
-        StatusLine = value
-            ? "뉴스데이 ON · 사이즈 50% · 재호가 억제 · 감성 자동매매 없음"
-            : "뉴스데이 OFF · 정상 계획 사이즈";
+        ContingencyLabel = CompactGate(gate.OwnerMessage);
+        StatusLine = value ? "뉴스데이 ON · 사이즈 50%" : "뉴스데이 OFF";
         RebuildChart();
     }
 
     private void BuildEmptyChart()
     {
         ApplyBracket(_harness.GetActiveBracketPlan());
-        ContingencyLabel = _harness.EvaluateEntryGate().OwnerMessage;
+        ConnectionLabel = CompactConnection(_harness.ConnectionLabel);
+        ApplyConnectionAndDataPills();
+        ApplySafetyPills();
         _ = LoadNewsOnStartAsync();
         RebuildChart();
+    }
+
+    private static string TruncateFit(string text, int max)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= max)
+        {
+            return text;
+        }
+
+        return text[..(max - 1)] + "…";
+    }
+
+    private static string CompactConnection(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "연결 확인 전";
+        }
+
+        // Prefer short owner-facing status (drop long HTTP detail).
+        if (raw.Contains("실", StringComparison.Ordinal) && raw.Contains("HTTP", StringComparison.OrdinalIgnoreCase))
+        {
+            return "토스 실연결";
+        }
+
+        if (raw.Contains("오류", StringComparison.Ordinal) || raw.Contains("실패", StringComparison.Ordinal))
+        {
+            return TruncateFit(raw, 28);
+        }
+
+        return TruncateFit(raw.Replace(" — ", " · ", StringComparison.Ordinal), 36);
+    }
+
+    private static string CompactGate(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "게이트 대기";
+        }
+
+        if (raw.Contains("뉴스데이", StringComparison.Ordinal))
+        {
+            return "뉴스데이 · 사이즈 50% · 감성매매 금지";
+        }
+
+        if (raw.Contains("게이트 통과", StringComparison.Ordinal))
+        {
+            return "게이트 통과 · 실주문 아님";
+        }
+
+        if (raw.Contains("킬스위치", StringComparison.Ordinal) || raw.Contains("일손실", StringComparison.Ordinal))
+        {
+            return "진입 차단 · 킬스위치/일손실";
+        }
+
+        if (raw.Contains("추세", StringComparison.Ordinal) || raw.Contains("필터", StringComparison.Ordinal))
+        {
+            return "진입 차단 · 추세/필터 미충족";
+        }
+
+        if (raw.Contains("세션", StringComparison.Ordinal))
+        {
+            return "진입 차단 · 세션";
+        }
+
+        if (raw.Contains("데이터", StringComparison.Ordinal))
+        {
+            return "진입 차단 · 데이터";
+        }
+
+        // Domain messages are already short; keep whole string when reasonable
+        return raw.Length <= 42 ? raw : TruncateFit(raw, 42);
+    }
+
+    private static string CompactBalance(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "—";
+        }
+
+        // "잔액 1.54 (토스 …)" → keep readable head
+        return TruncateFit(raw.Replace("잔액 ", "", StringComparison.Ordinal), 28);
+    }
+
+    private static string CompactReturn(string raw, decimal returnRatePercent = 0m)
+    {
+        if (string.IsNullOrWhiteSpace(raw) || raw.Contains("—", StringComparison.Ordinal))
+        {
+            return returnRatePercent == 0m ? "0.00% · 세션" : $"{returnRatePercent:N2}%";
+        }
+
+        var t = TruncateFit(raw.Replace("수익률 ", "", StringComparison.Ordinal), 16);
+        return string.IsNullOrWhiteSpace(t) || t == "—" ? "0.00% · 세션" : t;
     }
 
     private async Task LoadNewsOnStartAsync()
@@ -317,16 +625,33 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void ApplyNews()
     {
-        NewsStatus = _harness.NewsStatus;
+        NewsStatus = CompactNewsStatus(_harness.NewsStatus);
         NewsItems.Clear();
-        foreach (var n in _harness.LastNews)
+        foreach (var n in _harness.LastNews.Take(2))
         {
             NewsItems.Add(new NewsItemRow(
-                n.Title,
+                n.Title.Trim(),
                 $"{n.Source} · {n.PublishedKstLabel}",
                 n.IsMaterialEvent ? "중요" : "",
                 n.Url));
         }
+    }
+
+    private static string CompactNewsStatus(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "뉴스 대기";
+        }
+
+        // "Google News RSS · 2건 · …" keep head only
+        var parts = raw.Split('·', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+        {
+            return TruncateFit($"{parts[0]} · {parts[1]}", 36);
+        }
+
+        return TruncateFit(raw, 36);
     }
 
     [RelayCommand]
@@ -340,27 +665,37 @@ public partial class MainWindowViewModel : ViewModelBase
     private void ApplyBracket(TradeBracketPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        OrderTypeLabel = $"{plan.OrderType} · 지정가 계획 · 실주문 잠금";
+        OrderTypeLabel = $"{plan.OrderType} · 잠금";
         EntryLimitLabel = plan.EntryLimit > 0 ? plan.EntryLimit.ToString("N2") : "—";
         StopLossLabel = plan.StopPrice > 0 ? plan.StopPrice.ToString("N2") : "—";
         TakeProfitLabel = plan.TakeProfitPrice > 0 ? plan.TakeProfitPrice.ToString("N2") : "—";
         QuantityPlanLabel = plan.Quantity > 0 ? plan.Quantity.ToString("N0") : "0";
         RiskAmountLabel = plan.RiskAmount > 0 ? $"${plan.RiskAmount:N2}" : "—";
-        RewardRiskLabel = plan.RewardRiskRatio > 0 ? $"1 : {plan.RewardRiskRatio:N2}" : "—";
+        RewardRiskLabel = plan.RewardRiskRatio > 0 ? $"1:{plan.RewardRiskRatio:N2}" : "—";
         AtrLabel = plan.Atr is decimal a
-            ? $"{a:N4} ({plan.StopSource})"
+            ? $"{a:N4} · {plan.StopSource}"
             : plan.StopSource.ToString();
         CommissionLabel = plan.EstimatedCommissionUsd > 0m
-            ? $"≈ ${plan.EstimatedCommissionUsd:N2} (왕복 추정)"
-            : plan.IsValid ? "≈ $0 ~ 소액" : "—";
+            ? $"≈${plan.EstimatedCommissionUsd:N2}"
+            : plan.IsValid ? "≈$0" : "—";
         NetRrLabel = plan.NetRewardRiskRatio > 0m
-            ? $"1 : {plan.NetRewardRiskRatio:N2}"
+            ? $"1:{plan.NetRewardRiskRatio:N2}"
             : "—";
-        BracketSummary = plan.OwnerMessage;
+        BracketSummary = plan.IsValid
+            ? $"R:R 1:{plan.RewardRiskRatio:N2} · 수수료≈${plan.EstimatedCommissionUsd:N2}"
+            : plan.OwnerMessage;
     }
 
-    private static string ShortConnectionPill(string modeLabel, string? ownerLabel = null)
+    private static string ShortConnectionPill(
+        string modeLabel,
+        string? ownerLabel = null,
+        bool isLiveReadOnly = false)
     {
+        if (isLiveReadOnly)
+        {
+            return "토스 실연결";
+        }
+
         if (!string.IsNullOrWhiteSpace(ownerLabel)
             && (ownerLabel.Contains("오류", StringComparison.Ordinal)
                 || ownerLabel.Contains("실패", StringComparison.Ordinal)))
@@ -368,8 +703,16 @@ public partial class MainWindowViewModel : ViewModelBase
             return "오류";
         }
 
+        if (!string.IsNullOrWhiteSpace(ownerLabel)
+            && (ownerLabel.Contains("실 HTTP", StringComparison.Ordinal)
+                || ownerLabel.Contains("실연결", StringComparison.Ordinal)
+                || ownerLabel.Contains("토스 실", StringComparison.Ordinal)))
+        {
+            return "토스 실연결";
+        }
+
         if (modeLabel.Contains("실 HTTP", StringComparison.Ordinal)
-            || modeLabel.Contains("토스", StringComparison.Ordinal))
+            || modeLabel.Contains("읽기 전용", StringComparison.Ordinal))
         {
             return "토스 실연결";
         }
@@ -379,7 +722,13 @@ public partial class MainWindowViewModel : ViewModelBase
             return "오류";
         }
 
-        return "mock";
+        if (modeLabel.Contains("mock", StringComparison.OrdinalIgnoreCase)
+            || modeLabel.Contains("모의", StringComparison.Ordinal))
+        {
+            return "mock";
+        }
+
+        return string.IsNullOrWhiteSpace(modeLabel) ? "확인중" : TruncateFit(modeLabel, 14);
     }
 
 
@@ -389,29 +738,128 @@ public partial class MainWindowViewModel : ViewModelBase
         var bracket = _harness.GetActiveBracketPlan();
         ApplyBracket(bracket);
 
+        _chartCandles = candles;
+        var watermark = _harness.ChartWatermark;
         var bundle = ChartPresentationBuilder.Build(
             candles,
             markers,
             indicators,
             bracket,
-            _harness.Timeframe);
+            _harness.Timeframe,
+            dataSourceWatermark: watermark);
 
         Series = bundle.PriceSeries;
         VolumeSeries = bundle.VolumeSeries;
+        RsiSeries = bundle.RsiSeries ?? Array.Empty<ISeries>();
         XAxes = bundle.PriceXAxes;
         YAxes = bundle.PriceYAxes;
         VolumeXAxes = bundle.VolumeXAxes;
         VolumeYAxes = bundle.VolumeYAxes;
+        RsiXAxes = bundle.RsiXAxes ?? Array.Empty<Axis>();
+        RsiYAxes = bundle.RsiYAxes ?? Array.Empty<Axis>();
         Sections = bundle.PriceSections;
+        RsiSections = bundle.RsiSections ?? Array.Empty<RectangularSection>();
         DrawMarginFrame = bundle.PriceFrame;
         VolumeDrawMarginFrame = bundle.VolumeFrame;
+        RsiDrawMarginFrame = bundle.RsiFrame;
         DrawMargin = bundle.PriceMargin;
         VolumeDrawMargin = bundle.VolumeMargin;
+        RsiDrawMargin = bundle.RsiMargin;
+        RsiStatusText = bundle.RsiStatusText ?? string.Empty;
         LastPriceLabel = bundle.LastPriceLabel;
-        IndicatorLegend = bundle.IndicatorLegend;
-        ChartSubtitle = ChartTimeframeCatalog.Describe(_harness.Timeframe) + " · 한국시간(KST) · 프리미엄 차트";
+        LastCloseText = string.IsNullOrEmpty(bundle.LastPriceTag)
+            ? (string.IsNullOrEmpty(bundle.LastCloseText) ? "—" : bundle.LastCloseText)
+            : bundle.LastPriceTag;
+        LastPriceAxisBadge = string.IsNullOrEmpty(bundle.LastPriceAxisBadge)
+            ? LastCloseText
+            : bundle.LastPriceAxisBadge;
+        LastPriceAxisBadgeIsUp = bundle.LastPriceAxisBadgeIsUp;
+        LastPriceYFraction = bundle.LastPriceYFraction;
+        LastPriceYMin = bundle.LastPriceYMin;
+        LastPriceYMax = bundle.LastPriceYMax;
+        LastCloseValue = bundle.LastCloseValue;
+        LastCloseX = candles.Count > 0
+            ? KoreaTime.ToKstDateTime(candles[^1].Time).Ticks
+            : 0;
+        ChangeText = string.IsNullOrEmpty(bundle.ChangeText) ? "—" : bundle.ChangeText;
+        ChangeIsPositive = bundle.ChangeIsPositive;
+        BarCountText = bundle.BarCountText;
+        LastBarTimeText = bundle.LastBarTimeText;
+        HighLowText = bundle.HighLowText;
+        OpenText = bundle.OpenText;
+        VolumeText = bundle.VolumeText;
+        _baseOhlcStatusLine = string.IsNullOrEmpty(bundle.StatusLineText) ? "—" : bundle.StatusLineText;
+        OhlcStatusLine = _baseOhlcStatusLine;
+        IndicatorLegend = string.IsNullOrEmpty(bundle.IndicatorLegend)
+            ? watermark
+            : bundle.IndicatorLegend;
+        ChartWatermarkLabel = watermark;
+        ShowChartWatermark = !string.IsNullOrWhiteSpace(watermark)
+                             && !string.Equals(watermark, "토스 실봉", StringComparison.Ordinal);
+        var focus = _harness.Session.ResolveFocusSymbol();
+        ChartTitle = $"{focus} · {SelectedTimeframe}";
+        ChartSubtitle = $"{_harness.ChartDataSourceLabel} · KST · 줌 연동";
+        DataSourcePill = _harness.ChartUsesRealCandles
+            ? "토스 실봉"
+            : ShortDataSourcePill(_harness.ChartDataSourceLabel);
+    }
+
+    public void UpdateHoverFromChartX(double xCoordinate)
+    {
+        if (_chartCandles.Count == 0 || xCoordinate <= 0 || double.IsNaN(xCoordinate))
+        {
+            return;
+        }
+
+        DateTimeOffset hoverTime;
+        try
+        {
+            var ticks = (long)xCoordinate;
+            if (ticks < TimeSpan.FromDays(365).Ticks)
+            {
+                return;
+            }
+
+            var kstWall = new DateTime(ticks, DateTimeKind.Unspecified);
+            hoverTime = new DateTimeOffset(kstWall, KoreaTime.TimeZone.BaseUtcOffset);
+        }
+        catch
+        {
+            return;
+        }
+
+        var hover = ChartPresentationBuilder.ResolveHoverOhlcStatus(_chartCandles, hoverTime);
+        if (string.IsNullOrEmpty(hover))
+        {
+            return;
+        }
+
+        OhlcStatusLine = hover;
+    }
+
+    public void ClearHoverOhlc()
+    {
+        OhlcStatusLine = string.IsNullOrEmpty(_baseOhlcStatusLine) ? "—" : _baseOhlcStatusLine;
     }
 }
 
-/// <summary>One row in the SPCX news card.</summary>
+/// <summary>One row in the news card.</summary>
 public sealed record NewsItemRow(string Title, string Meta, string Badge, string? Url);
+
+public partial class TimeframeChipVm : ObservableObject
+{
+    private readonly Action<string> _onSelect;
+
+    public TimeframeChipVm(string label, Action<string> onSelect)
+    {
+        Label = label ?? throw new ArgumentNullException(nameof(label));
+        _onSelect = onSelect ?? throw new ArgumentNullException(nameof(onSelect));
+    }
+
+    public string Label { get; }
+
+    [ObservableProperty] private bool _isSelected;
+
+    [RelayCommand]
+    private void Select() => _onSelect(Label);
+}

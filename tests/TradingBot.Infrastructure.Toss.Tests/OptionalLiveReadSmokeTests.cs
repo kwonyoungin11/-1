@@ -75,10 +75,10 @@ public class OptionalLiveReadSmokeTests
             return;
         }
 
-        // Owner-enabled path only: read-only portfolio snapshot, no order APIs in this stack.
+        // Owner-enabled path: live HTTP for read + gated order transport when safety flags allow.
         var mode = TossReadOnlyFactory.DescribeMode(options);
-        Assert.Contains("실 HTTP 읽기 전용", mode, StringComparison.Ordinal);
-        Assert.Contains("주문 API 없음", mode, StringComparison.Ordinal);
+        Assert.Contains("실 HTTP", mode, StringComparison.Ordinal);
+        Assert.Contains("주문", mode, StringComparison.Ordinal);
 
         var svc = TossReadOnlyFactory.CreatePortfolioService(options);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));

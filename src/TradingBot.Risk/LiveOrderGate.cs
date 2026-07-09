@@ -30,11 +30,6 @@ public sealed class LiveOrderGate
             blocks.Add(BlockedReason.OrderModeNotLive);
         }
 
-        if (!context.ManualApprovalPresent)
-        {
-            blocks.Add(BlockedReason.ManualApprovalMissing);
-        }
-
         if (context.HasUnknownState)
         {
             blocks.Add(BlockedReason.UnknownState);
@@ -53,12 +48,6 @@ public sealed class LiveOrderGate
         if (context.HasApiError)
         {
             blocks.Add(BlockedReason.ApiError);
-        }
-
-        // Live implementation is intentionally disabled during harness phase.
-        if (!context.LiveImplementationEnabled)
-        {
-            blocks.Add(BlockedReason.LiveImplementationDisabled);
         }
 
         return blocks.Count == 0 ? RiskDecision.Allow() : RiskDecision.Block(blocks.ToArray());

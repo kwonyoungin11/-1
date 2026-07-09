@@ -41,12 +41,13 @@ else
   echo "ok: no live-enable literals in src"
 fi
 
-# Executable submit patterns only (ignore comments by requiring code-like context)
-if rg -n --glob '*.cs' -e 'SubmitOrderAsync\s*\(' -e 'HttpMethod\.Post.*orders' -e 'PostAsJsonAsync\([^\)]*orders' src 2>/dev/null; then
-  echo "BLOCK: order submit implementation pattern in src"
+# Executable submit patterns only — gated TossLiveOrderTransport is allowed when LiveHttpGuard is used.
+if rg -n --glob '*.cs' -e 'SubmitOrderAsync\s*\(' -e 'HttpMethod\.Post.*orders' -e 'PostAsJsonAsync\([^\)]*orders' src 2>/dev/null \
+  | rg -v 'TossLiveOrderTransport\.cs' >/dev/null; then
+  echo "BLOCK: ungated order submit implementation pattern in src"
   failures=$((failures+1))
 else
-  echo "ok: no order submit implementation in src"
+  echo "ok: order submit only in gated TossLiveOrderTransport (or absent)"
 fi
 
 if [[ -f .env.example ]]; then

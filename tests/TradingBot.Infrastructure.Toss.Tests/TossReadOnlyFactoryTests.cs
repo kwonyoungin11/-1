@@ -44,7 +44,7 @@ public class TossReadOnlyFactoryTests
     }
 
     [Fact]
-    public void DescribeMode_when_live_true_and_credentials_present_is_live_read_only()
+    public void DescribeMode_when_live_true_and_credentials_present_describes_live_http()
     {
         var options = new TossOptions
         {
@@ -55,8 +55,8 @@ public class TossReadOnlyFactoryTests
 
         var mode = TossReadOnlyFactory.DescribeMode(options);
 
-        Assert.Contains("실 HTTP 읽기 전용", mode, StringComparison.Ordinal);
-        Assert.Contains("주문 API 없음", mode, StringComparison.Ordinal);
+        Assert.Contains("실 HTTP", mode, StringComparison.Ordinal);
+        Assert.Contains("주문", mode, StringComparison.Ordinal);
         Assert.DoesNotContain("synthetic-id", mode, StringComparison.Ordinal);
         Assert.DoesNotContain("synthetic-secret", mode, StringComparison.Ordinal);
     }

@@ -50,6 +50,33 @@ public class TradingSafetyDefaultsTests
     }
 
     [Fact]
+    public void FromEnvironment_respects_live_flags_when_set()
+    {
+        var env = new Dictionary<string, string?>
+        {
+            ["ALLOW_LIVE_ORDERS"] = "true",
+            ["KILL_SWITCH"] = "false",
+            ["ORDER_MODE"] = "live",
+        };
+
+        var settings = TradingSafetySettings.FromEnvironment(env);
+
+        Assert.True(settings.AllowLiveOrders);
+        Assert.False(settings.KillSwitch);
+        Assert.Equal(OrderMode.Live, settings.OrderMode);
+    }
+
+    [Fact]
+    public void FromEnvironment_falls_back_to_fail_closed_defaults()
+    {
+        var settings = TradingSafetySettings.FromEnvironment(new Dictionary<string, string?>());
+
+        Assert.False(settings.AllowLiveOrders);
+        Assert.True(settings.KillSwitch);
+        Assert.Equal(OrderMode.DryRun, settings.OrderMode);
+    }
+
+    [Fact]
     public void SecretRedactor_masks_account_and_token()
     {
         Assert.Contains("****", SecretRedactor.MaskAccount("1234567890"), StringComparison.Ordinal);

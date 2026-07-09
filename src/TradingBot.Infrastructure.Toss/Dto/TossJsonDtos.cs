@@ -191,3 +191,39 @@ public sealed class CandleDto
     public string? Currency { get; set; }
 }
 
+public sealed class OrderCreateRequestDto
+{
+    [JsonPropertyName("clientOrderId")]
+    public string? ClientOrderId { get; set; }
+
+    [JsonPropertyName("symbol")]
+    public string Symbol { get; set; } = "";
+
+    [JsonPropertyName("side")]
+    public string Side { get; set; } = "";
+
+    [JsonPropertyName("orderType")]
+    public string OrderType { get; set; } = "";
+
+    [JsonPropertyName("quantity")]
+    public string Quantity { get; set; } = "";
+
+    [JsonPropertyName("price")]
+    public string? Price { get; set; }
+}
+
+public sealed class OrderCreateResponseDto
+{
+    [JsonPropertyName("result")]
+    public OrderCreateResultDto? Result { get; set; }
+}
+
+public sealed class OrderCreateResultDto
+{
+    [JsonPropertyName("orderId")]
+    public string? OrderId { get; set; }
+
+    [JsonPropertyName("clientOrderId")]
+    public string? ClientOrderId { get; set; }
+}
+

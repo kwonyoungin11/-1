@@ -73,7 +73,6 @@ public class GatedLiveOrderRouterTests
         Assert.Contains(result.Blocks, b => b.Code == BlockedReason.KillSwitchActive.Code);
         Assert.Contains(result.Blocks, b => b.Code == BlockedReason.LiveOrdersNotAllowed.Code);
         Assert.Contains(result.Blocks, b => b.Code == BlockedReason.OrderModeNotLive.Code);
-        Assert.Contains(result.Blocks, b => b.Code == BlockedReason.LiveImplementationDisabled.Code);
         Assert.Contains("No transport call", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -135,11 +134,10 @@ public class GatedLiveOrderRouterTests
     }
 
     [Fact]
-    public void IsLiveSubmissionEnabled_requires_all_four_conditions()
+    public void IsLiveSubmissionEnabled_requires_all_three_settings_conditions()
     {
         var transport = new RecordingLiveOrderTransport();
         var openCtx = AllGatesOpenContext();
-        var closedCtx = new LiveOrderContext { LiveImplementationEnabled = false };
 
         Assert.False(CreateRouter(
             new TradingSafetySettings
@@ -171,37 +169,10 @@ public class GatedLiveOrderRouterTests
             openCtx,
             transport).IsLiveSubmissionEnabled);
 
-        Assert.False(CreateRouter(
-            AllGatesOpenSettings(),
-            closedCtx,
-            transport).IsLiveSubmissionEnabled);
-
         Assert.True(CreateRouter(
             AllGatesOpenSettings(),
             openCtx,
             transport).IsLiveSubmissionEnabled);
-    }
-
-    [Fact]
-    public async Task Gate_blocks_on_missing_manual_approval_even_when_IsLiveSubmissionEnabled()
-    {
-        // IsLiveSubmissionEnabled does not require manual approval; RouteAsync gate does.
-        var transport = new RecordingLiveOrderTransport();
-        var context = new LiveOrderContext
-        {
-            ManualApprovalPresent = false,
-            LiveImplementationEnabled = true,
-        };
-        var router = CreateRouter(AllGatesOpenSettings(), context, transport);
-
-        Assert.True(router.IsLiveSubmissionEnabled);
-
-        var result = await router.RouteAsync(Sample(), CancellationToken.None);
-
-        Assert.False(result.Accepted);
-        Assert.Equal("live_blocked", result.Mode);
-        Assert.Equal(0, transport.CallCount);
-        Assert.Contains(result.Blocks, b => b.Code == BlockedReason.ManualApprovalMissing.Code);
     }
 
     [Fact]

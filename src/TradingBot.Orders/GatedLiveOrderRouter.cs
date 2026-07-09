@@ -50,10 +50,9 @@ public sealed class GatedLiveOrderRouter : IOrderRouter
 
     /// <inheritdoc />
     /// <remarks>
-    /// True only when settings allow live, kill switch is off, mode is Live, and
-    /// context reports <see cref="LiveOrderContext.LiveImplementationEnabled"/>.
-    /// Safe defaults always yield false. Full gate (manual approval, data freshness, etc.)
-    /// is still enforced on <see cref="RouteAsync"/>.
+    /// True only when settings allow live, kill switch is off, and mode is Live.
+    /// Safe defaults always yield false. Data freshness and API health are still enforced on
+    /// <see cref="RouteAsync"/>.
     /// </remarks>
     public bool IsLiveSubmissionEnabled
     {
@@ -64,8 +63,7 @@ public sealed class GatedLiveOrderRouter : IOrderRouter
 
             return _settings.AllowLiveOrders
                 && !_settings.KillSwitch
-                && _settings.OrderMode == OrderMode.Live
-                && context.LiveImplementationEnabled;
+                && _settings.OrderMode == OrderMode.Live;
         }
     }
 

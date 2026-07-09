@@ -20,10 +20,7 @@ public sealed record AppTradingEvidenceSummary(
     string? ExportText = null,
     TradingEvidenceSnapshot? Snapshot = null)
 {
-    /// <summary>
-    /// Always false in AppHarness — dry-run and paper routers never enable live submission.
-    /// </summary>
-    public bool IsLiveSubmissionEnabled => false;
+    public bool IsLiveSubmissionEnabled => !LiveBlocked;
 }
 
 /// <summary>
@@ -48,6 +45,12 @@ public sealed class AppHarness
     private string _connectionLabel = "연결 확인 전";
     private string _connectionModeLabel = "mock";
     private bool _isLiveReadOnlyConnected;
+    private ConnectionStatus _lastConnectionStatus = ConnectionStatus.Disconnected;
+    /// <summary>
+    /// True when live read-only was connected but Toss candle fetch failed, returned empty,
+    /// or cache was cleared — chart is showing MockCandleSeriesFactory fallback, not production bars.
+    /// </summary>
+    private bool _chartCandleFetchFailedOrEmpty;
     private IReadOnlyList<QuoteSnapshot> _lastQuotes = Array.Empty<QuoteSnapshot>();
     private string? _cachedCandlesSymbol;
     private IReadOnlyList<CandlePoint>? _cachedRealCandles;
@@ -56,6 +59,18 @@ public sealed class AppHarness
     private readonly INewsFeed _newsFeed;
     private IReadOnlyList<NewsHeadline> _lastNews = Array.Empty<NewsHeadline>();
     private string _newsStatus = "뉴스 대기";
+
+    /// <summary>
+    /// Max candles shown on the chart (UI density). Toss still pages at
+    /// <see cref="TossCandlePageSize"/> bars per HTTP request — this cap only trims after fetch/aggregate.
+    /// </summary>
+    public const int ChartDisplayBarCap = 300;
+
+    /// <summary>Preferred display bar count when requesting/aggregating series (capped by <see cref="ChartDisplayBarCap"/>).</summary>
+    public const int ChartPreferredDisplayBars = 300;
+
+    /// <summary>Toss OpenAPI candle page size (official list endpoint page limit).</summary>
+    public const int TossCandlePageSize = 200;
 
     public AppHarness(
         TradingSafetySettings settings,
@@ -97,6 +112,54 @@ public sealed class AppHarness
 
     public string ConnectionModeLabel => _connectionModeLabel;
 
+    public bool IsLiveReadOnlyConnected => _isLiveReadOnlyConnected;
+
+    /// <summary>
+    /// True only when the chart series is the cached Toss candle response
+    /// (not <see cref="MockCandleSeriesFactory"/>). Requires live read-only connection
+    /// and a non-empty cache keyed to the current symbol/timeframe.
+    /// </summary>
+    public bool ChartUsesRealCandles =>
+        _isLiveReadOnlyConnected
+        && _cachedRealCandles is { Count: > 0 }
+        && !string.IsNullOrEmpty(_cachedCandlesSymbol)
+        && !_chartCandleFetchFailedOrEmpty;
+
+    /// <summary>
+    /// Diagnostic / pill label for chart data provenance. Prefer <see cref="ChartWatermark"/> for on-chart UI.
+    /// </summary>
+    public string ChartDataSourceLabel =>
+        ChartUsesRealCandles
+            ? "토스 실봉"
+            : IsChartDataErrorOrStale
+                ? "데이터 오류/폴백 · 실봉 아님 · 주문 차단"
+                : _isLiveReadOnlyConnected
+                    ? "토스 연결 · 봉 대기/실패 → 표시용 폴백"
+                    : "mock/오프라인 폴백 · 실 HTTP 아님";
+
+    /// <summary>
+    /// On-chart honesty watermark for ViewModel binding. Never silent production look on mock/fallback.
+    /// <list type="bullet">
+    /// <item><description>Real Toss candles: <c>토스 실봉</c></description></item>
+    /// <item><description>Mock / offline practice: <c>연습 데이터 · 실봉 아님</c></description></item>
+    /// <item><description>Error, stale, or live-connected mock fallback: <c>데이터 오류 · 주문 차단</c></description></item>
+    /// </list>
+    /// </summary>
+    public string ChartWatermark =>
+        ChartUsesRealCandles
+            ? "토스 실봉"
+            : IsChartDataErrorOrStale
+                ? "데이터 오류 · 주문 차단"
+                : "연습 데이터 · 실봉 아님";
+
+    /// <summary>
+    /// Fail-closed chart honesty: connection error, blocked, or live path that could not load real candles.
+    /// </summary>
+    public bool IsChartDataErrorOrStale =>
+        _lastConnectionStatus is ConnectionStatus.Error or ConnectionStatus.Blocked
+        || _chartCandleFetchFailedOrEmpty
+        || (_isLiveReadOnlyConnected && !ChartUsesRealCandles);
+
     /// <summary>
     /// True when a gated live router instance is held (still not used by CreateDefault practice loop).
     /// </summary>
@@ -132,43 +195,46 @@ public sealed class AppHarness
 
     public static AppHarness CreateDefault()
     {
-        // MaxDailyLoss is absolute USD (not %). 3% of 100k practice notional = 3_000.
-        // Equity inputs come from BuildPracticeContext so RiskGate can evaluate fail-closed correctly.
+        var root = TryFindRepoRoot();
+        var env = EnvFile.LoadMergedWithProcess(root);
+        var loaded = TradingSafetySettings.FromEnvironment(env);
         var settings = new TradingSafetySettings
         {
-            AllowLiveOrders = false,
-            KillSwitch = true,
-            OrderMode = OrderMode.DryRun,
-            MaxOrderNotional = 50_000m,
-            MaxDailyLoss = DefaultPracticeMaxDailyLossAbsolute,
-            MarketDataMaxStalenessSeconds = TradingSafetyDefaults.MarketDataMaxStalenessSeconds,
+            AllowLiveOrders = loaded.AllowLiveOrders,
+            KillSwitch = loaded.KillSwitch,
+            OrderMode = loaded.OrderMode,
+            MarketDataMaxStalenessSeconds = loaded.MarketDataMaxStalenessSeconds,
+            MaxOrderNotional = loaded.MaxOrderNotional ?? 50_000m,
+            MaxDailyLoss = loaded.MaxDailyLoss ?? DefaultPracticeMaxDailyLossAbsolute,
+            MaxPositionSize = loaded.MaxPositionSize,
+            MaxSymbolPositionRatio = loaded.MaxSymbolPositionRatio,
+            MaxOpenOrders = loaded.MaxOpenOrders,
         };
-        var toss = TossReadOnlyFactory.LoadOptionsFromEnvironment();
+
+        var toss = TossOptions.FromEnvironment(env);
         var portfolio = TossReadOnlyFactory.CreatePortfolioService(toss);
         var audit = new InMemoryAuditLog();
-        // Shared index: same ClientOrderId cannot pass dry-run then paper twice
         var clientOrderIds = new ClientOrderIdIndex();
         var dryLedger = new InMemoryDryRunLedger();
         var dryRun = new DryRunOrderRouter(dryLedger, clientOrderIds);
         var paperLedger = new InMemoryPaperLedger();
-        // Paper uses its own index for paper-only dups; dry-run already registered ids
-        // stay unique per pipeline step via unique factory. Keep separate paper index.
         var paper = new PaperOrderRouter(paperLedger);
-        // Gated live stub: registered for readiness evidence, never used by practice loop
-        // under CreateDefault fail-closed settings. Prefer GatedLiveOrderRouter when present
-        // in Orders assembly; fall back to BlockedLiveOrderRouter (always IsLiveSubmissionEnabled=false).
-        var gatedLive = CreateGatedLiveRouterOrBlocked(settings);
+        var transport = CreateLiveTransport(settings, toss);
+        AppHarness? self = null;
+        var gatedLive = new GatedLiveOrderRouter(
+            settings,
+            () => self!.BuildLiveOrderContext(),
+            transport);
 
-        // Official final SPCX preset (pro + research lock-in).
         var session = new AutoTradeSessionService
         {
-            StockKind = StockMarketKind.스페이스X,
-            FocusSymbol = WatchlistCatalog.SpaceXSymbol,
-            Strategy = SpacexOfficialStrategyPreset.Strategy,
-            Timeframe = SpacexOfficialStrategyPreset.Timeframe,
+            StockKind = StockMarketKind.비전마린,
+            FocusSymbol = WatchlistCatalog.VmarSymbol,
+            Strategy = VmarOneMinuteScalpPreset.Strategy,
+            Timeframe = VmarOneMinuteScalpPreset.Timeframe,
         };
 
-        return new AppHarness(
+        self = new AppHarness(
             settings,
             portfolio,
             new OrderCandidatePipeline(),
@@ -182,6 +248,7 @@ public sealed class AppHarness
             toss,
             gatedLiveRouter: gatedLive,
             newsFeed: CompositeSpaceXNewsFeed.FromEnvironment());
+        return self;
     }
 
     public IReadOnlyList<NewsHeadline> LastNews => _lastNews;
@@ -189,14 +256,15 @@ public sealed class AppHarness
     public string NewsStatus => _newsStatus;
 
     /// <summary>
-    /// Poll SPCX news (Finnhub if key present, else mock). Display/gate only.
+    /// Poll focus-symbol news (Finnhub if key present, else mock). Display/gate only.
     /// </summary>
     public async Task RefreshNewsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
+            var newsSymbol = _session.ResolveFocusSymbol();
             var items = await _newsFeed
-                .GetHeadlinesAsync(WatchlistCatalog.SpaceXSymbol, maxCount: 12, cancellationToken)
+                .GetHeadlinesAsync(newsSymbol, maxCount: 2, cancellationToken)
                 .ConfigureAwait(false);
             _lastNews = items;
             var material = items.Count(i => i.IsMaterialEvent);
@@ -268,22 +336,46 @@ public sealed class AppHarness
             newsDay: _newsDay,
             trendFilterOk: trendFilterOk);
 
-    /// <summary>
-    /// Real <see cref="GatedLiveOrderRouter"/> with fail-closed context and no-op transport.
-    /// Practice loop never calls this router; it is registered for capability/tests only.
-    /// Under CreateDefault settings, <see cref="GatedLiveOrderRouter.IsLiveSubmissionEnabled"/> is false.
-    /// </summary>
-    private static IOrderRouter CreateGatedLiveRouterOrBlocked(TradingSafetySettings settings)
+    private static ILiveOrderTransport CreateLiveTransport(TradingSafetySettings settings, TossOptions toss)
     {
-        // Fail-closed context: LiveImplementationEnabled stays false for CreateDefault host.
-        var failClosedContext = new LiveOrderContext
+        if (settings.OrderMode == OrderMode.Live
+            && settings.AllowLiveOrders
+            && !settings.KillSwitch
+            && toss.AllowLiveHttp
+            && toss.HasClientCredentials)
         {
-            ManualApprovalPresent = false,
-            LiveImplementationEnabled = false,
+            return TossReadOnlyFactory.CreateLiveOrderTransport(toss);
+        }
+
+        return new RecordingLiveOrderTransport();
+    }
+
+    private LiveOrderContext BuildLiveOrderContext()
+    {
+        var stale = false;
+        if (_lastQuotes.Count > 0 && _settings.MarketDataMaxStalenessSeconds > 0)
+        {
+            var timestamps = _lastQuotes
+                .Select(q => q.TimestampUtc)
+                .Where(t => t.HasValue)
+                .Select(t => t!.Value)
+                .ToList();
+            if (timestamps.Count > 0)
+            {
+                var newest = timestamps.Max();
+                stale = DateTimeOffset.UtcNow - newest
+                    > TimeSpan.FromSeconds(_settings.MarketDataMaxStalenessSeconds);
+            }
+        }
+
+        return new LiveOrderContext
+        {
+            HasUnknownState = false,
+            HasMissingData = _settings.OrderMode == OrderMode.Live
+                && _lastConnectionStatus != ConnectionStatus.LiveReadOnlyConnected,
+            HasStaleMarketData = stale,
+            HasApiError = _lastConnectionStatus == ConnectionStatus.Error,
         };
-        // Recording transport never hits network; CallCount stays 0 when gate blocks.
-        var transport = new RecordingLiveOrderTransport();
-        return new GatedLiveOrderRouter(settings, failClosedContext, transport);
     }
 
     public AutoTradePanelSnapshot GetAutoTradePanel() => _session.ToPanelSnapshot();
@@ -302,56 +394,105 @@ public sealed class AppHarness
         return msg;
     }
 
-    public void SetStockKind(StockMarketKind kind) => _session.StockKind = StockMarketKind.스페이스X;
+    public void SetStockKind(StockMarketKind kind)
+    {
+        if (kind != StockMarketKind.비전마린)
+        {
+            kind = StockMarketKind.비전마린;
+        }
+
+        _session.StockKind = kind;
+        var symbols = WatchlistCatalog.ResolveSymbols(kind);
+        var focus = symbols.Count > 0 ? symbols[0] : WatchlistCatalog.VmarSymbol;
+        _session.FocusSymbol = focus;
+
+        _session.Strategy = VmarOneMinuteScalpPreset.Strategy;
+        SetTimeframe(VmarOneMinuteScalpPreset.Timeframe);
+
+        _cachedRealCandles = null;
+        _cachedCandlesSymbol = null;
+        if (_isLiveReadOnlyConnected)
+        {
+            _chartCandleFetchFailedOrEmpty = true;
+        }
+    }
 
     public void SetStrategy(TradingStrategyKind strategy) => _session.Strategy = strategy;
 
-    public void SetFocusSymbol(string symbol) => _session.FocusSymbol = WatchlistCatalog.SpaceXSymbol;
+    public void SetFocusSymbol(string symbol)
+    {
+        if (WatchlistCatalog.IsKnownSymbol(symbol))
+        {
+            _session.FocusSymbol = symbol;
+            _cachedRealCandles = null;
+            _cachedCandlesSymbol = null;
+            if (_isLiveReadOnlyConnected)
+            {
+                _chartCandleFetchFailedOrEmpty = true;
+            }
+        }
+    }
 
     public void SetTimeframe(ChartTimeframe timeframe)
     {
         _session.Timeframe = timeframe;
-        // 시간봉 변경 시 실봉 캐시 무효화
+        // 시간봉 변경 시 실봉 캐시 무효화 — 다음 대시보드 갱신 전까지 폴백 라벨 유지
         _cachedRealCandles = null;
         _cachedCandlesSymbol = null;
+        if (_isLiveReadOnlyConnected)
+        {
+            _chartCandleFetchFailedOrEmpty = true;
+        }
     }
 
     public ChartTimeframe Timeframe => _session.Timeframe;
 
     /// <summary>
-    /// SPCX long LIMIT bracket plan from last price + ATR (or %). Display / dry-run only.
+    /// Focus-symbol long LIMIT bracket plan from last price + ATR (or %). Display / dry-run only.
     /// Never places live orders.
     /// </summary>
     public TradeBracketPlan GetActiveBracketPlan()
     {
+        var symbol = _session.ResolveFocusSymbol();
         var (candles, _, _) = GetChartData();
         var atr = AtrCalculator.Compute(candles, SpacexRiskParameters.CreateSafeDefaults().AtrPeriod);
-        var last = ResolveLastPrice(candles);
+        var last = ResolveLastPrice(candles, symbol);
         var practice = BuildPracticeContext();
+        var riskPercent = practice.EffectiveRiskPercentPerTrade;
+        if (_session.StockKind == StockMarketKind.비전마린
+            || string.Equals(symbol, WatchlistCatalog.VmarSymbol, StringComparison.OrdinalIgnoreCase))
+        {
+            riskPercent = Math.Min(riskPercent, VmarOneMinuteScalpPreset.RiskPercentPerTrade);
+        }
+
+        var isVmar = _session.StockKind == StockMarketKind.비전마린
+            || string.Equals(symbol, WatchlistCatalog.VmarSymbol, StringComparison.OrdinalIgnoreCase);
         var risk = SpacexRiskParameters.CreateSafeDefaults() with
         {
-            RiskPercentPerTrade = practice.EffectiveRiskPercentPerTrade,
+            RiskPercentPerTrade = riskPercent,
+            UseAtrStops = !isVmar,
+            FallbackStopLossPercent = isVmar ? 2.0m : SpacexRiskParameters.CreateSafeDefaults().FallbackStopLossPercent,
         };
-        if (practice.SymbolWarningActive || practice.EffectiveRiskPercentPerTrade <= 0m)
+        if (practice.SymbolWarningActive || riskPercent <= 0m)
         {
             return TradeBracketPlan.Invalid(
-                WatchlistCatalog.SpaceXSymbol,
+                symbol,
                 "종목 경고 또는 리스크 0 — 지정가 계획 중단 · 실주문 없음");
         }
         var trend = practice.TrendFollow ?? TrendFollowParameters.CreateSafeDefaults();
         return TradeBracketPlanner.PlanLongLimit(
-            WatchlistCatalog.SpaceXSymbol,
+            symbol,
             last,
             practice.Equity > 0m ? practice.Equity : DefaultPracticeStartingBalance,
             risk,
-            atr,
+            isVmar ? null : atr,
             trend);
     }
 
-    private decimal ResolveLastPrice(IReadOnlyList<CandlePoint> candles)
+    private decimal ResolveLastPrice(IReadOnlyList<CandlePoint> candles, string symbol)
     {
         var quote = _lastQuotes.FirstOrDefault(q =>
-            q.Symbol.Equals(WatchlistCatalog.SpaceXSymbol, StringComparison.OrdinalIgnoreCase));
+            q.Symbol.Equals(symbol, StringComparison.OrdinalIgnoreCase));
         if (quote?.LastPrice is decimal px && px > 0m)
         {
             return px;
@@ -362,33 +503,45 @@ public sealed class AppHarness
             return (decimal)candles[^1].Close;
         }
 
-        return (decimal)WatchlistCatalog.ChartSeedPrice(WatchlistCatalog.SpaceXSymbol);
+        return (decimal)WatchlistCatalog.ChartSeedPrice(symbol);
     }
 
+    /// <summary>
+    /// Chart series for UI. Uses cached Toss candles when <see cref="ChartUsesRealCandles"/>;
+    /// otherwise <see cref="MockCandleSeriesFactory"/> — never silent production look
+    /// (bind <see cref="ChartWatermark"/> / <see cref="ChartDataSourceLabel"/>).
+    /// Display capped at <see cref="ChartDisplayBarCap"/>; Toss page size remains <see cref="TossCandlePageSize"/>.
+    /// </summary>
     public (IReadOnlyList<CandlePoint> Candles, IReadOnlyList<TradeMarker> Markers, IReadOnlyList<ChartIndicatorLine> Indicators) GetChartData()
     {
-        var symbol = WatchlistCatalog.SpaceXSymbol;
+        var symbol = _session.ResolveFocusSymbol();
         var tf = _session.Timeframe;
         IReadOnlyList<CandlePoint> candles;
         var cacheKey = $"{symbol}:{ChartTimeframeCatalog.UiLabel(tf)}:{ChartTimeframeCatalog.SourceTossInterval(tf)}";
-        if (_cachedRealCandles is { Count: > 0 }
+        if (ChartUsesRealCandles
+            && _cachedRealCandles is { Count: > 0 }
             && string.Equals(_cachedCandlesSymbol, cacheKey, StringComparison.OrdinalIgnoreCase))
         {
             candles = _cachedRealCandles;
         }
         else
         {
-            // Mock / offline: 1m dense then aggregate; 1d/1w use day steps
+            // Mock / fallback path — ChartWatermark must not look like live production bars.
+            if (_isLiveReadOnlyConnected)
+            {
+                _chartCandleFetchFailedOrEmpty = true;
+            }
+
             var seed = TryResolveChartSeed(symbol);
             if (ChartTimeframeCatalog.SourceTossInterval(tf) == "1d"
                 && !ChartTimeframeCatalog.IsWeeklyAggregation(tf))
             {
                 candles = MockCandleSeriesFactory.CreateSeries(
-                    symbol, 160, DateTimeOffset.UtcNow, seed, TimeSpan.FromDays(1));
+                    symbol, ChartPreferredDisplayBars, DateTimeOffset.UtcNow, seed, TimeSpan.FromDays(1));
             }
             else
             {
-                var rawCount = ChartTimeframeCatalog.PreferredRawBarCount(tf, 160);
+                var rawCount = ChartTimeframeCatalog.PreferredRawBarCount(tf, ChartPreferredDisplayBars);
                 var raw = MockCandleSeriesFactory.CreateSeries(
                     symbol, Math.Min(rawCount, 800), DateTimeOffset.UtcNow, seed, TimeSpan.FromMinutes(1));
                 candles = ChartTimeframeCatalog.NeedsAggregation(tf)
@@ -396,10 +549,7 @@ public sealed class AppHarness
                     : raw;
             }
 
-            if (candles.Count > 200)
-            {
-                candles = candles.Skip(candles.Count - 200).ToArray();
-            }
+            candles = CapDisplayBars(candles);
         }
 
         // 실데이터·mock 공통: 봉 거래대금 버블 (ChartFanatics). 실연결에서 버블 실종 방지.
@@ -428,8 +578,18 @@ public sealed class AppHarness
         return (candles, markers, indicators);
     }
 
+    private static IReadOnlyList<CandlePoint> CapDisplayBars(IReadOnlyList<CandlePoint> candles)
+    {
+        if (candles.Count <= ChartDisplayBarCap)
+        {
+            return candles;
+        }
+
+        return candles.Skip(candles.Count - ChartDisplayBarCap).ToArray();
+    }
+
     /// <summary>
-    /// Live 읽기 전용 스냅샷을 UI 세션에 바인딩: 잔액·SPCX 워치.
+    /// Live 읽기 전용 스냅샷을 UI 세션에 바인딩: 잔액·워치(알려진 심볼).
     /// mock / 오류 / 끊김에서는 호출하지 않음. 실주문 없음.
     /// </summary>
     public void ApplyRealPortfolio(ReadOnlyPortfolioSnapshot portfolio)
@@ -447,12 +607,39 @@ public sealed class AppHarness
         if (balance is decimal bal)
         {
             _session.ApplyExternalBalance(bal, setStartingIfUnset: true);
+            _session.SetDataSourceLabel("토스 실계좌");
+        }
+        else
+        {
+            _session.SetDataSourceLabel("토스 실연결 · 잔액 미확인");
         }
 
-        _session.SetDataSourceLabel("토스 실계좌");
-        _session.StockKind = StockMarketKind.스페이스X;
-        _session.ApplyExternalWatchSymbols([WatchlistCatalog.SpaceXSymbol]);
-        _session.FocusSymbol = WatchlistCatalog.SpaceXSymbol;
+        var fromHoldings = (portfolio.Holdings ?? Array.Empty<HoldingSummary>())
+            .Select(h => h.Symbol)
+            .Where(WatchlistCatalog.IsKnownSymbol)
+            .ToArray();
+        var fromQuotes = (portfolio.Quotes ?? Array.Empty<QuoteSnapshot>())
+            .Select(q => q.Symbol)
+            .Where(WatchlistCatalog.IsKnownSymbol)
+            .ToArray();
+        var catalog = WatchlistCatalog.ResolveSymbols(_session.StockKind);
+        var merged = catalog
+            .Concat(fromHoldings)
+            .Concat(fromQuotes)
+            .Select(WatchlistCatalog.NormalizeKnownSymbol)
+            .Where(s => s is not null)
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        _session.ApplyExternalWatchSymbols(
+            merged.Length > 0 ? merged : [WatchlistCatalog.VmarSymbol]);
+
+        var focus = _session.ResolveFocusSymbol();
+        if (!WatchlistCatalog.IsKnownSymbol(focus))
+        {
+            _session.FocusSymbol = merged.Length > 0 ? merged[0] : WatchlistCatalog.VmarSymbol;
+        }
     }
 
     /// <summary>
@@ -527,7 +714,10 @@ public sealed class AppHarness
     }
 
     /// <summary>
-    /// Cache real Toss candles for chart when live read-only is connected.
+    /// Cache real Toss candles when live read-only is connected.
+    /// On empty/error: clear cache and set <see cref="_chartCandleFetchFailedOrEmpty"/> so
+    /// <see cref="GetChartData"/> mock fallback is labeled (never silent production look).
+    /// Toss page size = <see cref="TossCandlePageSize"/>; display cap = <see cref="ChartDisplayBarCap"/>.
     /// </summary>
     private async Task TryCacheRealCandlesAsync(string symbol, CancellationToken cancellationToken)
     {
@@ -536,20 +726,28 @@ public sealed class AppHarness
             return;
         }
 
-        var sym = WatchlistCatalog.SpaceXSymbol;
+        var sym = string.IsNullOrWhiteSpace(symbol)
+            ? _session.ResolveFocusSymbol()
+            : (WatchlistCatalog.NormalizeKnownSymbol(symbol) ?? _session.ResolveFocusSymbol());
         var tf = _session.Timeframe;
         var sourceInterval = ChartTimeframeCatalog.SourceTossInterval(tf);
         var cacheKey = $"{sym}:{ChartTimeframeCatalog.UiLabel(tf)}:{sourceInterval}";
 
         try
         {
-            var rawTarget = ChartTimeframeCatalog.PreferredRawBarCount(tf, targetDisplayBars: 160);
-            var maxPages = Math.Clamp((rawTarget + 199) / 200, 1, 5);
+            var rawTarget = ChartTimeframeCatalog.PreferredRawBarCount(tf, targetDisplayBars: ChartPreferredDisplayBars);
+            // Catalog still clamps direct 1m/1d raw to Toss page size (200); multi-page fetch can fill ChartDisplayBarCap.
+            if (!ChartTimeframeCatalog.NeedsAggregation(tf))
+            {
+                rawTarget = Math.Max(rawTarget, ChartPreferredDisplayBars);
+            }
+
+            var maxPages = Math.Clamp((rawTarget + TossCandlePageSize - 1) / TossCandlePageSize, 1, 5);
             var raw = await _portfolio
                 .GetCandlesPagedAsync(
                     sym,
                     sourceInterval,
-                    countPerPage: 200,
+                    countPerPage: TossCandlePageSize,
                     maxPages: maxPages,
                     targetTotal: rawTarget,
                     cancellationToken)
@@ -559,37 +757,48 @@ public sealed class AppHarness
                 ? CandleAggregator.Aggregate(raw, tf)
                 : raw;
 
-            // Cap display bars for UI density
-            if (candles.Count > 200)
-            {
-                candles = candles.Skip(candles.Count - 200).ToArray();
-            }
+            candles = CapDisplayBars(candles);
 
             if (candles.Count > 0)
             {
                 _cachedRealCandles = candles;
                 _cachedCandlesSymbol = cacheKey;
+                _chartCandleFetchFailedOrEmpty = false;
+            }
+            else
+            {
+                // Empty Toss response → mock fallback must show error/practice watermark, not "실봉".
+                _cachedRealCandles = null;
+                _cachedCandlesSymbol = null;
+                _chartCandleFetchFailedOrEmpty = true;
             }
         }
         catch
         {
-            // Fail closed for chart: keep seed path. Never affect orders.
+            // Fail closed for chart honesty: mock path + error watermark. Never affect orders.
             _cachedRealCandles = null;
             _cachedCandlesSymbol = null;
+            _chartCandleFetchFailedOrEmpty = true;
         }
     }
 
     public async Task<CockpitDashboardModel> GetDashboardAsync(
         CancellationToken cancellationToken = default)
     {
+        var focus = _session.ResolveFocusSymbol();
         _audit.Append(new AuditEntry(
             DateTimeOffset.UtcNow,
             "system",
-            "데스크톱 콕핏 갱신 — 토스 읽기 · SPCX · 실주문 게이트 잠금",
+            $"데스크톱 콕핏 갱신 — 토스 읽기 · {focus} · 실주문 게이트 잠금",
             "app_boot"));
 
-        var liveDecision = _liveOrderGate.Evaluate(_settings, new LiveOrderContext());
-        var symbols = new[] { WatchlistCatalog.SpaceXSymbol };
+        var liveDecision = _liveOrderGate.Evaluate(_settings, BuildLiveOrderContext());
+        var symbols = _session.ResolveWatchSymbols();
+        if (symbols.Length == 0)
+        {
+            symbols = [focus];
+        }
+
         var portfolio = await _portfolio
             .GetSnapshotAsync(symbols, cancellationToken)
             .ConfigureAwait(false);
@@ -597,20 +806,30 @@ public sealed class AppHarness
         _connectionModeLabel = TossReadOnlyFactory.DescribeMode(_tossOptions);
         await RefreshNewsAsync(cancellationToken).ConfigureAwait(false);
 
-        // Live 읽기 전용일 때만 실 포트폴리오를 세션에 바인딩 (mock은 연습 유지)
+        _lastConnectionStatus = portfolio.ConnectionStatus;
+
+        // Live 읽기 전용일 때만 실 포트폴리오를 세션에 바인딩 (mock/오류는 연습·폴백 라벨)
         if (portfolio.ConnectionStatus == ConnectionStatus.LiveReadOnlyConnected)
         {
             ApplyRealPortfolio(portfolio);
-            await TryCacheRealCandlesAsync(WatchlistCatalog.SpaceXSymbol, cancellationToken)
+            await TryCacheRealCandlesAsync(_session.ResolveFocusSymbol(), cancellationToken)
                 .ConfigureAwait(false);
         }
         else
         {
             _isLiveReadOnlyConnected = false;
-            // mock/오류: 시세는 차트 seed로만 캐시 (라벨·잔액은 연습 유지)
             _lastQuotes = portfolio.Quotes ?? Array.Empty<QuoteSnapshot>();
             _cachedRealCandles = null;
             _cachedCandlesSymbol = null;
+            // Offline mock is practice; Error/Blocked is fail-closed chart honesty (orders already blocked).
+            _chartCandleFetchFailedOrEmpty =
+                portfolio.ConnectionStatus is ConnectionStatus.Error or ConnectionStatus.Blocked;
+            _session.SetDataSourceLabel(
+                portfolio.ConnectionStatus == ConnectionStatus.Error
+                    ? "오류 · 연습 폴백"
+                    : portfolio.ConnectionStatus == ConnectionStatus.Blocked
+                        ? "차단 · 연습 폴백"
+                        : "mock/오프라인");
         }
 
         var snapshot = CockpitReadOnlyProjector.Project(portfolio, _settings);
@@ -638,17 +857,24 @@ public sealed class AppHarness
 
             foreach (var item in evaluated.Where(e => e.IsAcceptedForDryRun))
             {
-                // CreateDefault practice loop: dry-run + paper only.
-                // Gated live router is intentionally NOT used here even if registered.
-                // Live path remains fail-closed unless settings would allow AND a future
-                // approved implementation is wired (SettingsWouldAllowLiveRouting is false
-                // under CreateDefault).
+                if (SettingsWouldAllowLiveRouting && _gatedLiveRouter is not null)
+                {
+                    var liveResult = await _gatedLiveRouter
+                        .RouteAsync(item.Candidate, cancellationToken)
+                        .ConfigureAwait(false);
+                    _audit.Append(new AuditEntry(
+                        DateTimeOffset.UtcNow,
+                        "orders",
+                        liveResult.Message,
+                        liveResult.Accepted ? "live_accepted" : "live_blocked"));
+                    continue;
+                }
+
                 _ = await _dryRun.RouteAsync(item.Candidate, cancellationToken).ConfigureAwait(false);
                 var paperResult = await _paper.RouteAsync(item.Candidate, cancellationToken).ConfigureAwait(false);
                 if (paperResult.Accepted && item.Candidate.LimitPrice is decimal px)
                 {
                     _session.ApplyVirtualFill(item.Candidate.Side, item.Candidate.Quantity, px);
-                    // 규모(수량×가격)에 비례한 소액 평가손익 연습
                     _session.ApplyScaffoldMarkToMarket(item.Candidate.Quantity * px * 0.0005m);
                 }
             }
@@ -662,7 +888,7 @@ public sealed class AppHarness
     }
 
     public (int DryRun, int Paper, bool LiveBlocked) GetEvidenceCounts() =>
-        (_dryRunLedger.Count, _paperLedger.Count, true);
+        (_dryRunLedger.Count, _paperLedger.Count, !IsLiveSubmissionEnabled);
 
     /// <summary>
     /// Practice evidence summary: dry-run/paper ledger counts, live always blocked,
@@ -690,7 +916,7 @@ public sealed class AppHarness
         return new AppTradingEvidenceSummary(
             DryRunCount: dry,
             PaperCount: paper,
-            LiveBlocked: true,
+            LiveBlocked: !IsLiveSubmissionEnabled,
             ExportText: exportText,
             Snapshot: snapshot);
     }
@@ -725,10 +951,10 @@ public sealed class AppHarness
             $"LIVE_READY=false; LIVE_OWNER_UNLOCK_STATUS={ownerStatus}; "
             + $"status={evaluation.Status}; "
             + $"gatedLiveRouterType={(_gatedLiveRouter?.GetType().Name ?? "none")}; "
-            + "practiceLoop=dry_run_paper_only";
+            + (SettingsWouldAllowLiveRouting ? "practiceLoop=live" : "practiceLoop=dry_run_paper_only");
 
         return new AppLiveReadinessReport(
-            LiveBlocked: true,
+            LiveBlocked: !IsLiveSubmissionEnabled,
             IsLiveSubmissionEnabled: IsLiveSubmissionEnabled,
             OwnerUnlockStatus: ownerStatus,
             ChecklistPresent: checklistPresent,
@@ -736,7 +962,7 @@ public sealed class AppHarness
             LiveReadinessArtifactDirPresent: artifactDirPresent,
             AutomationScriptPresent: scriptPresent,
             GatedLiveRouterRegistered: IsGatedLiveRouterRegistered,
-            GatedLiveRouterUsedInPractice: false,
+            GatedLiveRouterUsedInPractice: SettingsWouldAllowLiveRouting,
             SettingsAllowLiveOrders: _settings.AllowLiveOrders,
             SettingsKillSwitch: _settings.KillSwitch,
             SettingsOrderMode: _settings.OrderMode.ToString(),

@@ -101,13 +101,12 @@ public class OrderRouterTests
         Assert.False(router.IsLiveSubmissionEnabled);
         Assert.Equal("live_not_implemented", result.Mode);
         Assert.Contains("No API call", result.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(result.Blocks, b => b.Code == BlockedReason.LiveImplementationDisabled.Code);
         Assert.NotEqual(OrderMode.Live.ToString(), result.Mode);
         Assert.DoesNotContain(result.Blocks, b => b.Code == BlockedReason.KillSwitchActive.Code);
     }
 
     [Fact]
-    public async Task BlockedLiveRouter_open_settings_but_implementation_flag_off_still_blocks()
+    public async Task BlockedLiveRouter_open_settings_still_returns_not_implemented_stub()
     {
         var settings = new TradingSafetySettings
         {
@@ -115,19 +114,14 @@ public class OrderRouterTests
             KillSwitch = false,
             OrderMode = OrderMode.Live,
         };
-        var context = new LiveOrderContext
-        {
-            ManualApprovalPresent = true,
-            LiveImplementationEnabled = false,
-        };
+        var context = new LiveOrderContext();
 
         var router = new BlockedLiveOrderRouter(settings, context);
         var result = await router.RouteAsync(Sample(), CancellationToken.None);
 
         Assert.False(result.Accepted);
         Assert.False(router.IsLiveSubmissionEnabled);
-        Assert.Equal("live_blocked", result.Mode);
-        Assert.Contains(result.Blocks, b => b.Code == BlockedReason.LiveImplementationDisabled.Code);
+        Assert.Equal("live_not_implemented", result.Mode);
         Assert.Contains("No API call", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 

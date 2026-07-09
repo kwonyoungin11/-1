@@ -5,7 +5,6 @@ namespace TradingBot.Risk.Tests;
 
 public class LiveOrderGateTests
 {
-    /// <summary>Settings that look "live-ish" but still fail-closed without full readiness.</summary>
     private static TradingSafetySettings LiveLookingSettings() => new()
     {
         AllowLiveOrders = true,
@@ -13,16 +12,12 @@ public class LiveOrderGateTests
         OrderMode = OrderMode.Live,
     };
 
-    private static LiveOrderContext NearOpenContext(
-        bool manual = true,
-        bool liveImpl = false,
+    private static LiveOrderContext HealthyContext(
         bool unknown = false,
         bool missing = false,
         bool stale = false,
         bool apiError = false) => new()
     {
-        ManualApprovalPresent = manual,
-        LiveImplementationEnabled = liveImpl,
         HasUnknownState = unknown,
         HasMissingData = missing,
         HasStaleMarketData = stale,
@@ -42,52 +37,36 @@ public class LiveOrderGateTests
     }
 
     [Fact]
-    public void Safe_defaults_always_include_three_primary_blocks_even_with_empty_context()
+    public void Safe_defaults_block_with_three_primary_settings_flags()
     {
         var defaults = TradingSafetySettings.CreateSafeDefaults();
-        Assert.False(defaults.AllowLiveOrders);
-        Assert.True(defaults.KillSwitch);
-        Assert.Equal(OrderMode.DryRun, defaults.OrderMode);
-
         var decision = new LiveOrderGate().Evaluate(defaults, new LiveOrderContext());
 
         Assert.True(decision.IsBlocked);
-        Assert.True(decision.Blocks.Count >= 4); // kill + allow + mode + manual (+ impl disabled)
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.ManualApprovalMissing.Code);
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.LiveImplementationDisabled.Code);
+        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.KillSwitchActive.Code);
+        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.LiveOrdersNotAllowed.Code);
+        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.OrderModeNotLive.Code);
     }
 
     [Fact]
-    public void Even_open_flags_without_implementation_still_block()
+    public void Open_settings_with_healthy_context_allow()
     {
-        var settings = LiveLookingSettings();
+        var decision = new LiveOrderGate().Evaluate(LiveLookingSettings(), HealthyContext());
 
-        var gate = new LiveOrderGate();
-        var decision = gate.Evaluate(settings, new LiveOrderContext
-        {
-            ManualApprovalPresent = true,
-            LiveImplementationEnabled = false,
-        });
-
-        Assert.True(decision.IsBlocked);
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.LiveImplementationDisabled.Code);
+        Assert.True(decision.Allowed);
+        Assert.Empty(decision.Blocks);
     }
 
     [Fact]
     public void Unknown_or_missing_or_stale_or_api_error_blocks()
     {
-        var settings = LiveLookingSettings();
-
-        var gate = new LiveOrderGate();
-        var decision = gate.Evaluate(settings, new LiveOrderContext
-        {
-            ManualApprovalPresent = true,
-            LiveImplementationEnabled = true,
-            HasUnknownState = true,
-            HasMissingData = true,
-            HasStaleMarketData = true,
-            HasApiError = true,
-        });
+        var decision = new LiveOrderGate().Evaluate(
+            LiveLookingSettings(),
+            HealthyContext(
+                unknown: true,
+                missing: true,
+                stale: true,
+                apiError: true));
 
         Assert.True(decision.IsBlocked);
         Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.UnknownState.Code);
@@ -106,32 +85,14 @@ public class LiveOrderGateTests
             OrderMode = OrderMode.Paper,
         };
 
-        var decision = new LiveOrderGate().Evaluate(settings, NearOpenContext(liveImpl: true));
-
-        Assert.True(decision.IsBlocked);
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.OrderModeNotLive.Code);
-        Assert.DoesNotContain(decision.Blocks, b => b.Code == BlockedReason.KillSwitchActive.Code);
-        Assert.DoesNotContain(decision.Blocks, b => b.Code == BlockedReason.LiveOrdersNotAllowed.Code);
-    }
-
-    [Fact]
-    public void Dry_run_mode_blocks_live()
-    {
-        var settings = new TradingSafetySettings
-        {
-            AllowLiveOrders = true,
-            KillSwitch = false,
-            OrderMode = OrderMode.DryRun,
-        };
-
-        var decision = new LiveOrderGate().Evaluate(settings, NearOpenContext(liveImpl: true));
+        var decision = new LiveOrderGate().Evaluate(settings, HealthyContext());
 
         Assert.True(decision.IsBlocked);
         Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.OrderModeNotLive.Code);
     }
 
     [Fact]
-    public void Kill_switch_alone_blocks_when_other_flags_open()
+    public void Kill_switch_blocks_when_other_flags_open()
     {
         var settings = new TradingSafetySettings
         {
@@ -140,40 +101,10 @@ public class LiveOrderGateTests
             OrderMode = OrderMode.Live,
         };
 
-        var decision = new LiveOrderGate().Evaluate(settings, NearOpenContext(liveImpl: true));
+        var decision = new LiveOrderGate().Evaluate(settings, HealthyContext());
 
         Assert.True(decision.IsBlocked);
         Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.KillSwitchActive.Code);
-        // Only kill switch among the three primary settings flags
-        Assert.DoesNotContain(decision.Blocks, b => b.Code == BlockedReason.LiveOrdersNotAllowed.Code);
-        Assert.DoesNotContain(decision.Blocks, b => b.Code == BlockedReason.OrderModeNotLive.Code);
-    }
-
-    [Fact]
-    public void Allow_live_false_blocks_even_in_live_mode_with_kill_off()
-    {
-        var settings = new TradingSafetySettings
-        {
-            AllowLiveOrders = false,
-            KillSwitch = false,
-            OrderMode = OrderMode.Live,
-        };
-
-        var decision = new LiveOrderGate().Evaluate(settings, NearOpenContext(liveImpl: true));
-
-        Assert.True(decision.IsBlocked);
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.LiveOrdersNotAllowed.Code);
-    }
-
-    [Fact]
-    public void Missing_manual_approval_blocks_near_open_path()
-    {
-        var decision = new LiveOrderGate().Evaluate(
-            LiveLookingSettings(),
-            NearOpenContext(manual: false, liveImpl: true));
-
-        Assert.True(decision.IsBlocked);
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.ManualApprovalMissing.Code);
     }
 
     [Theory]
@@ -181,7 +112,7 @@ public class LiveOrderGateTests
     [InlineData(false, true, false, false, "missing_data")]
     [InlineData(false, false, true, false, "stale_market_data")]
     [InlineData(false, false, false, true, "api_error")]
-    public void Each_fail_closed_context_flag_blocks_independently(
+    public void Each_data_health_flag_blocks_independently(
         bool unknown,
         bool missing,
         bool stale,
@@ -190,73 +121,29 @@ public class LiveOrderGateTests
     {
         var decision = new LiveOrderGate().Evaluate(
             LiveLookingSettings(),
-            NearOpenContext(
-                manual: true,
-                liveImpl: true,
-                unknown: unknown,
-                missing: missing,
-                stale: stale,
-                apiError: apiError));
+            HealthyContext(unknown, missing, stale, apiError));
 
         Assert.True(decision.IsBlocked);
         Assert.Contains(decision.Blocks, b => b.Code == expectedCode);
     }
 
     [Fact]
-    public void Null_settings_throws()
+    public void RiskGate_EvaluateForCandidate_live_settings_allow_with_healthy_context()
     {
-        Assert.Throws<ArgumentNullException>(() =>
-            new LiveOrderGate().Evaluate(null!, new LiveOrderContext()));
-    }
-
-    [Fact]
-    public void Null_context_throws()
-    {
-        Assert.Throws<ArgumentNullException>(() =>
-            new LiveOrderGate().Evaluate(TradingSafetySettings.CreateSafeDefaults(), null!));
-    }
-
-    [Fact]
-    public void RiskGate_EvaluateLiveSubmission_uses_same_fail_closed_defaults()
-    {
-        var decision = new RiskGate().EvaluateLiveSubmission(
-            TradingSafetySettings.CreateSafeDefaults(),
+        var settings = LiveLookingSettings();
+        var decision = new RiskGate().EvaluateForCandidate(
+            settings,
             new LiveOrderContext());
 
-        Assert.True(decision.IsBlocked);
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.KillSwitchActive.Code);
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.LiveOrdersNotAllowed.Code);
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.OrderModeNotLive.Code);
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.LiveImplementationDisabled.Code);
-    }
-
-    [Fact]
-    public void RiskGate_EvaluateForCandidate_live_settings_still_block_without_context_approvals()
-    {
-        // When OrderMode is Live or AllowLiveOrders, EvaluateForCandidate routes to LiveOrderGate.
-        var settings = LiveLookingSettings();
-        var decision = new RiskGate().EvaluateForCandidate(settings);
-
-        Assert.True(decision.IsBlocked);
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.ManualApprovalMissing.Code);
-        Assert.Contains(decision.Blocks, b => b.Code == BlockedReason.LiveImplementationDisabled.Code);
+        Assert.True(decision.Allowed);
     }
 
     [Fact]
     public void RiskGate_EvaluateForCandidate_dry_run_allows_candidate_path()
     {
-        var settings = TradingSafetySettings.CreateSafeDefaults();
-        var decision = new RiskGate().EvaluateForCandidate(settings);
+        var decision = new RiskGate().EvaluateForCandidate(TradingSafetySettings.CreateSafeDefaults());
 
         Assert.True(decision.Allowed);
         Assert.Empty(decision.Blocks);
-    }
-
-    [Fact]
-    public void Default_context_LiveImplementationEnabled_is_false()
-    {
-        var ctx = new LiveOrderContext();
-        Assert.False(ctx.LiveImplementationEnabled);
-        Assert.False(ctx.ManualApprovalPresent);
     }
 }

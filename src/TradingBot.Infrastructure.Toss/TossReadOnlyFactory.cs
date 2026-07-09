@@ -1,5 +1,6 @@
 using TradingBot.Infrastructure.Toss.Http;
 using TradingBot.Infrastructure.Toss.Mock;
+using TradingBot.Orders;
 
 namespace TradingBot.Infrastructure.Toss;
 
@@ -63,7 +64,36 @@ public static class TossReadOnlyFactory
             return "mock 모드 (클라이언트 키 없음 — 실 HTTP 요청 안 함)";
         }
 
-        return "실 HTTP 읽기 전용 모드 (주문 API 없음)";
+        return "실 HTTP 모드 (읽기·주문 API 사용 가능)";
+    }
+
+    /// <summary>
+    /// Creates a gated live order transport when HTTP and credentials are enabled.
+    /// </summary>
+    public static ILiveOrderTransport CreateLiveOrderTransport(
+        TossOptions options,
+        HttpMessageHandler? httpHandler = null)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        LiveHttpGuard.EnsureAllowed(options);
+
+        if (!options.HasClientCredentials)
+        {
+            throw new InvalidOperationException("TOSS_CLIENT_ID/SECRET missing — cannot create live order transport.");
+        }
+
+        var baseUri = new Uri(EnsureTrailingSlash(options.BaseUrl));
+        var http = httpHandler is null
+            ? new HttpClient { BaseAddress = baseUri, Timeout = TimeSpan.FromSeconds(30) }
+            : new HttpClient(httpHandler, disposeHandler: false)
+            {
+                BaseAddress = baseUri,
+                Timeout = TimeSpan.FromSeconds(30),
+            };
+
+        var auth = new LiveTossAuthClient(http, options);
+        var accounts = new LiveTossAccountClient(http, options, auth, new DomainTossRedactor());
+        return new TossLiveOrderTransport(http, options, auth, accounts);
     }
 
     private static string EnsureTrailingSlash(string baseUrl) =>

@@ -13,6 +13,7 @@ public class StrategyCatalogTests
         Assert.Contains(TradingStrategyKind.추세추종, StrategyCatalog.All);
         Assert.Contains(TradingStrategyKind.평균회귀, StrategyCatalog.All);
         Assert.Contains(TradingStrategyKind.모멘텀돌파, StrategyCatalog.All);
+        Assert.Contains(TradingStrategyKind.일분분할스캘프, StrategyCatalog.All);
     }
 
     [Fact]
@@ -48,6 +49,14 @@ public class StrategyCatalogTests
     }
 
     [Fact]
+    public void BaseQuantity_one_minute_split_scalp_is_six_divisible_by_three_legs()
+    {
+        var qty = StrategyCatalog.BaseQuantity(TradingStrategyKind.일분분할스캘프);
+        Assert.Equal(6m, qty);
+        Assert.Equal(0m, qty % 3m);
+    }
+
+    [Fact]
     public void Describe_is_non_empty_for_every_strategy()
     {
         foreach (var kind in StrategyCatalog.All)
@@ -64,5 +73,17 @@ public class StrategyCatalogTests
         Assert.Contains("투자 조언 아님", description, StringComparison.Ordinal);
         Assert.DoesNotContain("보장", description, StringComparison.Ordinal);
         Assert.DoesNotContain("추천 종목", description, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Describe_one_minute_split_scalp_is_practice_with_fee_warning()
+    {
+        var description = StrategyCatalog.Describe(TradingStrategyKind.일분분할스캘프);
+        Assert.Contains("15m", description, StringComparison.Ordinal);
+        Assert.Contains("분할", description, StringComparison.Ordinal);
+        Assert.Contains("수수료", description, StringComparison.Ordinal);
+        Assert.Contains("dry-run", description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("투자 조언 아님", description, StringComparison.Ordinal);
+        Assert.DoesNotContain("보장", description, StringComparison.Ordinal);
     }
 }
