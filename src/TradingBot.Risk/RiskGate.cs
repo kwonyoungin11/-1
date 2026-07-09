@@ -75,6 +75,25 @@ public sealed class RiskGate
             }
         }
 
+        // Optional daily loss halt: only when MaxDailyLoss is configured.
+        // Missing equity inputs → fail-closed (limit is on but cannot be verified).
+        if (settings.MaxDailyLoss is decimal maxDailyLoss)
+        {
+            if (context.DayStartEquity is not decimal dayStart
+                || context.CurrentEquity is not decimal currentEquity)
+            {
+                blocks.Add(BlockedReason.DailyLossLimitDataInvalid);
+            }
+            else
+            {
+                var daily = DailyLossGuard.EvaluateAbsolute(dayStart, currentEquity, maxDailyLoss);
+                if (daily.IsBlocked)
+                {
+                    blocks.AddRange(daily.Blocks);
+                }
+            }
+        }
+
         // Live-path flags never make a candidate "live-ready"; they only add blocks for visibility
         // when settings already look live-ish. Kill switch does not block dry-run candidates by itself.
         if (settings.OrderMode == OrderMode.Live || settings.AllowLiveOrders)

@@ -9,6 +9,16 @@ public sealed record CandidateRiskContext
     public required decimal Quantity { get; init; }
     public required decimal? LimitPrice { get; init; }
     public decimal? CurrentPositionQuantity { get; init; }
+
+    /// <summary>
+    /// Equity at the start of the trading day (base for <see cref="TradingSafetySettings.MaxDailyLoss"/>).
+    /// When MaxDailyLoss is configured, both this and <see cref="CurrentEquity"/> are required (fail-closed).
+    /// </summary>
+    public decimal? DayStartEquity { get; init; }
+
+    /// <summary>Current equity (or mark-to-market equity) for daily loss halt.</summary>
+    public decimal? CurrentEquity { get; init; }
+
     public DateTimeOffset? QuoteTimestampUtc { get; init; }
     public DateTimeOffset NowUtc { get; init; } = DateTimeOffset.UtcNow;
     public bool HasMissingData { get; init; }
