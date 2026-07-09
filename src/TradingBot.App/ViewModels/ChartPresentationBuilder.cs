@@ -1,5 +1,6 @@
 using LiveChartsCore;
 using LiveChartsCore.Defaults;
+using LiveChartsCore.Kernel;
 using LiveChartsCore.Kernel.Sketches;
 using LiveChartsCore.Measure;
 using LiveChartsCore.SkiaSharpView;
@@ -102,20 +103,49 @@ public static class ChartPresentationBuilder
         var buyBubbles = BuildBubbles(markers, candles, TradeMarkerSide.매수, threshold);
         var sellBubbles = BuildBubbles(markers, candles, TradeMarkerSide.매도, threshold);
 
-        var series = new List<ISeries>
+        Func<ChartPoint, string> xTipFin = p =>
         {
-            new CandlesticksSeries<FinancialPoint>
+            try
             {
-                Name = "SPCX",
-                Values = financial,
-                UpFill = new SolidColorPaint(TvUp),
-                UpStroke = new SolidColorPaint(TvUp) { StrokeThickness = 1 },
-                DownFill = new SolidColorPaint(TvDown),
-                DownStroke = new SolidColorPaint(TvDown) { StrokeThickness = 1 },
-                MaxBarWidth = maxBarWidth,
-                ZIndex = 2,
+                // FinancialPoint: date is on the X (secondary in LC2 financial)
+                var x = p.Coordinate.SecondaryValue;
+                if (x <= 0)
+                {
+                    x = p.Coordinate.PrimaryValue;
+                }
+
+                return KoreaTime.FormatAxisFromTicks((long)x, includeDate) + " KST";
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        };
+
+        var candleSeries = new CandlesticksSeries<FinancialPoint>
+        {
+            Name = "SPCX",
+            Values = financial,
+            UpFill = new SolidColorPaint(TvUp),
+            UpStroke = new SolidColorPaint(TvUp) { StrokeThickness = 1 },
+            DownFill = new SolidColorPaint(TvDown),
+            DownStroke = new SolidColorPaint(TvDown) { StrokeThickness = 1 },
+            MaxBarWidth = maxBarWidth,
+            ZIndex = 2,
+            XToolTipLabelFormatter = xTipFin,
+            YToolTipLabelFormatter = p =>
+            {
+                // Show OHLC-ish from point if available
+                if (p.Context.DataSource is FinancialPoint fp)
+                {
+                    return $"O {fp.Open:N2}  H {fp.High:N2}  L {fp.Low:N2}  C {fp.Close:N2}";
+                }
+
+                return p.Coordinate.PrimaryValue.ToString("N2");
             },
         };
+
+        var series = new List<ISeries> { candleSeries };
 
         var legend = new List<string>();
         for (var i = 0; i < indicators.Count; i++)
@@ -141,6 +171,8 @@ public static class ChartPresentationBuilder
                 Fill = null,
                 Stroke = new SolidColorPaint(color) { StrokeThickness = 1.5f },
                 ZIndex = 4 + i,
+                XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
+                YToolTipLabelFormatter = p => $"{line.Name} {p.Coordinate.PrimaryValue:N2}",
             });
             legend.Add(line.Name);
         }
@@ -165,45 +197,53 @@ public static class ChartPresentationBuilder
                 PathEffect = new DashEffect([4, 4]),
             },
             ZIndex = 3,
+            IsVisibleAtLegend = false,
+            XToolTipLabelFormatter = _ => string.Empty,
+            YToolTipLabelFormatter = p => $"Last {p.Coordinate.PrimaryValue:N2}",
         });
 
         if (bracket.EntryLimit > 0m)
         {
-            series.Add(LevelLine("ENTRY", (double)bracket.EntryLimit, t0, t1, TvEntry, dash: true));
+            series.Add(LevelLine("ENTRY", (double)bracket.EntryLimit, t0, t1, TvEntry, dash: true, includeDate));
             legend.Add("ENTRY");
         }
 
         if (bracket.StopPrice > 0m)
         {
-            series.Add(LevelLine("SL", (double)bracket.StopPrice, t0, t1, TvDown, dash: true));
+            series.Add(LevelLine("SL", (double)bracket.StopPrice, t0, t1, TvDown, dash: true, includeDate));
             legend.Add("SL");
         }
 
         if (bracket.TakeProfitPrice > 0m)
         {
-            series.Add(LevelLine("TP", (double)bracket.TakeProfitPrice, t0, t1, TvUp, dash: true));
+            series.Add(LevelLine("TP", (double)bracket.TakeProfitPrice, t0, t1, TvUp, dash: true, includeDate));
             legend.Add("TP");
         }
 
+        // Bubbles: softer, no raw W in tooltip
         series.Add(new ScatterSeries<WeightedPoint>
         {
-            Name = "Vol↑",
+            Name = "대금↑",
             Values = buyBubbles,
-            MinGeometrySize = 4,
-            GeometrySize = 28,
-            Fill = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x40)),
+            MinGeometrySize = 5,
+            GeometrySize = 22,
+            Fill = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x38)),
             Stroke = null,
             ZIndex = 8,
+            XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
+            YToolTipLabelFormatter = p => $"대금↑ {p.Coordinate.PrimaryValue:N2}",
         });
         series.Add(new ScatterSeries<WeightedPoint>
         {
-            Name = "Vol↓",
+            Name = "대금↓",
             Values = sellBubbles,
-            MinGeometrySize = 4,
-            GeometrySize = 28,
-            Fill = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x40)),
+            MinGeometrySize = 5,
+            GeometrySize = 22,
+            Fill = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x38)),
             Stroke = null,
             ZIndex = 8,
+            XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
+            YToolTipLabelFormatter = p => $"대금↓ {p.Coordinate.PrimaryValue:N2}",
         });
 
         // Volume pane
@@ -227,21 +267,25 @@ public static class ChartPresentationBuilder
         {
             new ColumnSeries<DateTimePoint>
             {
-                Name = "Vol+",
+                Name = "거래량+",
                 Values = volUp,
                 Fill = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x88)),
                 Stroke = null,
                 MaxBarWidth = maxBarWidth,
                 Padding = 0.4,
+                XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
+                YToolTipLabelFormatter = p => FormatVolume(p.Coordinate.PrimaryValue),
             },
             new ColumnSeries<DateTimePoint>
             {
-                Name = "Vol-",
+                Name = "거래량-",
                 Values = volDown,
                 Fill = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x88)),
                 Stroke = null,
                 MaxBarWidth = maxBarWidth,
                 Padding = 0.4,
+                XToolTipLabelFormatter = p => FormatPointTime(p, includeDate),
+                YToolTipLabelFormatter = p => FormatVolume(p.Coordinate.PrimaryValue),
             },
         };
 
@@ -349,8 +393,8 @@ public static class ChartPresentationBuilder
         var chg = first.Close > 0 ? (last.Close - first.Close) / first.Close * 100.0 : 0;
         var lastKst = KoreaTime.FormatAxis(last.Time, includeDate: true);
         var lastLabel =
-            $"종가 {last.Close:N2} · 구간 {chg:+0.00;-0.00;0}% · {candles.Count}봉 · {lastKst} KST · " +
-            $"E {bracket.EntryLimit:N2} / SL {bracket.StopPrice:N2} / TP {bracket.TakeProfitPrice:N2}";
+            $"종가 {last.Close:N2}  구간 {chg:+0.00;-0.00;0}%  {candles.Count}봉  {lastKst} KST\n" +
+            $"ENTRY {bracket.EntryLimit:N2}   SL {bracket.StopPrice:N2}   TP {bracket.TakeProfitPrice:N2}";
 
         var legendText = legend.Count == 0
             ? "프리미엄 차트 · Crosshair · Sections · KST"
@@ -438,7 +482,8 @@ public static class ChartPresentationBuilder
         DateTime t0,
         DateTime t1,
         SKColor color,
-        bool dash) =>
+        bool dash,
+        bool includeDate) =>
         new()
         {
             Name = name,
@@ -455,7 +500,33 @@ public static class ChartPresentationBuilder
                 PathEffect = dash ? new DashEffect([6, 4]) : null,
             },
             ZIndex = 12,
+            XToolTipLabelFormatter = _ => string.Empty,
+            YToolTipLabelFormatter = _ => $"{name} {price:N2}",
         };
+
+    private static string FormatPointTime(ChartPoint p, bool includeDate)
+    {
+        try
+        {
+            var x = p.Coordinate.SecondaryValue;
+            if (double.IsNaN(x) || x <= 0)
+            {
+                x = p.Coordinate.PrimaryValue;
+            }
+
+            // reject weight-like tiny values mistaken for ticks
+            if (x < TimeSpan.FromDays(365).Ticks)
+            {
+                return string.Empty;
+            }
+
+            return KoreaTime.FormatAxisFromTicks((long)x, includeDate) + " KST";
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
 
     private static string FormatVolume(double v)
     {
