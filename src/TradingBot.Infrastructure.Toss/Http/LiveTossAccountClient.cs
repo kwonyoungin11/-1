@@ -10,6 +10,9 @@ public sealed class LiveTossAccountClient : ITossAccountClient
     private readonly TossOptions _options;
     private readonly LiveTossAuthClient _auth;
     private readonly ITossRedactor _redactor;
+    private readonly SemaphoreSlim _seqGate = new(1, 1);
+    private string? _cachedAccountSeq;
+    private IReadOnlyList<AccountSummary>? _cachedAccounts;
 
     public LiveTossAccountClient(
         HttpClient http,
@@ -26,12 +29,25 @@ public sealed class LiveTossAccountClient : ITossAccountClient
     public async Task<IReadOnlyList<AccountSummary>> GetAccountsAsync(CancellationToken cancellationToken)
     {
         LiveHttpGuard.EnsureAllowed(_options);
+        if (_cachedAccounts is { Count: > 0 })
+        {
+            return _cachedAccounts;
+        }
+
         var dto = await GetJsonAsync<AccountsResponseDto>(
                 new Uri("api/v1/accounts", UriKind.Relative),
                 accountSeqHeader: null,
                 cancellationToken)
             .ConfigureAwait(false);
-        return TossDtoMapper.MapAccounts(dto, _redactor);
+        var mapped = TossDtoMapper.MapAccounts(dto, _redactor);
+        _cachedAccounts = mapped;
+        if (string.IsNullOrWhiteSpace(_cachedAccountSeq)
+            && mapped.FirstOrDefault()?.AccountSeq is { Length: > 0 } seq)
+        {
+            _cachedAccountSeq = seq;
+        }
+
+        return mapped;
     }
 
     public async Task<HoldingsReadModel> GetHoldingsAsync(CancellationToken cancellationToken)
@@ -69,15 +85,34 @@ public sealed class LiveTossAccountClient : ITossAccountClient
             return _options.AccountSeq!;
         }
 
-        var accounts = await GetAccountsAsync(cancellationToken).ConfigureAwait(false);
-        var first = accounts.FirstOrDefault()?.AccountSeq;
-        if (string.IsNullOrWhiteSpace(first))
+        if (!string.IsNullOrWhiteSpace(_cachedAccountSeq))
         {
-            throw new InvalidOperationException(
-                "TOSS_ACCOUNT_SEQ missing and accounts list empty — cannot read holdings.");
+            return _cachedAccountSeq!;
         }
 
-        return first;
+        await _seqGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_cachedAccountSeq))
+            {
+                return _cachedAccountSeq!;
+            }
+
+            var accounts = await GetAccountsAsync(cancellationToken).ConfigureAwait(false);
+            var first = accounts.FirstOrDefault()?.AccountSeq;
+            if (string.IsNullOrWhiteSpace(first))
+            {
+                throw new InvalidOperationException(
+                    "TOSS_ACCOUNT_SEQ missing and accounts list empty — cannot read holdings.");
+            }
+
+            _cachedAccountSeq = first;
+            return first;
+        }
+        finally
+        {
+            _seqGate.Release();
+        }
     }
 
     private async Task<T> GetJsonAsync<T>(
