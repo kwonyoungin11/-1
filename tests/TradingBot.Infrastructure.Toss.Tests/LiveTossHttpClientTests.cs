@@ -61,6 +61,66 @@ public class LiveTossHttpClientTests
         Assert.Contains("TOSS_ALLOW_LIVE_HTTP", ex.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task GetCandlesAsync_calls_api_v1_candles_with_1m_interval_and_maps_ohlcv()
+    {
+        var handler = new StubHandler();
+        var options = new TossOptions
+        {
+            BaseUrl = "https://openapi.tossinvest.com/",
+            ClientId = "test-id",
+            ClientSecret = "test-secret",
+            AllowLiveHttp = true,
+        };
+        var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri(options.BaseUrl),
+        };
+        var auth = new LiveTossAuthClient(http, options);
+        var market = new LiveTossMarketDataClient(http, options, auth);
+
+        var candles = await market.GetCandlesAsync("AAPL", "1m", 160, CancellationToken.None);
+
+        Assert.Equal(2, candles.Count);
+        Assert.True(candles[0].Time < candles[1].Time);
+        Assert.Equal(185.70, candles[0].Close, precision: 4);
+        Assert.Equal(186.00, candles[1].Close, precision: 4);
+
+        var candlePath = Assert.Single(handler.Paths, p => p.Contains("api/v1/candles", StringComparison.Ordinal));
+        Assert.Contains("symbol=AAPL", candlePath, StringComparison.Ordinal);
+        Assert.Contains("interval=1m", candlePath, StringComparison.Ordinal);
+        Assert.Contains("count=160", candlePath, StringComparison.Ordinal);
+        Assert.DoesNotContain(handler.Paths, p => p.Contains("orders", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GetCandlesAsync_rejects_invalid_interval()
+    {
+        var http = new HttpClient(new StubHandler())
+        {
+            BaseAddress = new Uri("https://openapi.tossinvest.com/"),
+        };
+        var options = new TossOptions
+        {
+            ClientId = "test-id",
+            ClientSecret = "test-secret",
+            AllowLiveHttp = true,
+        };
+        var market = new LiveTossMarketDataClient(http, options, new LiveTossAuthClient(http, options));
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => market.GetCandlesAsync("AAPL", "5m", 100, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Mock_GetCandlesAsync_returns_synthetic_series()
+    {
+        var mock = new Mock.MockTossMarketDataClient();
+        var candles = await mock.GetCandlesAsync("AAPL", "1m", 40, CancellationToken.None);
+        Assert.Equal(40, candles.Count);
+        Assert.True(candles[0].High >= candles[0].Low);
+    }
+
     private sealed class StubHandler : HttpMessageHandler
     {
         public List<string> Paths { get; } = new();
@@ -84,6 +144,10 @@ public class LiveTossHttpClientTests
             else if (path.Contains("api/v1/holdings", StringComparison.Ordinal))
             {
                 json = """{"result":{"marketValue":{"amount":{"krw":"0","usd":"100"}},"items":[{"symbol":"AAPL","name":"Apple","currency":"USD","quantity":"1","lastPrice":"190"}]}}""";
+            }
+            else if (path.Contains("api/v1/candles", StringComparison.Ordinal))
+            {
+                json = """{"result":{"candles":[{"timestamp":"2026-03-25T09:32:00+09:00","openPrice":"185.70","highPrice":"186.10","lowPrice":"185.50","closePrice":"186.00","volume":"15200","currency":"USD"},{"timestamp":"2026-03-25T09:31:00+09:00","openPrice":"185.50","highPrice":"185.80","lowPrice":"185.40","closePrice":"185.70","volume":"18400","currency":"USD"}],"nextBefore":"2026-03-25T09:31:00+09:00"}}""";
             }
             else if (path.Contains("api/v1/prices", StringComparison.Ordinal))
             {

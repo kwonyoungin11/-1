@@ -23,6 +23,16 @@ public interface ITossMarketDataClient
     Task<UsMarketSessionSnapshot> GetUsMarketCalendarAsync(
         DateOnly? date,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// OHLCV candles for chart (read-only). Toss interval enum: <c>1m</c>, <c>1d</c>.
+    /// Max count 200 per official OpenAPI.
+    /// </summary>
+    Task<IReadOnlyList<CandlePoint>> GetCandlesAsync(
+        string symbol,
+        string interval,
+        int count,
+        CancellationToken cancellationToken);
 }
 
 public interface ITossOrderClient

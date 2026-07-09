@@ -61,4 +61,19 @@ public class TossDtoMapperTests
         Assert.Equal("2026-07-09", cal.Date);
         Assert.False(cal.IsHolidayOrClosed);
     }
+
+    [Fact]
+    public void Maps_candles_newest_first_api_to_chronological_chart_points()
+    {
+        var points = TossDtoMapper.MapCandles(Load<CandlesResponseDto>("candles.json"));
+        Assert.Equal(2, points.Count);
+        // API fixture is newest-first; mapper sorts oldest-first for charts.
+        Assert.True(points[0].Time < points[1].Time);
+        Assert.Equal(185.50, points[0].Open, precision: 4);
+        Assert.Equal(185.80, points[0].High, precision: 4);
+        Assert.Equal(185.40, points[0].Low, precision: 4);
+        Assert.Equal(185.70, points[0].Close, precision: 4);
+        Assert.Equal(18400, points[0].Volume, precision: 1);
+        Assert.Equal(186.00, points[1].Close, precision: 4);
+    }
 }

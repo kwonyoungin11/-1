@@ -3,9 +3,15 @@ using TradingBot.Infrastructure.Toss.Dto;
 
 namespace TradingBot.Infrastructure.Toss.Http;
 
-/// <summary>Read-only prices + US market calendar. No order endpoints.</summary>
+/// <summary>Read-only prices, candles, US market calendar. No order endpoints.</summary>
 public sealed class LiveTossMarketDataClient : ITossMarketDataClient
 {
+    /// <summary>OpenAPI enum for GET /api/v1/candles interval.</summary>
+    public static readonly HashSet<string> AllowedCandleIntervals =
+        new(StringComparer.Ordinal) { "1m", "1d" };
+
+    private const int MaxCandleCount = 200;
+
     private readonly HttpClient _http;
     private readonly TossOptions _options;
     private readonly LiveTossAuthClient _auth;
@@ -47,6 +53,37 @@ public sealed class LiveTossMarketDataClient : ITossMarketDataClient
                 cancellationToken)
             .ConfigureAwait(false);
         return TossDtoMapper.MapUsCalendar(dto);
+    }
+
+    public async Task<IReadOnlyList<CandlePoint>> GetCandlesAsync(
+        string symbol,
+        string interval,
+        int count,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+        {
+            throw new ArgumentException("Symbol is required.", nameof(symbol));
+        }
+
+        if (string.IsNullOrWhiteSpace(interval) || !AllowedCandleIntervals.Contains(interval))
+        {
+            throw new ArgumentException(
+                "Candle interval must be one of: 1m, 1d (Toss OpenAPI enum).",
+                nameof(interval));
+        }
+
+        LiveHttpGuard.EnsureAllowed(_options);
+        var clamped = Math.Clamp(count, 1, MaxCandleCount);
+        var path =
+            $"api/v1/candles?symbol={Uri.EscapeDataString(symbol.Trim())}" +
+            $"&interval={Uri.EscapeDataString(interval)}" +
+            $"&count={clamped}";
+        var dto = await GetJsonAsync<CandlesResponseDto>(
+                new Uri(path, UriKind.Relative),
+                cancellationToken)
+            .ConfigureAwait(false);
+        return TossDtoMapper.MapCandles(dto);
     }
 
     private async Task<T> GetJsonAsync<T>(Uri relative, CancellationToken cancellationToken)
