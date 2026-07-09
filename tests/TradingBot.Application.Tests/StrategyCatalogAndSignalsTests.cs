@@ -26,6 +26,62 @@ public class StrategyCatalogAndSignalsTests
     }
 
     [Fact]
+    public void TrendFollow_generator_defaults_to_safe_parameters()
+    {
+        var gen = new TrendFollowSignalGenerator();
+        var defaults = TrendFollowParameters.CreateSafeDefaults();
+        Assert.Equal(defaults, gen.Parameters);
+        Assert.Equal(0.15m, gen.Parameters.MinMomentumScore);
+        Assert.Equal(1.0m, gen.Parameters.StopLossR);
+        Assert.Equal(2.0m, gen.Parameters.TakeProfitR);
+        Assert.Equal(3, gen.Parameters.CooldownBars);
+    }
+
+    [Fact]
+    public void TrendFollow_uses_MinMomentumScore_threshold()
+    {
+        var now = DateTimeOffset.Parse("2026-07-09T16:00:00Z");
+        var q = new QuoteSnapshot("AAPL", 190m, "USD", now);
+
+        // Threshold above any possible |MomentumScore| (clamped to 1.5) → always hold
+        var tight = new TrendFollowSignalGenerator(
+            new TrendFollowParameters(
+                StopLossR: 1.0m,
+                TakeProfitR: 2.0m,
+                CooldownBars: 3,
+                MinMomentumScore: 10m));
+        var hold = tight.Generate(q, 2m, now);
+        Assert.False(hold.IsActionable);
+        Assert.Equal(SignalSide.Hold, hold.Side);
+        Assert.Contains("임계", hold.OwnerMessage, StringComparison.Ordinal);
+        Assert.Contains("투자 조언 아님", hold.OwnerMessage, StringComparison.Ordinal);
+
+        // Zero threshold → never hold for momentum weakness (always acts when quote valid)
+        var loose = new TrendFollowSignalGenerator(
+            new TrendFollowParameters(
+                StopLossR: 1.0m,
+                TakeProfitR: 2.0m,
+                CooldownBars: 3,
+                MinMomentumScore: 0m));
+        var action = loose.Generate(q, 2m, now);
+        Assert.True(action.IsActionable);
+        Assert.True(action.Side is SignalSide.Buy or SignalSide.Sell);
+        Assert.Contains("SL", action.OwnerMessage, StringComparison.Ordinal);
+        Assert.Contains("TP", action.OwnerMessage, StringComparison.Ordinal);
+        Assert.Contains("투자 조언 아님", action.OwnerMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TrendFollow_Describe_is_honest_not_advice()
+    {
+        var description = StrategyCatalog.Describe(TradingStrategyKind.추세추종);
+        Assert.False(string.IsNullOrWhiteSpace(description));
+        Assert.Contains("투자 조언 아님", description, StringComparison.Ordinal);
+        Assert.DoesNotContain("보장", description, StringComparison.Ordinal);
+        Assert.DoesNotContain("수익", description, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Bubble_size_is_notional_quantity_times_price()
     {
         var size = TradeMarker.NotionalSize(10m, 190m);

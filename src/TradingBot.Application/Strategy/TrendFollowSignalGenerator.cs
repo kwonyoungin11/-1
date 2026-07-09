@@ -4,11 +4,19 @@ namespace TradingBot.Application;
 
 /// <summary>
 /// 추세추종 연습: 심볼·시간 기반 모의 모멘텀으로 매수/매도 방향 결정.
-/// (실시세 연결 전 deterministic mock — 투자 조언 아님)
+/// <see cref="TrendFollowParameters"/> 로 임계·R배수·쿨다운 설정 (실시세 연결 전 deterministic mock — 투자 조언 아님).
 /// </summary>
 public sealed class TrendFollowSignalGenerator : IStrategySignalGenerator
 {
     public TradingStrategyKind Kind => TradingStrategyKind.추세추종;
+
+    /// <summary>Explicit practice parameters used by this generator.</summary>
+    public TrendFollowParameters Parameters { get; }
+
+    public TrendFollowSignalGenerator(TrendFollowParameters? parameters = null)
+    {
+        Parameters = parameters ?? TrendFollowParameters.CreateSafeDefaults();
+    }
 
     public StrategySignal Generate(
         QuoteSnapshot quote,
@@ -22,8 +30,8 @@ public sealed class TrendFollowSignalGenerator : IStrategySignalGenerator
         }
 
         var score = MomentumScore(quote.Symbol, quote.LastPrice!.Value, nowUtc);
-        // score > 0 → 상승 추세 가정 → 매수, < 0 → 매도
-        if (Math.Abs(score) < 0.15m)
+        // score > 0 → 상승 추세 가정 → 매수, < 0 → 매도; |score| below threshold → 관망
+        if (Math.Abs(score) < Parameters.MinMomentumScore)
         {
             return new StrategySignal(
                 quote.Symbol,
@@ -31,7 +39,7 @@ public sealed class TrendFollowSignalGenerator : IStrategySignalGenerator
                 null,
                 quote.LastPrice,
                 "trend_follow_v1",
-                $"추세추종 관망 {quote.Symbol} (모멘텀 약함 · 투자 조언 아님)",
+                $"추세추종 관망 {quote.Symbol} (모멘텀 약함 · 임계 {Parameters.MinMomentumScore} · 투자 조언 아님)",
                 nowUtc,
                 IsActionable: false);
         }
@@ -45,7 +53,7 @@ public sealed class TrendFollowSignalGenerator : IStrategySignalGenerator
             qty,
             quote.LastPrice,
             "trend_follow_v1",
-            $"추세추종 {sideKr} 후보 {quote.Symbol} @ {quote.LastPrice} · 수량 {qty} (규모↑=버블↑ · 투자 조언 아님)",
+            $"추세추종 {sideKr} 후보 {quote.Symbol} @ {quote.LastPrice} · 수량 {qty} · SL {Parameters.StopLossR}R / TP {Parameters.TakeProfitR}R · 쿨다운 {Parameters.CooldownBars}바 (규모↑=버블↑ · 투자 조언 아님)",
             nowUtc,
             IsActionable: true);
     }

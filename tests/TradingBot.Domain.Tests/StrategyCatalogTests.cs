@@ -56,4 +56,13 @@ public class StrategyCatalogTests
             Assert.False(string.IsNullOrWhiteSpace(description), $"Describe({kind}) empty");
         }
     }
+
+    [Fact]
+    public void Describe_trend_follow_is_honest_not_investment_advice()
+    {
+        var description = StrategyCatalog.Describe(TradingStrategyKind.추세추종);
+        Assert.Contains("투자 조언 아님", description, StringComparison.Ordinal);
+        Assert.DoesNotContain("보장", description, StringComparison.Ordinal);
+        Assert.DoesNotContain("추천 종목", description, StringComparison.Ordinal);
+    }
 }
