@@ -114,5 +114,13 @@
       <Setter Property="BorderBrush" Value="#66FFFFFF"/>
       <Setter Property="BorderThickness" Value="1"/>
     </Style>
+    <Style Selector="Button.glass-btn-stop">
+      <Setter Property="Background" Value="#99B45309"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Padding" Value="16,8"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="BorderBrush" Value="#66FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
   </Application.Styles>
 </Application>

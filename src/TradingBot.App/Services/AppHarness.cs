@@ -9,13 +9,10 @@ using TradingBot.Ui;
 namespace TradingBot.App.Services;
 
 /// <summary>
-/// Desktop app composition root (Avalonia). Mock read-only + dry-run/paper.
-/// Never calls Toss order HTTP. Live submission blocked by defaults.
+/// Mac 앱 조합 루트. 차트·자동매매 연습 세션. 실주문 HTTP 없음.
 /// </summary>
 public sealed class AppHarness
 {
-    private static readonly string[] DefaultWatchSymbols = ["AAPL"];
-
     private readonly TradingSafetySettings _settings;
     private readonly IReadOnlyPortfolioService _portfolio;
     private readonly OrderCandidatePipeline _pipeline;
@@ -25,6 +22,7 @@ public sealed class AppHarness
     private readonly IPaperLedger _paperLedger;
     private readonly PaperOrderRouter _paper;
     private readonly IAuditLog _audit;
+    private readonly AutoTradeSessionService _session;
 
     public AppHarness(
         TradingSafetySettings settings,
@@ -35,7 +33,8 @@ public sealed class AppHarness
         DryRunOrderRouter dryRun,
         IPaperLedger paperLedger,
         PaperOrderRouter paper,
-        IAuditLog audit)
+        IAuditLog audit,
+        AutoTradeSessionService session)
     {
         _settings = settings;
         _portfolio = portfolio;
@@ -46,7 +45,10 @@ public sealed class AppHarness
         _paperLedger = paperLedger;
         _paper = paper;
         _audit = audit;
+        _session = session;
     }
+
+    public AutoTradeSessionService Session => _session;
 
     public static AppHarness CreateDefault()
     {
@@ -72,7 +74,41 @@ public sealed class AppHarness
             dryRun,
             paperLedger,
             paper,
-            audit);
+            audit,
+            new AutoTradeSessionService());
+    }
+
+    public AutoTradePanelSnapshot GetAutoTradePanel() => _session.ToPanelSnapshot();
+
+    public string StartAutoTrade()
+    {
+        _ = _session.TryStart(out var msg);
+        _audit.Append(new AuditEntry(DateTimeOffset.UtcNow, "session", msg, "auto_start"));
+        return msg;
+    }
+
+    public string StopAutoTrade()
+    {
+        _ = _session.TryStop(out var msg);
+        _audit.Append(new AuditEntry(DateTimeOffset.UtcNow, "session", msg, "auto_stop"));
+        return msg;
+    }
+
+    public void SetStockKind(StockMarketKind kind) => _session.StockKind = kind;
+
+    public void SetStrategy(TradingStrategyKind strategy) => _session.Strategy = strategy;
+
+    public (IReadOnlyList<CandlePoint> Candles, IReadOnlyList<TradeMarker> Markers) GetChartData()
+    {
+        var symbol = _session.ResolveWatchSymbols().FirstOrDefault() ?? "AAPL";
+        var candles = MockCandleSeriesFactory.CreateSeries(symbol, 120, DateTimeOffset.UtcNow);
+        var paperMarkers = MockCandleSeriesFactory.MarkersFromPaperFills(_paperLedger.GetSnapshot());
+        if (paperMarkers.Count > 0)
+        {
+            return (candles, paperMarkers);
+        }
+
+        return (candles, MockCandleSeriesFactory.CreateDemoMarkers(candles));
     }
 
     public async Task<CockpitDashboardModel> GetDashboardAsync(
@@ -81,31 +117,42 @@ public sealed class AppHarness
         _audit.Append(new AuditEntry(
             DateTimeOffset.UtcNow,
             "system",
-            "Desktop cockpit refresh — live blocked; mock read-only",
+            "데스크톱 콕핏 갱신 — 실거래 차단 · 연습만",
             "app_boot"));
 
         var liveDecision = _liveOrderGate.Evaluate(_settings, new LiveOrderContext());
+        var symbols = _session.ResolveWatchSymbols();
         var portfolio = await _portfolio
-            .GetSnapshotAsync(DefaultWatchSymbols, cancellationToken)
+            .GetSnapshotAsync(symbols, cancellationToken)
             .ConfigureAwait(false);
         var snapshot = CockpitReadOnlyProjector.Project(portfolio, _settings);
 
         var now = DateTimeOffset.UtcNow;
-        var session = UsMarketSessionGuard.Evaluate(portfolio.UsMarket, now);
+        var usSession = UsMarketSessionGuard.Evaluate(portfolio.UsMarket, now);
+        var qty = _session.Strategy == TradingStrategyKind.관망만 ? 0m : 1m;
+        IReadOnlyList<EvaluatedOrderCandidate> evaluated = Array.Empty<EvaluatedOrderCandidate>();
 
-        var evaluated = _pipeline.BuildCandidates(
-            portfolio.Quotes,
-            _settings,
-            defaultOrderQuantity: 1m,
-            nowUtc: now,
-            marketSessionOpen: session.IsOpenForOrders,
-            marketSessionKnown: session.IsKnown,
-            usMarket: portfolio.UsMarket);
-
-        foreach (var item in evaluated.Where(e => e.IsAcceptedForDryRun))
+        if (_session.Status == AutoTradeSessionStatus.실행중)
         {
-            _ = await _dryRun.RouteAsync(item.Candidate, cancellationToken).ConfigureAwait(false);
-            _ = await _paper.RouteAsync(item.Candidate, cancellationToken).ConfigureAwait(false);
+            evaluated = _pipeline.BuildCandidates(
+                portfolio.Quotes,
+                _settings,
+                defaultOrderQuantity: qty,
+                nowUtc: now,
+                marketSessionOpen: usSession.IsOpenForOrders,
+                marketSessionKnown: usSession.IsKnown,
+                usMarket: portfolio.UsMarket);
+
+            foreach (var item in evaluated.Where(e => e.IsAcceptedForDryRun))
+            {
+                _ = await _dryRun.RouteAsync(item.Candidate, cancellationToken).ConfigureAwait(false);
+                var paperResult = await _paper.RouteAsync(item.Candidate, cancellationToken).ConfigureAwait(false);
+                if (paperResult.Accepted && item.Candidate.LimitPrice is decimal px)
+                {
+                    _session.ApplyVirtualFill(item.Candidate.Side, item.Candidate.Quantity, px);
+                    _session.ApplyScaffoldMarkToMarket(item.Candidate.Quantity * px * 0.0005m);
+                }
+            }
         }
 
         return CockpitDashboardMapper.Compose(

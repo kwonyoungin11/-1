@@ -1,16 +1,17 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:TradingBot.App.ViewModels"
+        xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="1080" d:DesignHeight="760"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
         x:Class="TradingBot.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Classes="glass-root"
-        Width="1080" Height="760"
-        MinWidth="880" MinHeight="600"
+        Width="1200" Height="820"
+        MinWidth="960" MinHeight="680"
         TransparencyLevelHint="AcrylicBlur,Blur,Transparent"
-        Background="#CC0B1220"
+        Background="#E00B1220"
         ExtendClientAreaToDecorationsHint="True"
         Title="{Binding Title}">
 
@@ -18,170 +19,95 @@
     <vm:MainWindowViewModel/>
   </Design.DataContext>
 
-  <Panel>
-    <!-- 배경 그라데이션 (글래스 뒤 레이어) -->
-    <ExperimentalAcrylicBorder IsHitTestVisible="False">
-      <ExperimentalAcrylicBorder.Material>
-        <ExperimentalAcrylicMaterial
-          BackgroundSource="Digger"
-          TintColor="#0B1220"
-          TintOpacity="0.75"
-          MaterialOpacity="0.65"/>
-      </ExperimentalAcrylicBorder.Material>
-    </ExperimentalAcrylicBorder>
+  <!-- 위 2/3 차트 · 아래 1/3 조작 -->
+  <Grid RowDefinitions="2*,*" Margin="12,32,12,12">
 
-    <DockPanel Margin="20,36,20,16">
-      <!-- 상단 -->
-      <Border DockPanel.Dock="Top" Classes="glass-bar" Margin="0,0,0,14" Padding="16,12">
-        <Grid ColumnDefinitions="*,Auto">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="title" Text="{Binding Title}"/>
-            <TextBlock Classes="sub" Text="자동매매 상태 · 실주문 버튼 없음"/>
+    <!-- ===== 차트 영역 (상단 2/3) ===== -->
+    <Border Grid.Row="0" Classes="glass-card" Margin="0,0,0,10" Padding="10">
+      <Grid RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="*,Auto" Margin="4,0,4,8">
+          <StackPanel Spacing="2">
+            <TextBlock Classes="section" Text="{Binding ChartTitle}"/>
+            <TextBlock Classes="sub" Text="연습 차트 · 초록=매수 표시 · 빨강=매도 표시 · 실주문 없음"/>
           </StackPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <Border Classes="pill-kill">
-              <TextBlock Text="{Binding KillSwitchLabel, StringFormat=긴급정지 {0}}"/>
-            </Border>
-            <Border Classes="pill-lock">
-              <TextBlock Text="{Binding LiveLockLabel, StringFormat=실거래 {0}}"/>
-            </Border>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+            <Border Classes="pill-lock"><TextBlock Text="실거래 잠김"/></Border>
+            <Border Classes="pill-ok"><TextBlock Text="연습"/></Border>
+          </StackPanel>
+        </Grid>
+        <lvc:CartesianChart Grid.Row="1"
+                            Series="{Binding Series}"
+                            XAxes="{Binding XAxes}"
+                            YAxes="{Binding YAxes}"
+                            TooltipPosition="Top"
+                            ZoomMode="X"
+                            Background="#00000000"/>
+      </Grid>
+    </Border>
+
+    <!-- ===== 조작 영역 (하단 1/3) ===== -->
+    <Border Grid.Row="1" Classes="glass-bar" Padding="14">
+      <Grid ColumnDefinitions="2*,*,*,Auto" ColumnSpacing="14">
+
+        <!-- 대상 주식 · 전략 · 시작/종료 -->
+        <StackPanel Spacing="8">
+          <TextBlock Classes="section" Text="자동매매 조작"/>
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="10">
+            <TextBlock Classes="sub" Text="대상 주식" VerticalAlignment="Center"/>
+            <ComboBox Grid.Column="1" ItemsSource="{Binding StockKindOptions}"
+                      SelectedItem="{Binding SelectedStockKind}" MinWidth="160"/>
+            <TextBlock Grid.Row="1" Classes="sub" Text="매매 전략" VerticalAlignment="Center"/>
+            <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding StrategyOptions}"
+                      SelectedItem="{Binding SelectedStrategy}" MinWidth="160"/>
+            <TextBlock Grid.Row="2" Classes="sub" Text="관심 종목" VerticalAlignment="Center"/>
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding WatchSymbolsText}"
+                       TextWrapping="Wrap" VerticalAlignment="Center"/>
+          </Grid>
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+            <Button Classes="glass-btn" Content="자동매매 시작"
+                    Command="{Binding StartCommand}" IsEnabled="{Binding CanStart}"/>
+            <Button Classes="glass-btn-stop" Content="자동매매 종료"
+                    Command="{Binding StopCommand}" IsEnabled="{Binding CanStop}"/>
             <Button Classes="glass-btn" Content="새로고침"
-                    Command="{Binding RefreshCommand}"
-                    IsEnabled="{Binding !IsBusy}"/>
+                    Command="{Binding RefreshCommand}" IsEnabled="{Binding !IsBusy}"/>
           </StackPanel>
-        </Grid>
-      </Border>
-
-      <!-- 하단 증거 -->
-      <Border DockPanel.Dock="Bottom" Classes="glass-bar" Margin="0,14,0,0" Padding="14,10">
-        <Grid ColumnDefinitions="*,*,*">
-          <TextBlock Classes="sub" Text="{Binding DryRunLabel}"/>
-          <TextBlock Grid.Column="1" Classes="sub" HorizontalAlignment="Center" Text="{Binding PaperLabel}"/>
-          <TextBlock Grid.Column="2" Classes="sub" HorizontalAlignment="Right" Text="{Binding StatusLine}"/>
-        </Grid>
-      </Border>
-
-      <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Spacing="12">
-
-          <!-- 안전 배너 -->
-          <Border Classes="glass-danger" Padding="16">
-            <StackPanel Spacing="8">
-              <TextBlock Classes="headline" Text="{Binding SafetyHeadline}" TextWrapping="Wrap"/>
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Border Classes="pill-mode">
-                  <TextBlock Text="{Binding OrderModeLabel, StringFormat=모드 · {0}}"/>
-                </Border>
-                <Border Classes="pill-ok">
-                  <TextBlock Text="연습 전용"/>
-                </Border>
-              </StackPanel>
-            </StackPanel>
-          </Border>
-
-          <!-- 잠금 + 봇 -->
-          <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-            <Border Classes="glass-card" Grid.Column="0" Padding="14">
-              <StackPanel Spacing="6">
-                <TextBlock Classes="section" Text="실거래 잠금"/>
-                <TextBlock Classes="big-warn" Text="{Binding LiveLockLabel}"/>
-                <TextBlock Classes="sub" TextWrapping="Wrap"
-                           Text="실제 주문 경로가 잠겨 있습니다. 승인 전 해제하지 않습니다."/>
-                <TextBlock Classes="sub" Text="{Binding KillSwitchLabel, StringFormat=긴급정지 {0}}"/>
-              </StackPanel>
-            </Border>
-            <Border Classes="glass-card" Grid.Column="1" Padding="14">
-              <StackPanel Spacing="6">
-                <TextBlock Classes="section" Text="봇 상태"/>
-                <TextBlock Text="{Binding BotStateMessage}" TextWrapping="Wrap" FontSize="15"/>
-              </StackPanel>
-            </Border>
-          </Grid>
-
-          <!-- 할 일 -->
-          <Border Classes="glass-action" Padding="14">
-            <StackPanel Spacing="4">
-              <TextBlock Classes="section-blue" Text="지금 할 일"/>
-              <TextBlock Text="{Binding NextAction}" TextWrapping="Wrap" FontSize="15"/>
-            </StackPanel>
-          </Border>
-
-          <!-- 계좌·연결·시장 -->
-          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
-            <Border Classes="glass-card" Padding="12">
-              <StackPanel Spacing="4">
-                <TextBlock Classes="section" Text="계좌"/>
-                <TextBlock Text="{Binding AccountSummary}" TextWrapping="Wrap"/>
-              </StackPanel>
-            </Border>
-            <Border Classes="glass-card" Grid.Column="1" Padding="12">
-              <StackPanel Spacing="4">
-                <TextBlock Classes="section" Text="연결"/>
-                <TextBlock Text="{Binding ConnectionSummary}" TextWrapping="Wrap"/>
-              </StackPanel>
-            </Border>
-            <Border Classes="glass-card" Grid.Column="2" Padding="12">
-              <StackPanel Spacing="4">
-                <TextBlock Classes="section" Text="시장"/>
-                <TextBlock Text="{Binding MarketSummary}" TextWrapping="Wrap"/>
-              </StackPanel>
-            </Border>
-          </Grid>
-
-          <!-- 차단 요약 -->
-          <Border Classes="glass-card" Padding="14">
-            <StackPanel Spacing="8">
-              <TextBlock Classes="section" Text="최근 차단·경고"/>
-              <ItemsControl ItemsSource="{Binding BlockLines}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <TextBlock Classes="sub" Text="{Binding}" Margin="0,2" TextWrapping="Wrap"/>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </StackPanel>
-          </Border>
-
-          <!-- 리스크 -->
-          <Border Classes="glass-card" Padding="14">
-            <StackPanel Spacing="8">
-              <TextBlock Classes="section" Text="리스크 검사"/>
-              <ItemsControl ItemsSource="{Binding RiskLines}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Border Classes="glass-row" Margin="0,0,0,6" Padding="10,8">
-                      <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </StackPanel>
-          </Border>
-
-          <!-- 후보 -->
-          <Border Classes="glass-card" Padding="14">
-            <StackPanel Spacing="8">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="section" Text="주문 후보"/>
-                <Border Grid.Column="1" Classes="pill-ok">
-                  <TextBlock Text="실주문 아님"/>
-                </Border>
-              </Grid>
-              <ItemsControl ItemsSource="{Binding CandidateLines}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Border Classes="glass-row" Margin="0,0,0,6" Padding="10,8">
-                      <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-              <TextBlock Classes="sub" Text="매수·매도 실행 버튼 없음"/>
-            </StackPanel>
-          </Border>
-
+          <TextBlock Classes="sub" Text="{Binding SafetyNote}" TextWrapping="Wrap"/>
+          <TextBlock Classes="sub" Text="{Binding StatusLine}"/>
         </StackPanel>
-      </ScrollViewer>
-    </DockPanel>
-  </Panel>
+
+        <!-- 잔액 -->
+        <Border Classes="glass-card" Grid.Column="1" Padding="12">
+          <StackPanel Spacing="6" VerticalAlignment="Center">
+            <TextBlock Classes="section" Text="잔액"/>
+            <TextBlock FontSize="22" FontWeight="Bold" Text="{Binding BalanceLabel}" TextWrapping="Wrap"/>
+            <TextBlock Classes="sub" Text="{Binding SessionStatusLabel, StringFormat=상태 · {0}}"/>
+          </StackPanel>
+        </Border>
+
+        <!-- 수익률 -->
+        <Border Classes="glass-card" Grid.Column="2" Padding="12">
+          <StackPanel Spacing="6" VerticalAlignment="Center">
+            <TextBlock Classes="section" Text="수익률"/>
+            <TextBlock FontSize="28" FontWeight="Bold" Foreground="#4ADE80"
+                       Text="{Binding ReturnRateLabel}"/>
+            <TextBlock Classes="sub" Text="연습 기준 · 실계좌 아님"/>
+          </StackPanel>
+        </Border>
+
+        <!-- 범례 -->
+        <StackPanel Grid.Column="3" Spacing="8" VerticalAlignment="Center" MinWidth="120">
+          <TextBlock Classes="section" Text="차트 표시"/>
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Ellipse Width="10" Height="10" Fill="#00E676"/>
+            <TextBlock Text="매수" VerticalAlignment="Center"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Ellipse Width="10" Height="10" Fill="#FF5252"/>
+            <TextBlock Text="매도" VerticalAlignment="Center"/>
+          </StackPanel>
+          <TextBlock Classes="sub" TextWrapping="Wrap" Text="실행 주문 버튼 없음"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
 </Window>
