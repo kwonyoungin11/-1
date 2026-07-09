@@ -118,6 +118,72 @@ public class AppHarnessTests
     }
 
     [Fact]
+    public async Task Start_and_GetDashboard_exposes_trading_evidence_with_live_blocked()
+    {
+        var harness = AppHarness.CreateDefault();
+        harness.SetStockKind(StockMarketKind.나스닥);
+        harness.SetStrategy(TradingStrategyKind.단순연습전략);
+
+        // Practice start must never unlock live submission.
+        Assert.False(harness.IsLiveSubmissionEnabled);
+        var startMsg = harness.StartAutoTrade();
+        Assert.Contains("실주문", startMsg, StringComparison.Ordinal);
+        Assert.False(harness.IsLiveSubmissionEnabled);
+
+        var dash = await harness.GetDashboardAsync();
+        Assert.Equal(LiveLockState.Locked, dash.Snapshot.LiveLock);
+        Assert.False(dash.IsLiveTradingVisuallyOpen);
+        Assert.False(dash.Snapshot.AllowLiveOrders);
+        Assert.Equal(OrderMode.DryRun, dash.Snapshot.OrderMode);
+
+        var evidence = harness.GetTradingEvidenceSummary();
+        Assert.True(evidence.LiveBlocked);
+        Assert.False(evidence.IsLiveSubmissionEnabled);
+        Assert.False(harness.IsLiveSubmissionEnabled);
+        Assert.True(evidence.DryRunCount >= 0);
+        Assert.True(evidence.PaperCount >= 0);
+        Assert.Equal(harness.GetEvidenceCounts().DryRun, evidence.DryRunCount);
+        Assert.Equal(harness.GetEvidenceCounts().Paper, evidence.PaperCount);
+        Assert.True(harness.GetEvidenceCounts().LiveBlocked);
+
+        // Evidence types are merged: snapshot + export text available.
+        Assert.NotNull(evidence.Snapshot);
+        Assert.False(evidence.Snapshot!.Summary.LiveModePresent);
+        Assert.False(string.IsNullOrWhiteSpace(evidence.ExportText));
+        Assert.Contains("live_blocked=true", evidence.ExportText, StringComparison.Ordinal);
+        Assert.Contains("실주문", evidence.ExportText, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            evidence.Snapshot.Summary.ModesPresent,
+            m => m.Equals("Live", StringComparison.OrdinalIgnoreCase));
+
+        // Practice session still works after evidence read.
+        var panel = harness.GetAutoTradePanel();
+        Assert.Equal(AutoTradeSessionStatus.실행중, panel.SessionStatus);
+        Assert.Contains("연습", panel.SafetyNote, StringComparison.Ordinal);
+
+        _ = harness.StopAutoTrade();
+        Assert.False(harness.IsLiveSubmissionEnabled);
+        Assert.True(harness.GetTradingEvidenceSummary().LiveBlocked);
+    }
+
+    [Fact]
+    public void GetTradingEvidenceSummary_before_practice_is_empty_and_live_blocked()
+    {
+        var harness = AppHarness.CreateDefault();
+        var evidence = harness.GetTradingEvidenceSummary();
+
+        Assert.Equal(0, evidence.DryRunCount);
+        Assert.Equal(0, evidence.PaperCount);
+        Assert.True(evidence.LiveBlocked);
+        Assert.False(evidence.IsLiveSubmissionEnabled);
+        Assert.False(harness.IsLiveSubmissionEnabled);
+        Assert.NotNull(evidence.ExportText);
+        Assert.Contains("live_blocked=true", evidence.ExportText, StringComparison.Ordinal);
+        Assert.NotNull(evidence.Snapshot);
+        Assert.False(evidence.Snapshot!.Summary.LiveModePresent);
+    }
+
+    [Fact]
     public void Stop_without_start_stays_stopped_and_does_not_unlock_live()
     {
         var harness = AppHarness.CreateDefault();
@@ -128,6 +194,8 @@ public class AppHarnessTests
         var panel = harness.GetAutoTradePanel();
         Assert.Equal(AutoTradeSessionStatus.중지, panel.SessionStatus);
         Assert.True(harness.GetEvidenceCounts().LiveBlocked);
+        Assert.True(harness.GetTradingEvidenceSummary().LiveBlocked);
+        Assert.False(harness.IsLiveSubmissionEnabled);
     }
 
     [Fact]

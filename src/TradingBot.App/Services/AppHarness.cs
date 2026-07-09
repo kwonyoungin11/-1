@@ -9,6 +9,23 @@ using TradingBot.Ui;
 namespace TradingBot.App.Services;
 
 /// <summary>
+/// Owner-facing practice evidence from dry-run + paper ledgers.
+/// Live is always blocked in the desktop app host — no secrets, no account numbers.
+/// </summary>
+public sealed record AppTradingEvidenceSummary(
+    int DryRunCount,
+    int PaperCount,
+    bool LiveBlocked,
+    string? ExportText = null,
+    TradingEvidenceSnapshot? Snapshot = null)
+{
+    /// <summary>
+    /// Always false in AppHarness — dry-run and paper routers never enable live submission.
+    /// </summary>
+    public bool IsLiveSubmissionEnabled => false;
+}
+
+/// <summary>
 /// Mac 앱 조합 루트. 차트·자동매매 연습 세션. 실주문 HTTP 없음.
 /// 버블 크기 = 체결 규모(수량×가격).
 /// </summary>
@@ -25,6 +42,7 @@ public sealed class AppHarness
     private readonly IAuditLog _audit;
     private readonly AutoTradeSessionService _session;
     private readonly TossOptions _tossOptions;
+    private readonly EvidenceBuilder _evidenceBuilder;
     private string _connectionLabel = "연결 확인 전";
     private string _connectionModeLabel = "mock";
 
@@ -53,6 +71,7 @@ public sealed class AppHarness
         _session = session;
         _tossOptions = tossOptions ?? new TossOptions { AllowLiveHttp = false };
         _connectionModeLabel = TossReadOnlyFactory.DescribeMode(_tossOptions);
+        _evidenceBuilder = new EvidenceBuilder(_dryRunLedger, _paperLedger);
     }
 
     public AutoTradeSessionService Session => _session;
@@ -60,6 +79,12 @@ public sealed class AppHarness
     public string ConnectionLabel => _connectionLabel;
 
     public string ConnectionModeLabel => _connectionModeLabel;
+
+    /// <summary>
+    /// Practice routers never enable live Toss order HTTP. Exposed for evidence/tests.
+    /// </summary>
+    public bool IsLiveSubmissionEnabled =>
+        _dryRun.IsLiveSubmissionEnabled || _paper.IsLiveSubmissionEnabled;
 
     public static AppHarness CreateDefault()
     {
@@ -201,4 +226,37 @@ public sealed class AppHarness
 
     public (int DryRun, int Paper, bool LiveBlocked) GetEvidenceCounts() =>
         (_dryRunLedger.Count, _paperLedger.Count, true);
+
+    /// <summary>
+    /// Practice evidence summary: dry-run/paper ledger counts, live always blocked,
+    /// optional export text built from <see cref="EvidenceBuilder"/> / UI owner message.
+    /// Never enables live orders or touches Toss order HTTP.
+    /// </summary>
+    public AppTradingEvidenceSummary GetTradingEvidenceSummary()
+    {
+        // Exercise fail-closed live gate; desktop host always reports blocked.
+        _ = _liveOrderGate.Evaluate(_settings, new LiveOrderContext());
+
+        var snapshot = _evidenceBuilder.Build();
+        var dry = snapshot.Summary.DryRunEntryCount;
+        var paper = snapshot.Summary.PaperFillCount;
+
+        // Owner-facing export text (no secrets). Live path always described as blocked.
+        var ownerVm = EvidenceSummaryViewModel.FromCounts(
+            snapshot.Summary.DryRunAcceptedCount,
+            paper);
+        var modes = snapshot.Summary.ModesPresent.Count == 0
+            ? "none"
+            : string.Join(",", snapshot.Summary.ModesPresent);
+        var export =
+            $"{ownerVm.OwnerMessage} " +
+            $"[dry_run_entries={dry}; paper_fills={paper}; modes={modes}; live_blocked=true]";
+
+        return new AppTradingEvidenceSummary(
+            DryRunCount: dry,
+            PaperCount: paper,
+            LiveBlocked: true,
+            ExportText: export,
+            Snapshot: snapshot);
+    }
 }
