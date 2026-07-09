@@ -50,6 +50,15 @@ This file is the project constitution. Global Python AGENTS.md rules do **not** 
 - Fail-closed: unknown, missing data, stale quotes, API errors → **block**.
 - No investment advice; no stock buy/sell recommendations; no profit guarantees.
 
+### MANDATORY: recommend → implement (오너 확정 · “다음 단계” 무시 금지)
+
+**“다음에 하면 됩니다” 로 끝내지 않는다.**
+
+1. 다음 단계를 추천하면 **같은 턴 또는 즉시 이어서** worktree + 병렬 에이전트로 **구현을 시작**한다.
+2. 분석·설계만 하고 멈추는 것은 **초기 세팅(worktree / 최대 에이전트 / 실행) 위반**이다.
+3. 오너가 “왜 안 하냐”고 물을 필요가 없도록, 추천 직후 코드/테스트/병합까지 진행한다.
+4. 예외: 오너 실서명·실계좌 키·calendar multi-day 대기 등 **인간/시간 불가 블록**만 명시 후 중단.
+
 ### MANDATORY: parallel worktrees + max agents (오너 확정 · 예외 없음)
 
 **필수 사항입니다. 선택·권장이 아닙니다. 위반 시 작업을 중단하고 절차를 고칩니다.**
