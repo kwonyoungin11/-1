@@ -38,8 +38,17 @@ public static class EnvFile
     public static IReadOnlyDictionary<string, string?> ParseFile(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
+        return ParseLines(File.ReadAllLines(path));
+    }
+
+    /// <summary>
+    /// Parse .env-style lines. Synthetic content only in tests — never log values.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string?> ParseLines(IEnumerable<string> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
         var map = new Dictionary<string, string?>(StringComparer.Ordinal);
-        foreach (var raw in File.ReadAllLines(path))
+        foreach (var raw in lines)
         {
             var line = raw.Trim();
             if (line.Length == 0 || line.StartsWith('#') || !line.Contains('='))
