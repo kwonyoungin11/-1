@@ -15,8 +15,8 @@ public static class StrategyCatalog
     public static IReadOnlyList<string> Labels { get; } =
         All.Select(s => s.ToString()).ToArray();
 
-    /// <summary>SPCX 자동매매 콕핏 1순위 권장 (고변동·이벤트·수수료 고려).</summary>
-    public static TradingStrategyKind RecommendedForSpacex => TradingStrategyKind.추세추종;
+    /// <summary>SPCX 최종 확정 전략 (see <see cref="SpacexOfficialStrategyPreset"/>).</summary>
+    public static TradingStrategyKind RecommendedForSpacex => SpacexOfficialStrategyPreset.Strategy;
 
     public static string Describe(TradingStrategyKind kind) => kind switch
     {

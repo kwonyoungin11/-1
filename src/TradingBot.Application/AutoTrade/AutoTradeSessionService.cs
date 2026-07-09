@@ -14,9 +14,8 @@ public sealed class AutoTradeSessionService
     private readonly object _gate = new();
     private AutoTradeSessionStatus _status = AutoTradeSessionStatus.중지;
     private StockMarketKind _stockKind = StockMarketKind.스페이스X;
-    private TradingStrategyKind _strategy = TradingStrategyKind.추세추종;
-    // SPCX 고변동·수수료 고려: 기본 15분 (1m 스캘핑 비권장)
-    private ChartTimeframe _timeframe = ChartTimeframe.분봉15;
+    private TradingStrategyKind _strategy = SpacexOfficialStrategyPreset.Strategy;
+    private ChartTimeframe _timeframe = SpacexOfficialStrategyPreset.Timeframe;
     private string? _focusSymbol = WatchlistCatalog.SpaceXSymbol;
     private decimal _startingBalance = DefaultPracticeStartingBalance;
     private decimal _balance = DefaultPracticeStartingBalance;

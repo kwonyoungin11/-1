@@ -151,14 +151,13 @@ public sealed class AppHarness
         // in Orders assembly; fall back to BlockedLiveOrderRouter (always IsLiveSubmissionEnabled=false).
         var gatedLive = CreateGatedLiveRouterOrBlocked(settings);
 
-        // SpaceX / SPCX only.
+        // Official final SPCX preset (pro + research lock-in).
         var session = new AutoTradeSessionService
         {
             StockKind = StockMarketKind.스페이스X,
             FocusSymbol = WatchlistCatalog.SpaceXSymbol,
-            Strategy = TradingStrategyKind.추세추종,
-            // SPCX: 15m default (fee + volatility); not 1m scalping
-            Timeframe = ChartTimeframe.분봉15,
+            Strategy = SpacexOfficialStrategyPreset.Strategy,
+            Timeframe = SpacexOfficialStrategyPreset.Timeframe,
         };
 
         return new AppHarness(

@@ -25,13 +25,21 @@ public partial class MainWindowViewModel : ViewModelBase
     private const string SafetyHeadlineText =
         "토스증권 실데이터 · SPCX 전용 · 실주문은 게이트 잠금 · 투자 조언 아님";
 
+    // TradingView light palette
+    private static readonly SKColor TvUp = SKColor.Parse("#089981");
+    private static readonly SKColor TvDown = SKColor.Parse("#F23645");
+    private static readonly SKColor TvGrid = SKColor.Parse("#E0E3EB");
+    private static readonly SKColor TvAxis = SKColor.Parse("#787B86");
+    private static readonly SKColor TvEntry = SKColor.Parse("#2962FF");
+    private static readonly SKColor TvBg = SKColor.Parse("#FFFFFF");
+
     private static readonly SKColor[] IndicatorColors =
     [
-        SKColor.Parse("#38BDF8"), // sky SMA20
-        SKColor.Parse("#FBBF24"), // amber SMA60
-        SKColor.Parse("#A78BFA"), // violet
-        SKColor.Parse("#34D399"), // emerald
-        SKColor.Parse("#F472B6"), // pink
+        SKColor.Parse("#2962FF"), // TV blue SMA20
+        SKColor.Parse("#FF6D00"), // TV orange SMA60
+        SKColor.Parse("#9C27B0"),
+        SKColor.Parse("#00897B"),
+        SKColor.Parse("#E91E63"),
     ];
 
     private readonly AppHarness _harness;
@@ -54,17 +62,21 @@ public partial class MainWindowViewModel : ViewModelBase
         _harness.SetStockKind(StockMarketKind.스페이스X);
         SelectedSymbol = WatchlistCatalog.SpaceXSymbol;
         _harness.SetFocusSymbol(WatchlistCatalog.SpaceXSymbol);
-        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(ChartTimeframe.분봉15);
-        _harness.SetTimeframe(ChartTimeframe.분봉15);
-        SelectedStrategy = StrategyCatalog.RecommendedForSpacex.ToString();
-        _harness.SetStrategy(StrategyCatalog.RecommendedForSpacex);
+        // Official final preset
+        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(SpacexOfficialStrategyPreset.Timeframe);
+        _harness.SetTimeframe(SpacexOfficialStrategyPreset.Timeframe);
+        SelectedStrategy = SpacexOfficialStrategyPreset.Strategy.ToString();
+        _harness.SetStrategy(SpacexOfficialStrategyPreset.Strategy);
+        OfficialStrategyLabel = SpacexOfficialStrategyPreset.OwnerSummary;
+        RecommendedStrategyNote = SpacexOfficialStrategyPreset.OwnerSummary;
 
         BuildEmptyChart();
         ApplyPanel(_harness.GetAutoTradePanel());
         ConnectionLabel = _harness.ConnectionLabel;
         ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel);
         SafetyHeadline = SafetyHeadlineText;
-        ChartSubtitle = "버블 크기 = 거래대금 · 초록=상승 · 빨강=하락 · 하단=거래량";
+        ChartSubtitle = "TradingView 라이트 · 버블=거래대금 · ENTRY/SL/TP · 하단 거래량";
+        Title = "SPCX 콕핏 · 최종전략 추세추종";
     }
 
     public ObservableCollection<string> StockKindOptions { get; }
@@ -103,6 +115,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _orderTypeLabel = "LIMIT · 지정가 계획";
     [ObservableProperty] private string _recommendedStrategyNote =
         "SPCX 권장: 추세추종 · 15m/60m · LIMIT+ATR손절 · 1m 스캘핑 비권장(수수료) · 투자 조언 아님";
+    [ObservableProperty] private string _officialStrategyLabel = SpacexOfficialStrategyPreset.OwnerSummary;
     [ObservableProperty] private string _connectionLabel = "연결 확인 전";
     [ObservableProperty] private string _connectionPill = "mock";
     [ObservableProperty] private bool _canStart = true;
@@ -335,24 +348,24 @@ public partial class MainWindowViewModel : ViewModelBase
         var barDuration = ChartTimeframeCatalog.BarDuration(tf);
         var isDailyOrWeek = tf is ChartTimeframe.일봉 or ChartTimeframe.주봉;
 
-        // ── 캔들 (TradingView LWC 팔레트 #26a69a / #ef5350) ─────────
+        // ── 캔들 (TradingView light: #089981 / #F23645) ─────────────
         var financial = candles
             .Select(c => new FinancialPoint(c.Time.UtcDateTime, c.High, c.Open, c.Close, c.Low))
             .ToArray();
 
         var maxBarWidth = candles.Count switch
         {
-            > 140 => 4.0,
-            > 100 => 6.0,
-            > 70 => 8.0,
-            > 40 => 11.0,
-            _ => 14.0,
+            > 140 => 3.5,
+            > 100 => 5.0,
+            > 70 => 7.0,
+            > 40 => 9.0,
+            _ => 12.0,
         };
 
-        var upColor = SKColor.Parse("#26A69A");
-        var downColor = SKColor.Parse("#EF5350");
+        var upColor = TvUp;
+        var downColor = TvDown;
 
-        // ── 버블 (규모 = 거래대금) ───────────────────────────────────
+        // ── 버블 (규모 = 거래대금) — 라이트 반투명 ───────────────────
         var buyBubbles = markers
             .Where(m => m.Side == TradeMarkerSide.매수)
             .Select(m => new WeightedPoint(
@@ -368,11 +381,10 @@ public partial class MainWindowViewModel : ViewModelBase
                 Math.Clamp(m.SizeWeight, 0.35, 5.5)))
             .ToArray();
 
-        // 반투명 버블 — 캔들 가리지 않음
-        var buyFill = new SolidColorPaint(new SKColor(0x39, 0xFF, 0x14, 0x88));
-        var sellFill = new SolidColorPaint(new SKColor(0xFF, 0x2D, 0x2D, 0x90));
-        var buyStroke = new SolidColorPaint(new SKColor(0x00, 0xE6, 0x76, 0x55)) { StrokeThickness = 1.0f };
-        var sellStroke = new SolidColorPaint(new SKColor(0xFF, 0x52, 0x52, 0x55)) { StrokeThickness = 1.0f };
+        var buyFill = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x55));
+        var sellFill = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x55));
+        var buyStroke = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x40)) { StrokeThickness = 0.8f };
+        var sellStroke = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x40)) { StrokeThickness = 0.8f };
 
         // ── 거래량 컬럼 (ScalesYAt = 1) ──────────────────────────────
         var volUp = new List<DateTimePoint>(candles.Count);
@@ -397,9 +409,9 @@ public partial class MainWindowViewModel : ViewModelBase
                 Name = "SPCX",
                 Values = financial,
                 UpFill = new SolidColorPaint(upColor),
-                UpStroke = new SolidColorPaint(upColor) { StrokeThickness = 1.2f },
+                UpStroke = new SolidColorPaint(upColor) { StrokeThickness = 1 },
                 DownFill = new SolidColorPaint(downColor),
-                DownStroke = new SolidColorPaint(downColor) { StrokeThickness = 1.2f },
+                DownStroke = new SolidColorPaint(downColor) { StrokeThickness = 1 },
                 MaxBarWidth = maxBarWidth,
                 ScalesYAt = 0,
                 ZIndex = 2,
@@ -441,19 +453,19 @@ public partial class MainWindowViewModel : ViewModelBase
         var t1 = candles[^1].Time.UtcDateTime;
         if (bracket.EntryLimit > 0m)
         {
-            seriesList.Add(LevelLine("ENTRY", (double)bracket.EntryLimit, t0, t1, SKColor.Parse("#38BDF8"), 15));
+            seriesList.Add(LevelLine("ENTRY", (double)bracket.EntryLimit, t0, t1, TvEntry, 15));
             legendParts.Add("ENTRY");
         }
 
         if (bracket.StopPrice > 0m)
         {
-            seriesList.Add(LevelLine("SL", (double)bracket.StopPrice, t0, t1, SKColor.Parse("#EF5350"), 16));
+            seriesList.Add(LevelLine("SL", (double)bracket.StopPrice, t0, t1, TvDown, 16));
             legendParts.Add("SL");
         }
 
         if (bracket.TakeProfitPrice > 0m)
         {
-            seriesList.Add(LevelLine("TP", (double)bracket.TakeProfitPrice, t0, t1, SKColor.Parse("#22C55E"), 17));
+            seriesList.Add(LevelLine("TP", (double)bracket.TakeProfitPrice, t0, t1, TvUp, 17));
             legendParts.Add("TP");
         }
 
@@ -481,28 +493,28 @@ public partial class MainWindowViewModel : ViewModelBase
             ZIndex = 12,
         });
 
-        // 거래량 패널 (하단 Y 축)
+        // 거래량 패널 (하단 Y 축) — TV 스타일 연한 막대
         seriesList.Add(new ColumnSeries<DateTimePoint>
         {
             Name = "거래량↑",
             Values = volUp,
-            Fill = new SolidColorPaint(new SKColor(0x26, 0xA6, 0x9A, 0x99)),
+            Fill = new SolidColorPaint(new SKColor(0x08, 0x99, 0x81, 0x66)),
             Stroke = null,
             MaxBarWidth = maxBarWidth,
             ScalesYAt = 1,
             ZIndex = 1,
-            Padding = 1,
+            Padding = 0.5,
         });
         seriesList.Add(new ColumnSeries<DateTimePoint>
         {
             Name = "거래량↓",
             Values = volDown,
-            Fill = new SolidColorPaint(new SKColor(0xEF, 0x53, 0x50, 0x99)),
+            Fill = new SolidColorPaint(new SKColor(0xF2, 0x36, 0x45, 0x66)),
             Stroke = null,
             MaxBarWidth = maxBarWidth,
             ScalesYAt = 1,
             ZIndex = 1,
-            Padding = 1,
+            Padding = 0.5,
         });
 
         Series = seriesList.ToArray();
@@ -518,18 +530,17 @@ public partial class MainWindowViewModel : ViewModelBase
             ? $"버블 · 규모=거래대금 · 봉 {candles.Count}"
             : $"{string.Join(" · ", legendParts)} · {SelectedStrategy} · 지정가 계획(실주문 잠금)";
 
-        var dashGrid = new SolidColorPaint(SKColor.Parse("#1A2332"))
+        var gridPaint = new SolidColorPaint(TvGrid)
         {
             StrokeThickness = 1,
-            PathEffect = new DashEffect([4, 6]),
         };
 
         XAxes =
         [
             new Axis
             {
-                LabelsPaint = new SolidColorPaint(SKColor.Parse("#64748B")),
-                SeparatorsPaint = dashGrid,
+                LabelsPaint = new SolidColorPaint(TvAxis),
+                SeparatorsPaint = gridPaint,
                 ShowSeparatorLines = true,
                 Labeler = value =>
                 {
@@ -591,10 +602,10 @@ public partial class MainWindowViewModel : ViewModelBase
             new Axis
             {
                 Name = "가격",
-                NamePaint = new SolidColorPaint(SKColor.Parse("#64748B")) { SKTypeface = SKTypeface.Default },
+                NamePaint = new SolidColorPaint(TvAxis),
                 NameTextSize = 10,
-                LabelsPaint = new SolidColorPaint(SKColor.Parse("#94A3B8")),
-                SeparatorsPaint = dashGrid,
+                LabelsPaint = new SolidColorPaint(TvAxis),
+                SeparatorsPaint = gridPaint,
                 ShowSeparatorLines = true,
                 Position = AxisPosition.End,
                 TextSize = 10,
@@ -605,27 +616,26 @@ public partial class MainWindowViewModel : ViewModelBase
             new Axis
             {
                 Name = "Vol",
-                NamePaint = new SolidColorPaint(SKColor.Parse("#475569")),
+                NamePaint = new SolidColorPaint(TvAxis),
                 NameTextSize = 9,
-                LabelsPaint = new SolidColorPaint(SKColor.Parse("#64748B")),
+                LabelsPaint = new SolidColorPaint(TvAxis),
                 SeparatorsPaint = new SolidColorPaint(SKColors.Transparent),
                 ShowSeparatorLines = false,
                 Position = AxisPosition.Start,
                 TextSize = 9,
                 Labeler = value => FormatVolume(value),
                 MinLimit = 0,
-                MaxLimit = volMax * 4.2, // 거래량을 하단 약 1/4 높이에 압축 표시
+                MaxLimit = volMax * 4.2,
             },
         ];
 
         DrawMarginFrame = new DrawMarginFrame
         {
-            Fill = new SolidColorPaint(SKColor.Parse("#0B0F14")),
-            Stroke = new SolidColorPaint(SKColor.Parse("#1E293B")) { StrokeThickness = 1 },
+            Fill = new SolidColorPaint(TvBg),
+            Stroke = new SolidColorPaint(TvGrid) { StrokeThickness = 1 },
         };
 
-        // 플롯 여백 최소화 (프로 차트 밀도)
-        DrawMargin = new LiveChartsCore.Measure.Margin(48, 12, 56, 28);
+        DrawMargin = new LiveChartsCore.Measure.Margin(52, 14, 58, 30);
     }
 
     private static string FormatVolume(double v)
