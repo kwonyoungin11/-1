@@ -37,14 +37,18 @@ git worktree remove .worktrees/<이름>
 
 | 용도 | 경로 | 브랜치 |
 |------|------|--------|
-| 활성 개발 | `.worktrees/active-dev` | `feature/worktree-all-dev` |
-| 정식본 | 저장소 루트 | `main` |
+| 웨이브 통합 base | `.worktrees/wave-base` | `feature/parallel-wave-base` |
+| 에이전트 병렬 작업실 | `.worktrees/pwXX-*` | `feature/pwXX-*` |
+| (구) active-dev | `.worktrees/active-dev` | `feature/worktree-all-dev` |
+| 정식본 | 저장소 루트 | `main` (병합만) |
 
 ## 에이전트 규칙
 
 - Grok 에이전트는 구현 작업을 **worktree 경로에서** 수행한다.
+- **병렬 웨이브:** 독립 작업마다 worktree 1개 + 브랜치 1개 + 에이전트 1개 (최대 병렬).
 - 보고 시 어느 worktree/브랜치에서 작업했는지 명시한다.
-- main 직접 수정이 필요하면 오너 승인 후, 가능하면 즉시 worktree로 이전한다.
+- main 직접 수정 금지. 필요 시 즉시 worktree로 이전한다.
+- 상세: `docs/PARALLEL_AGENTS.md`
 
 ## 개발 루프
 
