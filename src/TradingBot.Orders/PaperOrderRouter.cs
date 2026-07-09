@@ -20,6 +20,10 @@ public sealed class PaperOrderRouter : IOrderRouter
         _referencePriceResolver = referencePriceResolver;
     }
 
+    /// <inheritdoc />
+    /// <remarks>Always false — paper fills are virtual; never issues Toss order HTTP.</remarks>
+    public bool IsLiveSubmissionEnabled => false;
+
     public Task<OrderRouteResult> RouteAsync(OrderCandidate candidate, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(candidate);
