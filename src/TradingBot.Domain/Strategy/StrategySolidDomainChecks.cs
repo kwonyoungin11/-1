@@ -7,25 +7,25 @@ namespace TradingBot.Domain;
 /// </summary>
 public static class StrategySolidDomainChecks
 {
-    /// <summary>나스닥코어3 enum + ResolveSymbols count 3 with QQQ, NVDA, AAPL.</summary>
-    public static bool IsCore3UniverseOk()
+    /// <summary>스페이스X 단일 유니버스: enum + ResolveSymbols = [SPCX].</summary>
+    public static bool IsSpacexUniverseOk()
     {
-        if (!Enum.IsDefined(StockMarketKind.나스닥코어3))
+        if (!Enum.IsDefined(StockMarketKind.스페이스X))
         {
             return false;
         }
 
-        var symbols = WatchlistCatalog.ResolveSymbols(StockMarketKind.나스닥코어3);
-        if (symbols is null || symbols.Count != 3)
+        var symbols = WatchlistCatalog.ResolveSymbols(StockMarketKind.스페이스X);
+        if (symbols is null || symbols.Count != 1)
         {
             return false;
         }
 
-        // Order-independent membership (catalog currently returns QQQ, NVDA, AAPL).
-        return symbols.Contains("QQQ", StringComparer.Ordinal)
-            && symbols.Contains("NVDA", StringComparer.Ordinal)
-            && symbols.Contains("AAPL", StringComparer.Ordinal);
+        return symbols[0].Equals(WatchlistCatalog.SpaceXSymbol, StringComparison.Ordinal);
     }
+
+    /// <summary>하위 호환 별칭 — 코어3 제거 후 스페이스X 검사로 연결.</summary>
+    public static bool IsCore3UniverseOk() => IsSpacexUniverseOk();
 
     /// <summary>Known vector: equity 100000, risk 1%, stop 2%, price 100 → quantity 500.</summary>
     public static bool IsPositionRiskSizerOk()
@@ -51,7 +51,7 @@ public static class StrategySolidDomainChecks
 
     /// <summary>All Domain-only strategy-solid pieces pass.</summary>
     public static bool AllDomainChecksOk() =>
-        IsCore3UniverseOk()
+        IsSpacexUniverseOk()
         && IsPositionRiskSizerOk()
         && IsTrendFollowParametersOk();
 }

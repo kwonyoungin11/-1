@@ -3,7 +3,8 @@ namespace TradingBot.Application;
 /// <summary>
 /// Machine-checkable "strategy solid" status for loop stop conditions.
 /// <see cref="StrategySolid"/> is true only when every required flag is true
-/// (Domain universe/sizing/params + Risk guards + practice pipeline method).
+/// (Domain SpaceX universe/sizing/params + Risk guards + practice pipeline method).
+/// <see cref="Core3UniverseOk"/> keeps wire name; value is SpaceX/SPCX-only universe check.
 /// </summary>
 public sealed record StrategySolidReport(
     bool StrategySolid,

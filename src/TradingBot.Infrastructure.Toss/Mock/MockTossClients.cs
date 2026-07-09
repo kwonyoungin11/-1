@@ -56,11 +56,11 @@ public sealed class MockTossAccountClient : ITossAccountClient
                 {
                     new()
                     {
-                        Symbol = "AAPL",
-                        Name = "Apple Inc.",
+                        Symbol = "SPCX",
+                        Name = "SpaceX",
                         Currency = "USD",
                         Quantity = "10",
-                        LastPrice = "190.50",
+                        LastPrice = "85.50",
                     },
                 },
             },

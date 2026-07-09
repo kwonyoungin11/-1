@@ -69,19 +69,71 @@ public static class TossReadOnlyFactory
     private static string EnsureTrailingSlash(string baseUrl) =>
         baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/";
 
+    /// <summary>
+    /// Prefer directory with TradingBot.sln + .env; then any parent with .env;
+    /// then cwd. Worktree bin paths often lack .env — walk up to main repo.
+    /// </summary>
     private static string? FindRepoRoot()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        // 1) App base → sln
+        var fromBase = WalkFor(AppContext.BaseDirectory, requireSln: true, requireEnv: false);
+        if (fromBase is not null && File.Exists(Path.Combine(fromBase, ".env")))
+        {
+            return fromBase;
+        }
+
+        // 2) cwd → sln with .env
+        var fromCwd = WalkFor(Directory.GetCurrentDirectory(), requireSln: true, requireEnv: true);
+        if (fromCwd is not null)
+        {
+            return fromCwd;
+        }
+
+        // 3) Any parent of base with .env (main repo when running from worktree bin)
+        var envOnly = WalkFor(AppContext.BaseDirectory, requireSln: false, requireEnv: true)
+                      ?? WalkFor(Directory.GetCurrentDirectory(), requireSln: false, requireEnv: true);
+        if (envOnly is not null)
+        {
+            return envOnly;
+        }
+
+        // 4) sln without .env (mock fallback still works)
+        return fromBase ?? WalkFor(Directory.GetCurrentDirectory(), requireSln: true, requireEnv: false)
+               ?? Directory.GetCurrentDirectory();
+    }
+
+    private static string? WalkFor(string start, bool requireSln, bool requireEnv)
+    {
+        if (string.IsNullOrWhiteSpace(start))
+        {
+            return null;
+        }
+
+        DirectoryInfo? dir;
+        try
+        {
+            dir = new DirectoryInfo(start);
+        }
+        catch
+        {
+            return null;
+        }
+
         while (dir is not null)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "TradingBot.sln")))
+            var sln = File.Exists(Path.Combine(dir.FullName, "TradingBot.sln"));
+            var env = File.Exists(Path.Combine(dir.FullName, ".env"));
+            if ((!requireSln || sln) && (!requireEnv || env))
             {
-                return dir.FullName;
+                if (requireSln || requireEnv)
+                {
+                    return dir.FullName;
+                }
             }
 
             dir = dir.Parent;
         }
 
-        return Directory.GetCurrentDirectory();
+        return null;
     }
 }

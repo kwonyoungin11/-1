@@ -52,75 +52,208 @@ public sealed class ReadOnlyPortfolioService : IReadOnlyPortfolioService
     {
         ArgumentNullException.ThrowIfNull(watchSymbols);
 
+        // SpaceX-only: force SPCX for market quotes even if caller passes others.
+        var symbols = watchSymbols
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim().ToUpperInvariant())
+            .Where(s => s.Equals(WatchlistCatalog.SpaceXSymbol, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (symbols.Length == 0)
+        {
+            symbols = [WatchlistCatalog.SpaceXSymbol];
+        }
+
         try
         {
             var token = await _auth.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
-            _ = _redactor.MaskToken(token.AccessToken); // ensure redaction path exercised; never log raw
+            _ = _redactor.MaskToken(token.AccessToken);
 
-            var accounts = await _accounts.GetAccountsAsync(cancellationToken).ConfigureAwait(false);
-            var holdings = await _accounts.GetHoldingsAsync(cancellationToken).ConfigureAwait(false);
-            // NASDAQ path defaults to USD cash buying power (OpenAPI: currency query required).
-            var buyingPower = await _accounts
-                .GetBuyingPowerAsync("USD", cancellationToken)
-                .ConfigureAwait(false);
-            var quotes = await _market.GetPricesAsync(watchSymbols, cancellationToken).ConfigureAwait(false);
-            var us = await _market.GetUsMarketCalendarAsync(null, cancellationToken).ConfigureAwait(false);
+            // Partial success: account/auth hard; holdings/bp/quotes/calendar soft.
+            // 이전에는 buying-power 등 하나 실패 시 전체가 Error → UI가 연습 잔액으로 떨어짐.
+            var blocks = new List<string>
+            {
+                "주문 API 미사용 — 읽기 경로",
+                _options.AllowLiveHttp
+                    ? "실 HTTP 읽기 허용 상태 (주문 아님)"
+                    : "실 HTTP 차단 — mock 경로",
+            };
+
+            IReadOnlyList<AccountSummary> accounts;
+            try
+            {
+                accounts = await _accounts.GetAccountsAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return ErrorSnapshot(ex, "계좌 목록 조회 실패");
+            }
+
+            HoldingsReadModel? holdingsModel = null;
+            try
+            {
+                holdingsModel = await _accounts.GetHoldingsAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                blocks.Add($"보유종목 부분실패:{SafeErrorHint(ex)}");
+            }
+
+            BuyingPowerSnapshot? buyingPower = null;
+            try
+            {
+                buyingPower = await _accounts
+                    .GetBuyingPowerAsync("USD", cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // USD 실패 시 KRW 한 번 더 시도
+                try
+                {
+                    buyingPower = await _accounts
+                        .GetBuyingPowerAsync("KRW", cancellationToken)
+                        .ConfigureAwait(false);
+                    blocks.Add("매수가능:KRW 폴백");
+                }
+                catch (Exception ex2) when (ex2 is not OperationCanceledException)
+                {
+                    blocks.Add($"매수가능 부분실패:{SafeErrorHint(ex)}");
+                }
+            }
+
+            IReadOnlyList<QuoteSnapshot> quotes = Array.Empty<QuoteSnapshot>();
+            try
+            {
+                quotes = await _market.GetPricesAsync(symbols, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                blocks.Add($"시세 부분실패:{SafeErrorHint(ex)}");
+            }
+
+            UsMarketSessionSnapshot? us = null;
+            try
+            {
+                us = await _market.GetUsMarketCalendarAsync(null, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                blocks.Add($"미국장 캘린더 부분실패:{SafeErrorHint(ex)}");
+            }
+
+            var holdings = holdingsModel?.Items ?? Array.Empty<HoldingSummary>();
+            var mvSummary = holdingsModel?.MarketValueUsd;
+            var mvDec = TossDtoMapper.ParseMarketValueUsd(mvSummary);
 
             var status = _isMock ? ConnectionStatus.MockConnected : ConnectionStatus.LiveReadOnlyConnected;
             var msg = _isMock
                 ? "mock 읽기 전용 연결됨 (실 HTTP 없음, 실주문 없음)"
-                : "실 HTTP 읽기 전용 연결됨 (실주문 없음)";
+                : "토스 실 HTTP 읽기 연결됨 (잔액·시세 · 실주문은 잠금 유지)";
 
             return new ReadOnlyPortfolioSnapshot
             {
                 ConnectionStatus = status,
                 ConnectionOwnerMessage = msg,
                 Accounts = accounts,
-                Holdings = holdings.Items,
+                Holdings = holdings,
                 Quotes = quotes,
                 UsMarket = us,
-                MarketValueUsdSummary = holdings.MarketValueUsd,
-                MarketValueUsdDecimal = TossDtoMapper.ParseMarketValueUsd(holdings.MarketValueUsd),
-                CashBuyingPower = buyingPower.CashBuyingPower,
-                CashCurrency = buyingPower.Currency,
+                MarketValueUsdSummary = mvSummary,
+                MarketValueUsdDecimal = mvDec,
+                CashBuyingPower = buyingPower?.CashBuyingPower,
+                CashCurrency = buyingPower?.Currency,
                 AsOfUtc = _clock.UtcNow,
-                BlockMessages = new[]
-                {
-                    "주문 API 미사용 — read-only 단계",
-                    _options.AllowLiveHttp
-                        ? "실 HTTP 읽기 허용 상태 (주문 아님)"
-                        : "실 HTTP 차단 — mock 경로",
-                },
+                BlockMessages = blocks,
             };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new ReadOnlyPortfolioSnapshot
-            {
-                ConnectionStatus = ConnectionStatus.Error,
-                ConnectionOwnerMessage = "읽기 연결 오류 — 실주문은 하지 않습니다.",
-                Accounts = Array.Empty<AccountSummary>(),
-                Holdings = Array.Empty<HoldingSummary>(),
-                Quotes = Array.Empty<QuoteSnapshot>(),
-                UsMarket = null,
-                MarketValueUsdSummary = null,
-                MarketValueUsdDecimal = null,
-                CashBuyingPower = null,
-                CashCurrency = null,
-                AsOfUtc = _clock.UtcNow,
-                BlockMessages = new[]
-                {
-                    "read-only 오류로 데이터 없음 (fail-closed)",
-                    ex.GetType().Name,
-                },
-            };
+            return ErrorSnapshot(ex, "읽기 연결 오류");
         }
+    }
+
+    private ReadOnlyPortfolioSnapshot ErrorSnapshot(Exception ex, string headline)
+    {
+        var hint = SafeErrorHint(ex);
+        return new ReadOnlyPortfolioSnapshot
+        {
+            ConnectionStatus = ConnectionStatus.Error,
+            ConnectionOwnerMessage = $"{headline} — {hint} · 실주문은 하지 않습니다.",
+            Accounts = Array.Empty<AccountSummary>(),
+            Holdings = Array.Empty<HoldingSummary>(),
+            Quotes = Array.Empty<QuoteSnapshot>(),
+            UsMarket = null,
+            MarketValueUsdSummary = null,
+            MarketValueUsdDecimal = null,
+            CashBuyingPower = null,
+            CashCurrency = null,
+            AsOfUtc = _clock.UtcNow,
+            BlockMessages = new[]
+            {
+                "read-only 오류로 데이터 없음 (fail-closed)",
+                ex.GetType().Name,
+                hint,
+            },
+        };
+    }
+
+    /// <summary>
+    /// Owner-safe error hint: type + HTTP status if present. Never includes tokens/secrets/body.
+    /// </summary>
+    public static string SafeErrorHint(Exception ex)
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+        if (ex is HttpRequestException http)
+        {
+            // Messages are already redacted in live clients ("body redacted").
+            var msg = http.Message;
+            if (msg.Length > 160)
+            {
+                msg = msg[..160];
+            }
+
+            // Strip anything that looks like a bearer/token fragment.
+            if (msg.Contains("Bearer", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("secret", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("token", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"HttpRequestException HTTP 오류 (상세 숨김)";
+            }
+
+            return msg;
+        }
+
+        if (ex is InvalidOperationException ioe)
+        {
+            var m = ioe.Message;
+            if (m.Contains("SECRET", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("token", StringComparison.OrdinalIgnoreCase))
+            {
+                return "설정 오류 (키/토큰 관련 — 값 숨김)";
+            }
+
+            return m.Length > 120 ? m[..120] : m;
+        }
+
+        return ex.GetType().Name;
     }
 
     public Task<IReadOnlyList<CandlePoint>> GetCandlesAsync(
         string symbol,
         string interval,
         int count,
-        CancellationToken cancellationToken) =>
-        _market.GetCandlesAsync(symbol, interval, count, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        // Force SPCX for this product.
+        var sym = string.IsNullOrWhiteSpace(symbol)
+            ? WatchlistCatalog.SpaceXSymbol
+            : symbol.Trim().ToUpperInvariant();
+        if (!sym.Equals(WatchlistCatalog.SpaceXSymbol, StringComparison.Ordinal))
+        {
+            sym = WatchlistCatalog.SpaceXSymbol;
+        }
+
+        return _market.GetCandlesAsync(sym, interval, count, cancellationToken);
+    }
 }

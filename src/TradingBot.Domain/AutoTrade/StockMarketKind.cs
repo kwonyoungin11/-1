@@ -1,13 +1,8 @@
 namespace TradingBot.Domain;
 
-/// <summary>대상 주식 종류 (관심 종목 묶음).</summary>
+/// <summary>대상 주식 종류. 스페이스X(SPCX) 단일 유니버스만 사용.</summary>
 public enum StockMarketKind
 {
-    나스닥 = 0,
-    미국주식 = 1,
-    국내주식 = 2,
-    나스닥테크 = 3,
-    미국ETF = 4,
-    /// <summary>나스닥 코어 3종 프리셋 (연습 유니버스, 투자 권유 아님).</summary>
-    나스닥코어3 = 5,
+    /// <summary>스페이스X 상장 티커 SPCX 전용 (그 외 종목 제거).</summary>
+    스페이스X = 0,
 }

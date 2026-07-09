@@ -6,13 +6,13 @@ namespace TradingBot.Application.Tests;
 public class StrategyCatalogAndSignalsTests
 {
     [Fact]
-    public void Watchlist_has_expanded_kinds_and_symbols()
+    public void Watchlist_is_spacex_only()
     {
-        Assert.True(WatchlistCatalog.AllKinds.Count >= 5);
-        Assert.Contains("NVDA", WatchlistCatalog.ResolveSymbols(StockMarketKind.나스닥));
-        Assert.Contains("SPY", WatchlistCatalog.ResolveSymbols(StockMarketKind.미국ETF));
-        Assert.Contains("005930", WatchlistCatalog.ResolveSymbols(StockMarketKind.국내주식));
-        Assert.Contains("AMD", WatchlistCatalog.ResolveSymbols(StockMarketKind.나스닥테크));
+        Assert.Single(WatchlistCatalog.AllKinds);
+        Assert.Equal(StockMarketKind.스페이스X, WatchlistCatalog.AllKinds[0]);
+        var symbols = WatchlistCatalog.ResolveSymbols(StockMarketKind.스페이스X);
+        Assert.Single(symbols);
+        Assert.Equal("SPCX", symbols[0]);
     }
 
     [Fact]
@@ -159,16 +159,16 @@ public class StrategyCatalogAndSignalsTests
     }
 
     [Fact]
-    public void Session_focus_symbol_and_expanded_watchlist()
+    public void Session_focus_symbol_is_always_spcx()
     {
         var s = new AutoTradeSessionService();
-        s.StockKind = StockMarketKind.미국ETF;
-        Assert.Contains("QQQ", s.ResolveWatchSymbols());
-        s.FocusSymbol = "QQQ";
-        Assert.Equal("QQQ", s.ResolveFocusSymbol());
+        s.StockKind = StockMarketKind.스페이스X;
+        Assert.Equal(new[] { "SPCX" }, s.ResolveWatchSymbols());
+        s.FocusSymbol = "AAPL";
+        Assert.Equal("SPCX", s.ResolveFocusSymbol());
         var p = s.ToPanelSnapshot();
-        Assert.Equal("QQQ", p.FocusSymbol);
-        Assert.Contains("ETF", p.StockKindDescription, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("규모", p.SafetyNote, StringComparison.Ordinal);
+        Assert.Equal("SPCX", p.FocusSymbol);
+        Assert.Contains("SPCX", p.StockKindDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("실주문", p.SafetyNote, StringComparison.Ordinal);
     }
 }

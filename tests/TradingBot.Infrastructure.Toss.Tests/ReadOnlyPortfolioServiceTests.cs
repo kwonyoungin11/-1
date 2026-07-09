@@ -10,12 +10,14 @@ public class ReadOnlyPortfolioServiceTests
     public async Task Mock_service_returns_connected_snapshot_without_live_orders()
     {
         var svc = ReadOnlyPortfolioService.CreateMock();
+        // 타 심볼 요청해도 유니버스는 SPCX 강제
         var snap = await svc.GetSnapshotAsync(new[] { "AAPL", "MSFT" }, CancellationToken.None);
 
         Assert.Equal(ConnectionStatus.MockConnected, snap.ConnectionStatus);
         Assert.NotEmpty(snap.Accounts);
         Assert.NotEmpty(snap.Holdings);
-        Assert.Equal(2, snap.Quotes.Count);
+        Assert.Single(snap.Quotes);
+        Assert.Equal(WatchlistCatalog.SpaceXSymbol, snap.Quotes[0].Symbol);
         Assert.Equal(3500.50m, snap.CashBuyingPower);
         Assert.Equal("USD", snap.CashCurrency);
         Assert.Equal(1500.25m, snap.MarketValueUsdDecimal);

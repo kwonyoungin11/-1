@@ -13,9 +13,10 @@ public sealed class AutoTradeSessionService
 
     private readonly object _gate = new();
     private AutoTradeSessionStatus _status = AutoTradeSessionStatus.중지;
-    private StockMarketKind _stockKind = StockMarketKind.나스닥;
-    private TradingStrategyKind _strategy = TradingStrategyKind.단순연습전략;
-    private string? _focusSymbol;
+    private StockMarketKind _stockKind = StockMarketKind.스페이스X;
+    private TradingStrategyKind _strategy = TradingStrategyKind.추세추종;
+    private ChartTimeframe _timeframe = ChartTimeframe.분봉1;
+    private string? _focusSymbol = WatchlistCatalog.SpaceXSymbol;
     private decimal _startingBalance = DefaultPracticeStartingBalance;
     private decimal _balance = DefaultPracticeStartingBalance;
     private decimal _realizedPnl;
@@ -44,7 +45,14 @@ public sealed class AutoTradeSessionService
         set { lock (_gate) { _strategy = value; } }
     }
 
-    /// <summary>차트·포커스 종목. null이면 워치리스트 첫 종목.</summary>
+    /// <summary>차트 시간봉 (토스 1m / 1d).</summary>
+    public ChartTimeframe Timeframe
+    {
+        get { lock (_gate) { return _timeframe; } }
+        set { lock (_gate) { _timeframe = value; } }
+    }
+
+    /// <summary>차트·포커스 종목. 항상 SPCX 강제.</summary>
     public string? FocusSymbol
     {
         get { lock (_gate) { return _focusSymbol; } }
@@ -52,7 +60,8 @@ public sealed class AutoTradeSessionService
         {
             lock (_gate)
             {
-                _focusSymbol = string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+                // 단일 유니버스: 외부 입력이 있어도 SPCX 고정
+                _focusSymbol = WatchlistCatalog.SpaceXSymbol;
             }
         }
     }
@@ -108,12 +117,13 @@ public sealed class AutoTradeSessionService
         ArgumentNullException.ThrowIfNull(symbols);
         lock (_gate)
         {
-            var cleaned = symbols
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Select(s => s.Trim().ToUpperInvariant())
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-            _externalWatchSymbols = cleaned.Length == 0 ? null : cleaned;
+            // 스페이스X 전용: 외부 보유 목록에 SPCX가 있으면 SPCX만, 없으면 카탈로그(SPCX).
+            var hasSpcx = symbols.Any(s =>
+                !string.IsNullOrWhiteSpace(s)
+                && s.Trim().Equals(WatchlistCatalog.SpaceXSymbol, StringComparison.OrdinalIgnoreCase));
+            _externalWatchSymbols = hasSpcx
+                ? [WatchlistCatalog.SpaceXSymbol]
+                : [WatchlistCatalog.SpaceXSymbol];
         }
     }
 
@@ -155,22 +165,7 @@ public sealed class AutoTradeSessionService
         }
     }
 
-    private string ResolveFocusSymbolUnlocked()
-    {
-        var list = ResolveWatchSymbolsUnlocked();
-        if (list.Length == 0)
-        {
-            return "AAPL";
-        }
-
-        if (_focusSymbol is not null
-            && list.Any(s => s.Equals(_focusSymbol, StringComparison.OrdinalIgnoreCase)))
-        {
-            return _focusSymbol;
-        }
-
-        return list[0];
-    }
+    private string ResolveFocusSymbolUnlocked() => WatchlistCatalog.SpaceXSymbol;
 
     public bool TryStart(out string ownerMessage)
     {
@@ -183,7 +178,8 @@ public sealed class AutoTradeSessionService
             }
 
             _status = AutoTradeSessionStatus.실행중;
-            ownerMessage = $"자동매매(연습) 시작 · 전략 {_strategy} · 실주문은 나가지 않습니다.";
+            ownerMessage =
+                $"자동매매 시작 · SPCX · {_strategy} · 시간봉 {_timeframe} · 실주문은 잠금(게이트) 유지.";
             return true;
         }
     }
@@ -199,7 +195,7 @@ public sealed class AutoTradeSessionService
             }
 
             _status = AutoTradeSessionStatus.중지;
-            ownerMessage = "자동매매(연습) 종료.";
+            ownerMessage = "자동매매 종료 · 실주문 없음.";
             return true;
         }
     }
@@ -260,8 +256,9 @@ public sealed class AutoTradeSessionService
                 CanStart = _status == AutoTradeSessionStatus.중지,
                 CanStop = _status == AutoTradeSessionStatus.실행중,
                 SafetyNote =
-                    "시작·종료는 연습 세션만 제어합니다. 실주문은 차단됩니다. 버블 크기=체결 규모(수량×가격).",
+                    "토스증권 실데이터 · 종목 SPCX 전용 · 실주문은 오너 잠금 해제 전 차단. 버블=체결 규모.",
             };
         }
     }
 }
+

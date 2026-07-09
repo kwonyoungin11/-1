@@ -151,10 +151,13 @@ public sealed class AppHarness
         // in Orders assembly; fall back to BlockedLiveOrderRouter (always IsLiveSubmissionEnabled=false).
         var gatedLive = CreateGatedLiveRouterOrBlocked(settings);
 
-        // Prefer 나스닥코어3 practice universe when catalog lists it (already in Domain).
+        // SpaceX / SPCX only.
         var session = new AutoTradeSessionService
         {
-            StockKind = StockMarketKind.나스닥코어3,
+            StockKind = StockMarketKind.스페이스X,
+            FocusSymbol = WatchlistCatalog.SpaceXSymbol,
+            Strategy = TradingStrategyKind.추세추종,
+            Timeframe = ChartTimeframe.분봉1,
         };
 
         return new AppHarness(
@@ -230,54 +233,87 @@ public sealed class AppHarness
         return msg;
     }
 
-    public void SetStockKind(StockMarketKind kind) => _session.StockKind = kind;
+    public void SetStockKind(StockMarketKind kind) => _session.StockKind = StockMarketKind.스페이스X;
 
     public void SetStrategy(TradingStrategyKind strategy) => _session.Strategy = strategy;
 
-    public void SetFocusSymbol(string symbol) => _session.FocusSymbol = symbol;
+    public void SetFocusSymbol(string symbol) => _session.FocusSymbol = WatchlistCatalog.SpaceXSymbol;
 
-    public (IReadOnlyList<CandlePoint> Candles, IReadOnlyList<TradeMarker> Markers) GetChartData()
+    public void SetTimeframe(ChartTimeframe timeframe)
     {
-        var symbol = _session.ResolveFocusSymbol();
+        _session.Timeframe = timeframe;
+        // 시간봉 변경 시 실봉 캐시 무효화
+        _cachedRealCandles = null;
+        _cachedCandlesSymbol = null;
+    }
+
+    public ChartTimeframe Timeframe => _session.Timeframe;
+
+    public (IReadOnlyList<CandlePoint> Candles, IReadOnlyList<TradeMarker> Markers, IReadOnlyList<ChartIndicatorLine> Indicators) GetChartData()
+    {
+        var symbol = WatchlistCatalog.SpaceXSymbol;
         IReadOnlyList<CandlePoint> candles;
+        var cacheKey = $"{symbol}:{ChartTimeframeCatalog.ToTossInterval(_session.Timeframe)}";
         if (_cachedRealCandles is { Count: > 0 }
-            && string.Equals(_cachedCandlesSymbol, symbol, StringComparison.OrdinalIgnoreCase))
+            && string.Equals(_cachedCandlesSymbol, cacheKey, StringComparison.OrdinalIgnoreCase))
         {
             candles = _cachedRealCandles;
         }
         else
         {
-            // Live 읽기 시 마지막 실시세 seed, 없으면 카탈로그 연습 seed
+            // Live 읽기 시 마지막 실시세 seed, 없으면 SPCX 시드
             var seed = TryResolveChartSeed(symbol);
             candles = MockCandleSeriesFactory.CreateSeries(symbol, 160, DateTimeOffset.UtcNow, seed);
         }
 
         var paperAll = MockCandleSeriesFactory.MarkersFromPaperFills(_paperLedger.GetSnapshot());
-        // 포커스 종목 paper 체결만 강조 + 데모 버블(거래대금 규모)
-        var paperFocus = paperAll
-            .Where(m => true) // paper fill에 symbol 없음 → 전체 반영; 규모는 Notional
-            .ToList();
-        var demo = MockCandleSeriesFactory.CreateDemoMarkers(candles);
-        if (paperFocus.Count == 0)
+        var paperFocus = paperAll.ToList();
+
+        IReadOnlyList<TradeMarker> markers;
+        if (_isLiveReadOnlyConnected)
         {
-            return (candles, demo);
+            // 실데이터 모드: 데모 버블 제거, paper 체결만 (있으면)
+            if (paperFocus.Count == 0)
+            {
+                markers = Array.Empty<TradeMarker>();
+            }
+            else
+            {
+                var maxPaper = paperFocus.Max(m => m.SizeWeight);
+                markers = paperFocus
+                    .Select(p =>
+                    {
+                        var w = maxPaper <= 0 ? 1 : 1.2 + 4.0 * (p.SizeWeight / maxPaper);
+                        return p with { SizeWeight = w, Label = p.Label };
+                    })
+                    .ToList();
+            }
+        }
+        else if (paperFocus.Count == 0)
+        {
+            markers = MockCandleSeriesFactory.CreateDemoMarkers(candles);
+        }
+        else
+        {
+            var demo = MockCandleSeriesFactory.CreateDemoMarkers(candles);
+            var merged = new List<TradeMarker>(demo.Count + paperFocus.Count);
+            merged.AddRange(demo);
+            var maxPaper = paperFocus.Max(m => m.SizeWeight);
+            foreach (var p in paperFocus)
+            {
+                var w = maxPaper <= 0 ? 1 : 1.2 + 4.0 * (p.SizeWeight / maxPaper);
+                merged.Add(p with { SizeWeight = w, Label = $"{p.Label}(체결)" });
+            }
+
+            markers = merged;
         }
 
-        var merged = new List<TradeMarker>(demo.Count + paperFocus.Count);
-        merged.AddRange(demo);
-        // paper 규모를 차트 Weight 스케일로 정규화 (로그 스케일 근사)
-        var maxPaper = paperFocus.Max(m => m.SizeWeight);
-        foreach (var p in paperFocus)
-        {
-            var w = maxPaper <= 0 ? 1 : 1.2 + 4.0 * (p.SizeWeight / maxPaper);
-            merged.Add(p with { SizeWeight = w, Label = $"{p.Label}(연습체결)" });
-        }
-
-        return (candles, merged);
+        var indicators = ChartIndicatorCalculator.ForStrategy(candles, _session.Strategy);
+        return (candles, markers, indicators);
     }
 
     /// <summary>
-    /// Live 읽기 전용 스냅샷을 UI 세션에 바인딩: 잔액·워치·포커스.
+    /// Live 읽기 전용 스냅샷을 UI 세션에 바인딩: 잔액·SPCX 워치.
     /// mock / 오류 / 끊김에서는 호출하지 않음. 실주문 없음.
     /// </summary>
     public void ApplyRealPortfolio(ReadOnlyPortfolioSnapshot portfolio)
@@ -297,45 +333,10 @@ public sealed class AppHarness
             _session.ApplyExternalBalance(bal, setStartingIfUnset: true);
         }
 
-        _session.SetDataSourceLabel("실계좌 읽기");
-
-        var currentWatch = _session.ResolveWatchSymbols();
-        var holdingSymbols = (portfolio.Holdings ?? Array.Empty<HoldingSummary>())
-            .Select(h => h.Symbol)
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s => s.Trim().ToUpperInvariant())
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        // 보유 있으면 보유∪현재 워치(코어 포커스 유지); 없으면 현재 워치 유지
-        string[] watch;
-        if (holdingSymbols.Length > 0)
-        {
-            watch = holdingSymbols
-                .Union(currentWatch, StringComparer.OrdinalIgnoreCase)
-                .Select(s => s.ToUpperInvariant())
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-        }
-        else
-        {
-            watch = currentWatch;
-        }
-
-        if (watch.Length > 0)
-        {
-            _session.ApplyExternalWatchSymbols(watch);
-        }
-
-        // Focus: 첫 보유 → 시세 있는 첫 종목 → 워치 첫 종목
-        var focus =
-            holdingSymbols.FirstOrDefault()
-            ?? _lastQuotes.FirstOrDefault(q => q.LastPrice is not null)?.Symbol
-            ?? (watch.Length > 0 ? watch[0] : null);
-        if (!string.IsNullOrWhiteSpace(focus))
-        {
-            _session.FocusSymbol = focus;
-        }
+        _session.SetDataSourceLabel("토스 실계좌");
+        _session.StockKind = StockMarketKind.스페이스X;
+        _session.ApplyExternalWatchSymbols([WatchlistCatalog.SpaceXSymbol]);
+        _session.FocusSymbol = WatchlistCatalog.SpaceXSymbol;
     }
 
     /// <summary>
@@ -414,25 +415,29 @@ public sealed class AppHarness
     /// </summary>
     private async Task TryCacheRealCandlesAsync(string symbol, CancellationToken cancellationToken)
     {
-        if (!_isLiveReadOnlyConnected || string.IsNullOrWhiteSpace(symbol))
+        if (!_isLiveReadOnlyConnected)
         {
             return;
         }
 
+        var sym = WatchlistCatalog.SpaceXSymbol;
+        var interval = ChartTimeframeCatalog.ToTossInterval(_session.Timeframe);
+        var cacheKey = $"{sym}:{interval}";
+
         try
         {
             var candles = await _portfolio
-                .GetCandlesAsync(symbol, "1m", 160, cancellationToken)
+                .GetCandlesAsync(sym, interval, 160, cancellationToken)
                 .ConfigureAwait(false);
             if (candles.Count > 0)
             {
                 _cachedRealCandles = candles;
-                _cachedCandlesSymbol = symbol.ToUpperInvariant();
+                _cachedCandlesSymbol = cacheKey;
             }
         }
         catch
         {
-            // Fail closed for chart: keep mock seed path. Never affect orders.
+            // Fail closed for chart: keep seed path. Never affect orders.
             _cachedRealCandles = null;
             _cachedCandlesSymbol = null;
         }
@@ -444,11 +449,11 @@ public sealed class AppHarness
         _audit.Append(new AuditEntry(
             DateTimeOffset.UtcNow,
             "system",
-            "데스크톱 콕핏 갱신 — 실거래 차단 · 연습만",
+            "데스크톱 콕핏 갱신 — 토스 읽기 · SPCX · 실주문 게이트 잠금",
             "app_boot"));
 
         var liveDecision = _liveOrderGate.Evaluate(_settings, new LiveOrderContext());
-        var symbols = _session.ResolveWatchSymbols();
+        var symbols = new[] { WatchlistCatalog.SpaceXSymbol };
         var portfolio = await _portfolio
             .GetSnapshotAsync(symbols, cancellationToken)
             .ConfigureAwait(false);
@@ -459,7 +464,7 @@ public sealed class AppHarness
         if (portfolio.ConnectionStatus == ConnectionStatus.LiveReadOnlyConnected)
         {
             ApplyRealPortfolio(portfolio);
-            await TryCacheRealCandlesAsync(_session.ResolveFocusSymbol(), cancellationToken)
+            await TryCacheRealCandlesAsync(WatchlistCatalog.SpaceXSymbol, cancellationToken)
                 .ConfigureAwait(false);
         }
         else

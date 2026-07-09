@@ -5,14 +5,18 @@ namespace TradingBot.Domain.Tests;
 public class StrategySolidDomainChecksTests
 {
     [Fact]
-    public void Core3_universe_is_ok()
+    public void Spacex_universe_is_ok()
+    {
+        Assert.True(StrategySolidDomainChecks.IsSpacexUniverseOk());
+        var symbols = WatchlistCatalog.ResolveSymbols(StockMarketKind.스페이스X);
+        Assert.Single(symbols);
+        Assert.Equal(WatchlistCatalog.SpaceXSymbol, symbols[0]);
+    }
+
+    [Fact]
+    public void Core3_alias_maps_to_spacex()
     {
         Assert.True(StrategySolidDomainChecks.IsCore3UniverseOk());
-        var symbols = WatchlistCatalog.ResolveSymbols(StockMarketKind.나스닥코어3);
-        Assert.Equal(3, symbols.Count);
-        Assert.Contains("QQQ", symbols);
-        Assert.Contains("NVDA", symbols);
-        Assert.Contains("AAPL", symbols);
     }
 
     [Fact]
@@ -34,5 +38,40 @@ public class StrategySolidDomainChecksTests
     public void AllDomainChecksOk_is_true_on_current_codebase()
     {
         Assert.True(StrategySolidDomainChecks.AllDomainChecksOk());
+    }
+
+    [Fact]
+    public void ChartIndicator_SMA_and_strategy_overlays()
+    {
+        var candles = Enumerable.Range(0, 80)
+            .Select(i => new CandlePoint(
+                DateTimeOffset.UtcNow.AddMinutes(i - 80),
+                100 + i * 0.1,
+                101 + i * 0.1,
+                99 + i * 0.1,
+                100.5 + i * 0.1,
+                1_000))
+            .ToList();
+
+        var trend = ChartIndicatorCalculator.ForStrategy(candles, TradingStrategyKind.추세추종);
+        Assert.Equal(2, trend.Count);
+        Assert.Contains(trend, l => l.Name == "SMA20");
+        Assert.Contains(trend, l => l.Name == "SMA60");
+
+        var mean = ChartIndicatorCalculator.ForStrategy(candles, TradingStrategyKind.평균회귀);
+        Assert.Equal(3, mean.Count);
+
+        var sma = ChartIndicatorCalculator.Sma(candles.Select(c => c.Close).ToArray(), 5);
+        Assert.Null(sma[3]);
+        Assert.NotNull(sma[4]);
+    }
+
+    [Fact]
+    public void ChartTimeframe_maps_to_toss_interval()
+    {
+        Assert.Equal("1m", ChartTimeframeCatalog.ToTossInterval(ChartTimeframe.분봉1));
+        Assert.Equal("1d", ChartTimeframeCatalog.ToTossInterval(ChartTimeframe.일봉));
+        Assert.True(ChartTimeframeCatalog.TryParse("일봉", out var d));
+        Assert.Equal(ChartTimeframe.일봉, d);
     }
 }

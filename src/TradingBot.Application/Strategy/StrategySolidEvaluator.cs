@@ -39,10 +39,10 @@ public static class StrategySolidEvaluator
 
         var notes = new List<string>();
 
-        var core3 = StrategySolidDomainChecks.IsCore3UniverseOk();
+        var core3 = StrategySolidDomainChecks.IsSpacexUniverseOk();
         if (!core3)
         {
-            notes.Add("Core3 universe failed: StockMarketKind.나스닥코어3 must resolve to QQQ,NVDA,AAPL (count 3).");
+            notes.Add("SpaceX universe failed: StockMarketKind.스페이스X must resolve to SPCX (count 1).");
         }
 
         var sizer = StrategySolidDomainChecks.IsPositionRiskSizerOk();
