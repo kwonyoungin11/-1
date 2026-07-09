@@ -7,6 +7,7 @@ public static class WatchlistCatalog
     [
         StockMarketKind.나스닥,
         StockMarketKind.나스닥테크,
+        StockMarketKind.나스닥코어3,
         StockMarketKind.미국주식,
         StockMarketKind.미국ETF,
         StockMarketKind.국내주식,
@@ -19,6 +20,8 @@ public static class WatchlistCatalog
     {
         StockMarketKind.나스닥 => ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA"],
         StockMarketKind.나스닥테크 => ["NVDA", "AVGO", "AMD", "INTC", "CRM", "ADBE", "ORCL"],
+        // 코어 3종 프리셋: QQQ + NVDA + AAPL (투자 권유 아님, 연습/시그널 유니버스)
+        StockMarketKind.나스닥코어3 => ["QQQ", "NVDA", "AAPL"],
         StockMarketKind.미국주식 => ["AAPL", "MSFT", "JPM", "JNJ", "XOM", "WMT", "BAC"],
         StockMarketKind.미국ETF => ["SPY", "QQQ", "IWM", "DIA", "VTI"],
         StockMarketKind.국내주식 => ["005930", "000660", "035420", "051910", "005380"],
@@ -29,6 +32,7 @@ public static class WatchlistCatalog
     {
         StockMarketKind.나스닥 => "나스닥 대표 대형주 7종",
         StockMarketKind.나스닥테크 => "나스닥 기술·반도체 중심",
+        StockMarketKind.나스닥코어3 => "나스닥 코어 3종 (QQQ·NVDA·AAPL) — 연습 유니버스",
         StockMarketKind.미국주식 => "미국 대형 우량·금융·소비",
         StockMarketKind.미국ETF => "미국 대표 ETF (지수 추종)",
         StockMarketKind.국내주식 => "국내 대표 대형주 (코드)",
