@@ -66,7 +66,8 @@
                       SelectedItem="{Binding SelectedSymbol}" MinWidth="168" IsEnabled="False"/>
             <TextBlock Grid.Row="1" Classes="sub" Text="시간봉" VerticalAlignment="Center"/>
             <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding TimeframeOptions}"
-                      SelectedItem="{Binding SelectedTimeframe}" MinWidth="168"/>
+                      SelectedItem="{Binding SelectedTimeframe}" MinWidth="168"
+                      ToolTip.Tip="1m~240m·1D·1W (5m+는 토스 1m 집계, 1W는 1d 집계)"/>
             <TextBlock Grid.Row="2" Classes="sub" Text="매매 전략" VerticalAlignment="Center"/>
             <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding StrategyOptions}"
                       SelectedItem="{Binding SelectedStrategy}" MinWidth="168"/>

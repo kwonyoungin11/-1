@@ -31,14 +31,31 @@ public interface ITossMarketDataClient
 
     /// <summary>
     /// OHLCV candles for chart (read-only). Toss interval enum: <c>1m</c>, <c>1d</c>.
-    /// Max count 200 per official OpenAPI.
+    /// Max count 200 per official OpenAPI. Single page unless using <see cref="GetCandlesPagedAsync"/>.
     /// </summary>
     Task<IReadOnlyList<CandlePoint>> GetCandlesAsync(
         string symbol,
         string interval,
         int count,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Multi-page candles via <c>before</c>/<c>nextBefore</c>. Still only interval 1m|1d.
+    /// Stops on empty page, null nextBefore, maxPages, or targetTotal bars.
+    /// </summary>
+    Task<IReadOnlyList<CandlePoint>> GetCandlesPagedAsync(
+        string symbol,
+        string interval,
+        int countPerPage,
+        int maxPages,
+        int targetTotal,
+        CancellationToken cancellationToken);
 }
+
+/// <summary>One candles API page (mapped).</summary>
+public sealed record CandlePageResult(
+    IReadOnlyList<CandlePoint> Candles,
+    string? NextBefore);
 
 public interface ITossOrderClient
 {

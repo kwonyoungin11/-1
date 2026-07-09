@@ -77,7 +77,11 @@ public static BuyingPowerSnapshot MapBuyingPower(BuyingPowerResponseDto dto)
     /// Maps Toss CandlePageResponse → chronological CandlePoint list (oldest first for charts).
     /// API examples return newest-first; we sort ascending by timestamp.
     /// </summary>
-    public static IReadOnlyList<CandlePoint> MapCandles(CandlesResponseDto dto)
+    public static IReadOnlyList<CandlePoint> MapCandles(CandlesResponseDto dto) =>
+        MapCandlePage(dto).Candles;
+
+    /// <summary>Candles (oldest→newest) + pagination cursor <c>nextBefore</c>.</summary>
+    public static CandlePageResult MapCandlePage(CandlesResponseDto dto)
     {
         ArgumentNullException.ThrowIfNull(dto);
         var raw = dto.Result?.Candles ?? new List<CandleDto>();
@@ -100,7 +104,10 @@ public static BuyingPowerSnapshot MapBuyingPower(BuyingPowerResponseDto dto)
         }
 
         list.Sort(static (a, b) => a.Time.CompareTo(b.Time));
-        return list;
+        var next = string.IsNullOrWhiteSpace(dto.Result?.NextBefore)
+            ? null
+            : dto.Result!.NextBefore!.Trim();
+        return new CandlePageResult(list, next);
     }
 
 

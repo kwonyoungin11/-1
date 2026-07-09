@@ -56,7 +56,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _harness.SetStrategy(TradingStrategyKind.추세추종);
         SelectedSymbol = WatchlistCatalog.SpaceXSymbol;
         _harness.SetFocusSymbol(WatchlistCatalog.SpaceXSymbol);
-        SelectedTimeframe = ChartTimeframe.분봉1.ToString();
+        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(ChartTimeframe.분봉1);
         _harness.SetTimeframe(ChartTimeframe.분봉1);
 
         BuildEmptyChart();
@@ -83,7 +83,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _selectedStockKind = "스페이스X";
     [ObservableProperty] private string _selectedStrategy = "추세추종";
     [ObservableProperty] private string _selectedSymbol = WatchlistCatalog.SpaceXSymbol;
-    [ObservableProperty] private string _selectedTimeframe = "분봉1";
+    [ObservableProperty] private string _selectedTimeframe = "1m";
     [ObservableProperty] private string _stockKindDescription = string.Empty;
     [ObservableProperty] private string _strategyDescription = string.Empty;
     [ObservableProperty] private string _chartTitle = "SPCX";
@@ -154,10 +154,14 @@ public partial class MainWindowViewModel : ViewModelBase
         if (ChartTimeframeCatalog.TryParse(value, out var tf))
         {
             _harness.SetTimeframe(tf);
-            ChartTitle = $"SPCX · {tf}";
-            ChartSubtitle = ChartTimeframeCatalog.Describe(tf) + " · 버블=거래대금";
-            StatusLine = $"시간봉 · {tf} · 새로고침으로 실봉 갱신";
+            ChartTitle = $"SPCX · {ChartTimeframeCatalog.UiLabel(tf)}";
+            ChartSubtitle = ChartTimeframeCatalog.Describe(tf) + " · 버블=거래대금 · TV 스타일";
+            StatusLine = ChartTimeframeCatalog.NeedsAggregation(tf)
+                ? $"시간봉 · {ChartTimeframeCatalog.UiLabel(tf)} · 집계({ChartTimeframeCatalog.SourceTossInterval(tf)}→{ChartTimeframeCatalog.UiLabel(tf)}) · 불러오는 중…"
+                : $"시간봉 · {ChartTimeframeCatalog.UiLabel(tf)} · 토스 {ChartTimeframeCatalog.SourceTossInterval(tf)} · 불러오는 중…";
             RebuildChart();
+            // 실봉 로드
+            _ = RefreshAsync();
         }
     }
 
@@ -235,6 +239,9 @@ public partial class MainWindowViewModel : ViewModelBase
         StrategyDescription = p.StrategyDescription;
         SelectedSymbol = WatchlistCatalog.SpaceXSymbol;
         ChartTitle = $"SPCX · {SelectedTimeframe}";
+        ChartSubtitle = ChartTimeframeCatalog.TryParse(SelectedTimeframe, out var tfApply)
+            ? ChartTimeframeCatalog.Describe(tfApply) + " · 버블=거래대금"
+            : ChartSubtitle;
         SafetyHeadline = SafetyHeadlineText;
         if (!SafetyNote.Contains("실주문", StringComparison.Ordinal))
         {
@@ -281,10 +288,11 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var isDaily = SelectedTimeframe.Contains("일", StringComparison.Ordinal)
-                      || _harness.Timeframe == ChartTimeframe.일봉;
+        var tf = _harness.Timeframe;
+        var barDuration = ChartTimeframeCatalog.BarDuration(tf);
+        var isDailyOrWeek = tf is ChartTimeframe.일봉 or ChartTimeframe.주봉;
 
-        // ── 캔들 (TradingView식 두꺼운 봉) ──────────────────────────
+        // ── 캔들 (TradingView LWC 팔레트 #26a69a / #ef5350) ─────────
         var financial = candles
             .Select(c => new FinancialPoint(c.Time.UtcDateTime, c.High, c.Open, c.Close, c.Low))
             .ToArray();
@@ -465,14 +473,22 @@ public partial class MainWindowViewModel : ViewModelBase
                     }
 
                     var dt = new DateTime((long)value);
-                    return isDaily ? dt.ToString("MM-dd") : dt.ToString("HH:mm");
+                    if (tf == ChartTimeframe.주봉)
+                    {
+                        return dt.ToString("yyyy-MM-dd");
+                    }
+
+                    if (isDailyOrWeek)
+                    {
+                        return dt.ToString("MM-dd");
+                    }
+
+                    return barDuration.TotalHours >= 1
+                        ? dt.ToString("MM-dd HH:mm")
+                        : dt.ToString("HH:mm");
                 },
-                UnitWidth = isDaily
-                    ? TimeSpan.FromDays(1).Ticks
-                    : TimeSpan.FromMinutes(1).Ticks,
-                MinStep = isDaily
-                    ? TimeSpan.FromDays(1).Ticks
-                    : TimeSpan.FromMinutes(5).Ticks,
+                UnitWidth = barDuration.Ticks,
+                MinStep = Math.Max(barDuration.Ticks, TimeSpan.FromMinutes(1).Ticks),
                 TextSize = 10,
                 Padding = new LiveChartsCore.Drawing.Padding(0, 4, 0, 0),
             },

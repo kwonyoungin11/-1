@@ -130,6 +130,15 @@ public sealed class MockTossMarketDataClient : ITossMarketDataClient
         string symbol,
         string interval,
         int count,
+        CancellationToken cancellationToken) =>
+        GetCandlesPagedAsync(symbol, interval, count, maxPages: 1, targetTotal: count, cancellationToken);
+
+    public Task<IReadOnlyList<CandlePoint>> GetCandlesPagedAsync(
+        string symbol,
+        string interval,
+        int countPerPage,
+        int maxPages,
+        int targetTotal,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -138,9 +147,10 @@ public sealed class MockTossMarketDataClient : ITossMarketDataClient
             return Task.FromResult<IReadOnlyList<CandlePoint>>(Array.Empty<CandlePoint>());
         }
 
-        // Synthetic series for cockpit chart when live HTTP is off (no network).
-        var clamped = Math.Clamp(count <= 0 ? 160 : count, 1, 200);
-        _ = interval; // mock ignores interval; live client validates 1m|1d
+        _ = interval;
+        _ = maxPages;
+        // Mock: one dense 1m series; caller aggregates for higher TF.
+        var clamped = Math.Clamp(targetTotal <= 0 ? 400 : targetTotal, 1, 1000);
         var series = TradingBot.Application.MockCandleSeriesFactory.CreateSeries(
             symbol.Trim(),
             clamped,

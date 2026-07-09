@@ -12,14 +12,16 @@ public static class MockCandleSeriesFactory
         string symbol,
         int count,
         DateTimeOffset endUtc,
-        double? seedPrice = null)
+        double? seedPrice = null,
+        TimeSpan? barStep = null)
     {
         var list = new List<CandlePoint>(count);
         var rnd = new Random(HashCode.Combine(symbol, endUtc.Day));
         var price = seedPrice ?? WatchlistCatalog.ChartSeedPrice(symbol);
         // 국내 주식은 원 단위 스케일 유지, 미국은 달러
-        var isKr = symbol.Length == 6 && symbol.All(char.IsDigit);
-        var t = endUtc.AddMinutes(-count);
+        var isKr = symbol is { Length: 6 } && symbol.All(char.IsDigit);
+        var step = barStep is { TotalSeconds: > 0 } s ? s : TimeSpan.FromMinutes(1);
+        var t = endUtc - step * count;
 
         for (var i = 0; i < count; i++)
         {
@@ -34,6 +36,12 @@ public static class MockCandleSeriesFactory
                 trend = -(isKr ? 150 : 0.9) - rnd.NextDouble() * (isKr ? 200 : 1.4);
             }
 
+            // Scale trend for multi-day bars
+            if (step.TotalHours >= 20)
+            {
+                trend *= 8;
+            }
+
             var open = price;
             var close = Math.Max(isKr ? 1000 : 1, open + trend + (rnd.NextDouble() - 0.5) * (isKr ? 40 : 0.6));
             var high = Math.Max(open, close) + rnd.NextDouble() * (isKr ? 80 : 1.2);
@@ -42,7 +50,7 @@ public static class MockCandleSeriesFactory
             var vol = volBase + rnd.Next(0, 1_800_000);
             list.Add(new CandlePoint(t, open, high, low, close, vol));
             price = close;
-            t = t.AddMinutes(1);
+            t = t.Add(step);
         }
 
         return list;

@@ -252,8 +252,9 @@ public sealed class AppHarness
     public (IReadOnlyList<CandlePoint> Candles, IReadOnlyList<TradeMarker> Markers, IReadOnlyList<ChartIndicatorLine> Indicators) GetChartData()
     {
         var symbol = WatchlistCatalog.SpaceXSymbol;
+        var tf = _session.Timeframe;
         IReadOnlyList<CandlePoint> candles;
-        var cacheKey = $"{symbol}:{ChartTimeframeCatalog.ToTossInterval(_session.Timeframe)}";
+        var cacheKey = $"{symbol}:{ChartTimeframeCatalog.UiLabel(tf)}:{ChartTimeframeCatalog.SourceTossInterval(tf)}";
         if (_cachedRealCandles is { Count: > 0 }
             && string.Equals(_cachedCandlesSymbol, cacheKey, StringComparison.OrdinalIgnoreCase))
         {
@@ -261,9 +262,28 @@ public sealed class AppHarness
         }
         else
         {
-            // Live 읽기 시 마지막 실시세 seed, 없으면 SPCX 시드
+            // Mock / offline: 1m dense then aggregate; 1d/1w use day steps
             var seed = TryResolveChartSeed(symbol);
-            candles = MockCandleSeriesFactory.CreateSeries(symbol, 160, DateTimeOffset.UtcNow, seed);
+            if (ChartTimeframeCatalog.SourceTossInterval(tf) == "1d"
+                && !ChartTimeframeCatalog.IsWeeklyAggregation(tf))
+            {
+                candles = MockCandleSeriesFactory.CreateSeries(
+                    symbol, 160, DateTimeOffset.UtcNow, seed, TimeSpan.FromDays(1));
+            }
+            else
+            {
+                var rawCount = ChartTimeframeCatalog.PreferredRawBarCount(tf, 160);
+                var raw = MockCandleSeriesFactory.CreateSeries(
+                    symbol, Math.Min(rawCount, 800), DateTimeOffset.UtcNow, seed, TimeSpan.FromMinutes(1));
+                candles = ChartTimeframeCatalog.NeedsAggregation(tf)
+                    ? CandleAggregator.Aggregate(raw, tf)
+                    : raw;
+            }
+
+            if (candles.Count > 200)
+            {
+                candles = candles.Skip(candles.Count - 200).ToArray();
+            }
         }
 
         // 실데이터·mock 공통: 봉 거래대금 버블 (ChartFanatics). 실연결에서 버블 실종 방지.
@@ -401,14 +421,34 @@ public sealed class AppHarness
         }
 
         var sym = WatchlistCatalog.SpaceXSymbol;
-        var interval = ChartTimeframeCatalog.ToTossInterval(_session.Timeframe);
-        var cacheKey = $"{sym}:{interval}";
+        var tf = _session.Timeframe;
+        var sourceInterval = ChartTimeframeCatalog.SourceTossInterval(tf);
+        var cacheKey = $"{sym}:{ChartTimeframeCatalog.UiLabel(tf)}:{sourceInterval}";
 
         try
         {
-            var candles = await _portfolio
-                .GetCandlesAsync(sym, interval, 160, cancellationToken)
+            var rawTarget = ChartTimeframeCatalog.PreferredRawBarCount(tf, targetDisplayBars: 160);
+            var maxPages = Math.Clamp((rawTarget + 199) / 200, 1, 5);
+            var raw = await _portfolio
+                .GetCandlesPagedAsync(
+                    sym,
+                    sourceInterval,
+                    countPerPage: 200,
+                    maxPages: maxPages,
+                    targetTotal: rawTarget,
+                    cancellationToken)
                 .ConfigureAwait(false);
+
+            IReadOnlyList<CandlePoint> candles = ChartTimeframeCatalog.NeedsAggregation(tf)
+                ? CandleAggregator.Aggregate(raw, tf)
+                : raw;
+
+            // Cap display bars for UI density
+            if (candles.Count > 200)
+            {
+                candles = candles.Skip(candles.Count - 200).ToArray();
+            }
+
             if (candles.Count > 0)
             {
                 _cachedRealCandles = candles;

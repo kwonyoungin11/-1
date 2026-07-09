@@ -55,10 +55,25 @@ public sealed class LiveTossMarketDataClient : ITossMarketDataClient
         return TossDtoMapper.MapUsCalendar(dto);
     }
 
-    public async Task<IReadOnlyList<CandlePoint>> GetCandlesAsync(
+    public Task<IReadOnlyList<CandlePoint>> GetCandlesAsync(
         string symbol,
         string interval,
         int count,
+        CancellationToken cancellationToken) =>
+        GetCandlesPagedAsync(
+            symbol,
+            interval,
+            countPerPage: count,
+            maxPages: 1,
+            targetTotal: Math.Clamp(count, 1, MaxCandleCount),
+            cancellationToken);
+
+    public async Task<IReadOnlyList<CandlePoint>> GetCandlesPagedAsync(
+        string symbol,
+        string interval,
+        int countPerPage,
+        int maxPages,
+        int targetTotal,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(symbol))
@@ -74,16 +89,77 @@ public sealed class LiveTossMarketDataClient : ITossMarketDataClient
         }
 
         LiveHttpGuard.EnsureAllowed(_options);
-        var clamped = Math.Clamp(count, 1, MaxCandleCount);
-        var path =
-            $"api/v1/candles?symbol={Uri.EscapeDataString(symbol.Trim())}" +
-            $"&interval={Uri.EscapeDataString(interval)}" +
-            $"&count={clamped}";
-        var dto = await GetJsonAsync<CandlesResponseDto>(
-                new Uri(path, UriKind.Relative),
-                cancellationToken)
-            .ConfigureAwait(false);
-        return TossDtoMapper.MapCandles(dto);
+        var pageSize = Math.Clamp(countPerPage, 1, MaxCandleCount);
+        var pages = Math.Clamp(maxPages, 1, 5);
+        var goal = Math.Clamp(targetTotal, 1, pages * MaxCandleCount);
+
+        var all = new List<CandlePoint>(goal);
+        string? before = null;
+
+        for (var page = 0; page < pages && all.Count < goal; page++)
+        {
+            var path =
+                $"api/v1/candles?symbol={Uri.EscapeDataString(symbol.Trim())}" +
+                $"&interval={Uri.EscapeDataString(interval)}" +
+                $"&count={pageSize}";
+            if (!string.IsNullOrWhiteSpace(before))
+            {
+                // OpenAPI: encode + in timezone as %2B
+                path += $"&before={Uri.EscapeDataString(before)}";
+            }
+
+            CandlesResponseDto dto;
+            try
+            {
+                dto = await GetJsonAsync<CandlesResponseDto>(
+                        new Uri(path, UriKind.Relative),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (HttpRequestException) when (all.Count > 0)
+            {
+                // Partial history on rate-limit / network after first page.
+                break;
+            }
+
+            var mapped = TossDtoMapper.MapCandlePage(dto);
+            if (mapped.Candles.Count == 0)
+            {
+                break;
+            }
+
+            // API returns newest-first pages; Map sorts ascending. Merge older pages (before).
+            // Subsequent pages are older; prepend by union on time.
+            all = MergeCandlesByTime(mapped.Candles, all);
+            if (string.IsNullOrWhiteSpace(mapped.NextBefore))
+            {
+                break;
+            }
+
+            before = mapped.NextBefore;
+        }
+
+        // Trim to newest `goal` bars if over-fetched
+        if (all.Count > goal)
+        {
+            all = all.Skip(all.Count - goal).ToList();
+        }
+
+        return all;
+    }
+
+    /// <summary>Union by timestamp, sorted ascending (oldest first).</summary>
+    public static List<CandlePoint> MergeCandlesByTime(
+        IReadOnlyList<CandlePoint> a,
+        IReadOnlyList<CandlePoint> b)
+    {
+        var map = new Dictionary<long, CandlePoint>();
+        foreach (var c in a.Concat(b))
+        {
+            map[c.Time.UtcTicks] = c;
+        }
+
+        return map.Values.OrderBy(c => c.Time).ToList();
     }
 
     private async Task<T> GetJsonAsync<T>(Uri relative, CancellationToken cancellationToken)

@@ -67,11 +67,13 @@ public class StrategySolidDomainChecksTests
     }
 
     [Fact]
-    public void ChartTimeframe_maps_to_toss_interval()
+    public void ChartTimeframe_maps_to_toss_source_interval()
     {
-        Assert.Equal("1m", ChartTimeframeCatalog.ToTossInterval(ChartTimeframe.분봉1));
-        Assert.Equal("1d", ChartTimeframeCatalog.ToTossInterval(ChartTimeframe.일봉));
-        Assert.True(ChartTimeframeCatalog.TryParse("일봉", out var d));
-        Assert.Equal(ChartTimeframe.일봉, d);
+        Assert.Equal("1m", ChartTimeframeCatalog.SourceTossInterval(ChartTimeframe.분봉1));
+        Assert.Equal("1m", ChartTimeframeCatalog.SourceTossInterval(ChartTimeframe.분봉15));
+        Assert.Equal("1d", ChartTimeframeCatalog.SourceTossInterval(ChartTimeframe.일봉));
+        Assert.Equal("1d", ChartTimeframeCatalog.SourceTossInterval(ChartTimeframe.주봉));
+        Assert.True(ChartTimeframeCatalog.TryParse("1W", out var w));
+        Assert.Equal(ChartTimeframe.주봉, w);
     }
 }

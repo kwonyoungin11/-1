@@ -243,17 +243,37 @@ public sealed class ReadOnlyPortfolioService : IReadOnlyPortfolioService
         string symbol,
         string interval,
         int count,
+        CancellationToken cancellationToken) =>
+        GetCandlesPagedAsync(symbol, interval, count, maxPages: 1, targetTotal: count, cancellationToken);
+
+    public Task<IReadOnlyList<CandlePoint>> GetCandlesPagedAsync(
+        string symbol,
+        string interval,
+        int countPerPage,
+        int maxPages,
+        int targetTotal,
         CancellationToken cancellationToken)
     {
-        // Force SPCX for this product.
-        var sym = string.IsNullOrWhiteSpace(symbol)
-            ? WatchlistCatalog.SpaceXSymbol
-            : symbol.Trim().ToUpperInvariant();
-        if (!sym.Equals(WatchlistCatalog.SpaceXSymbol, StringComparison.Ordinal))
+        var sym = ResolveSpcx(symbol);
+        return _market.GetCandlesPagedAsync(
+            sym,
+            interval,
+            countPerPage,
+            maxPages,
+            targetTotal,
+            cancellationToken);
+    }
+
+    private static string ResolveSpcx(string? symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
         {
-            sym = WatchlistCatalog.SpaceXSymbol;
+            return WatchlistCatalog.SpaceXSymbol;
         }
 
-        return _market.GetCandlesAsync(sym, interval, count, cancellationToken);
+        var sym = symbol.Trim().ToUpperInvariant();
+        return sym.Equals(WatchlistCatalog.SpaceXSymbol, StringComparison.Ordinal)
+            ? sym
+            : WatchlistCatalog.SpaceXSymbol;
     }
 }
