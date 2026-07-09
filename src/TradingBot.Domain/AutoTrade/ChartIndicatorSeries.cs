@@ -15,6 +15,7 @@ public static class ChartIndicatorCalculator
     /// Strategy overlay set for chart price scale.
     /// 추세추종 → SMA20/SMA60 + EMA9/EMA21 (price-scale safe; RSI is public API only).
     /// 평균회귀 → Bollinger; 모멘텀 → SMA10 + rolling high; 단순연습/관망 → SMA20.
+    /// CERS비용회귀 → EMA21 + CERS expected edge (NaN warm-up → null).
     /// </summary>
     public static IReadOnlyList<ChartIndicatorLine> ForStrategy(
         IReadOnlyList<CandlePoint> candles,
@@ -43,6 +44,7 @@ public static class ChartIndicatorCalculator
                 new ChartIndicatorLine("SMA10", Sma(closes, 10)),
                 new ChartIndicatorLine("모멘텀고", RollingMax(closes, 20)),
             ],
+            TradingStrategyKind.CERS비용회귀 => CersOverlays(candles, closes),
             TradingStrategyKind.단순연습전략 =>
             [
                 new ChartIndicatorLine("SMA20", Sma(closes, 20)),
@@ -56,6 +58,39 @@ public static class ChartIndicatorCalculator
                 new ChartIndicatorLine("SMA20", Sma(closes, 20)),
             ],
         };
+    }
+
+    /// <summary>
+    /// CERS chart overlays: EMA21 (mean reversion anchor) + per-bar expected edge.
+    /// Edge from <see cref="CersMath.ComputeExpectedEdge"/>; NaN/∞ → null for chart gaps.
+    /// Aligns with <see cref="CersMath.LastEma"/> / last expected edge at the final bar.
+    /// </summary>
+    private static IReadOnlyList<ChartIndicatorLine> CersOverlays(
+        IReadOnlyList<CandlePoint> candles,
+        IReadOnlyList<double> closes)
+    {
+        var ema21 = Ema(closes, CersPreset.EmaPeriod);
+        var rawEdge = CersMath.ComputeExpectedEdge(candles);
+        var edge = ToNullableSeries(rawEdge);
+
+        return
+        [
+            new ChartIndicatorLine("EMA21", ema21),
+            new ChartIndicatorLine("CERS", edge),
+        ];
+    }
+
+    private static IReadOnlyList<double?> ToNullableSeries(IReadOnlyList<double> values)
+    {
+        var n = values.Count;
+        var result = new double?[n];
+        for (var i = 0; i < n; i++)
+        {
+            var v = values[i];
+            result[i] = double.IsNaN(v) || double.IsInfinity(v) ? null : v;
+        }
+
+        return result;
     }
 
     public static IReadOnlyList<double?> Sma(IReadOnlyList<double> closes, int period)

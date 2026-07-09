@@ -22,4 +22,7 @@ public enum TradingStrategyKind
 
     /// <summary>1분봉 분할매수·분할매도 스캘프 연습 (VMAR 등 · 수수료 주의).</summary>
     일분분할스캘프 = 5,
+
+    /// <summary>CERS 비용 인식 평균회귀 연습 (1m · 실주문 게이트 · 투자 조언 아님).</summary>
+    CERS비용회귀 = 6,
 }

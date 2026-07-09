@@ -283,6 +283,35 @@
           <TextBlock Text="{Binding StrategyDescription}" FontSize="11" Foreground="#2962FF"
                      TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                      ToolTip.Tip="{Binding StrategyDescription}"/>
+          <!-- CERS cockpit metrics (visible only when CERS비용회귀 selected) -->
+          <StackPanel Spacing="4" IsVisible="{Binding IsCersStrategy}">
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+              <Border Classes="metric-3d" Background="#E8EAF6" Padding="8,5" BorderBrush="#9FA8DA">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="expected" FontSize="9" Foreground="#5C6BC0"/>
+                  <TextBlock Text="{Binding CersExpectedText}" FontSize="13" FontWeight="Bold"
+                             Foreground="#283593" FontFamily="Menlo, Consolas, monospace"/>
+                </StackPanel>
+              </Border>
+              <Border Grid.Column="1" Classes="metric-3d" Background="#E3F2FD" Padding="8,5" BorderBrush="#90CAF9">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="threshold" FontSize="9" Foreground="#1976D2"/>
+                  <TextBlock Text="{Binding CersThresholdText}" FontSize="13" FontWeight="Bold"
+                             Foreground="#0D47A1" FontFamily="Menlo, Consolas, monospace"/>
+                </StackPanel>
+              </Border>
+              <Border Grid.Column="2" Classes="metric-3d" Background="#E8F5E9" Padding="8,5" BorderBrush="#A5D6A7">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="state" FontSize="9" Foreground="#2E7D32"/>
+                  <TextBlock Text="{Binding CersStateText}" FontSize="13" FontWeight="Bold"
+                             Foreground="#1B5E20"/>
+                </StackPanel>
+              </Border>
+            </Grid>
+            <TextBlock Text="{Binding CersDetailText}" FontSize="10" Foreground="#546E7A"
+                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding CersDetailText}"/>
+          </StackPanel>
           <Border Classes="metric-3d" Background="#FFF8E1" Padding="8,5" BorderBrush="#FFE082">
             <TextBlock Text="{Binding GateStatusPill}" FontSize="11" Foreground="#E65100" FontWeight="Bold"
                        TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"

@@ -62,16 +62,16 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         else
         {
+            // Owner primary practice: VMAR + CERS (exact backtest params · live still gated).
             _harness.SetStockKind(StockMarketKind.비전마린);
+            _harness.SetCersPreset();
             SelectedStockKind = StockMarketKind.비전마린.ToString();
             SelectedSymbol = WatchlistCatalog.VmarSymbol;
             _harness.SetFocusSymbol(WatchlistCatalog.VmarSymbol);
-            SelectedTimeframe = ChartTimeframeCatalog.UiLabel(VmarOneMinuteScalpPreset.Timeframe);
-            _harness.SetTimeframe(VmarOneMinuteScalpPreset.Timeframe);
-            SelectedStrategy = VmarOneMinuteScalpPreset.Strategy.ToString();
-            _harness.SetStrategy(VmarOneMinuteScalpPreset.Strategy);
-            OfficialStrategyLabel = VmarOneMinuteScalpPreset.OwnerSummary;
-            RecommendedStrategyNote = VmarOneMinuteScalpPreset.OwnerSummary;
+            SelectedStrategy = CersPreset.Strategy.ToString();
+            SelectedTimeframe = ChartTimeframeCatalog.UiLabel(CersPreset.Timeframe);
+            OfficialStrategyLabel = CersPreset.OwnerSummary;
+            RecommendedStrategyNote = CersPreset.OwnerSummary;
         }
 
         _suppressSelectionEcho = false;
@@ -176,6 +176,16 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _recommendedStrategyNote =
         VmarOneMinuteScalpPreset.OwnerSummary;
     [ObservableProperty] private string _officialStrategyLabel = VmarOneMinuteScalpPreset.OwnerSummary;
+    /// <summary>Last CERS expected edge (e.g. "0.0082") or "—".</summary>
+    [ObservableProperty] private string _cersExpectedText = "—";
+    /// <summary>Entry threshold display (fixed "0.0060" when CERS).</summary>
+    [ObservableProperty] private string _cersThresholdText = "0.0060";
+    /// <summary>CERS cockpit state: 관망 | 진입가능 | 보유중.</summary>
+    [ObservableProperty] private string _cersStateText = "—";
+    /// <summary>One-line CERS params: thr×2 · SL 1.2% · max 40 · 1m.</summary>
+    [ObservableProperty] private string _cersDetailText = string.Empty;
+    /// <summary>True when selected strategy is CERS비용회귀 (metric row visibility).</summary>
+    [ObservableProperty] private bool _isCersStrategy;
     [ObservableProperty] private string _connectionLabel = "연결 확인 전";
     [ObservableProperty] private string _connectionPill = "확인중";
     [ObservableProperty] private string _dataSourcePill = "데이터 확인중";
@@ -353,6 +363,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             _harness.SetStrategy(s);
             StrategyDescription = StrategyCatalog.Describe(s);
+            ApplyOfficialStrategyLabel(s);
             StatusLine = $"전략 · {s} · 보조지표·버블 갱신";
             RebuildChart();
         }
@@ -558,6 +569,8 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplyStockKindUiLabels();
         ApplySafetyPills();
         ApplyLiveUiLabels();
+        ApplyOfficialStrategyLabel(p.Strategy);
+        RefreshCersMetrics();
         _suppressSelectionEcho = false;
     }
 
@@ -989,6 +1002,88 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             StockDisplayName = ResolveStockDisplayName(kindRebuild);
             Title = ResolveWindowTitle(kindRebuild, _harness.IsLiveSubmissionEnabled);
+        }
+
+        RefreshCersMetrics(candles);
+    }
+
+    /// <summary>
+    /// Fill CERS cockpit props from chart candles (CersMath + CersEvaluator).
+    /// Non-CERS clears visibility and placeholder texts.
+    /// </summary>
+    private void RefreshCersMetrics(IReadOnlyList<CandlePoint>? candles = null)
+    {
+        var strategy = _harness.Session.Strategy;
+        IsCersStrategy = strategy == TradingStrategyKind.CERS비용회귀;
+
+        if (!IsCersStrategy)
+        {
+            CersExpectedText = "—";
+            CersThresholdText = "—";
+            CersStateText = "—";
+            CersDetailText = string.Empty;
+            return;
+        }
+
+        StrategyDescription = StrategyCatalog.Describe(TradingStrategyKind.CERS비용회귀);
+        ApplyOfficialStrategyLabel(TradingStrategyKind.CERS비용회귀);
+
+        CersThresholdText = CersPreset.EntryThreshold.ToString("F4");
+        CersDetailText =
+            $"thr×{CersPreset.ThresholdMultiple:0.#} · SL {CersPreset.StopLossPct * 100:0.#}% · max {CersPreset.MaxHoldBars} · 1m";
+
+        var bars = candles ?? _chartCandles;
+        if (bars.Count == 0)
+        {
+            var chart = _harness.GetChartData();
+            bars = chart.Candles;
+        }
+
+        var expected = CersMath.LastExpectedEdge(bars);
+        CersExpectedText = expected is double e && !double.IsNaN(e) && !double.IsInfinity(e)
+            ? e.ToString("F4")
+            : "—";
+
+        var symbol = _harness.Session.ResolveFocusSymbol();
+        var signal = CersEvaluator.Evaluate(
+            symbol: symbol,
+            candles: bars,
+            openLong: null);
+
+        CersStateText = ResolveCersStateText(signal);
+
+        // Ensure chart legend names CERS when strategy is selected (price overlays may only show SMA/EMA).
+        if (string.IsNullOrWhiteSpace(IndicatorLegend)
+            || !IndicatorLegend.Contains("CERS", StringComparison.OrdinalIgnoreCase))
+        {
+            IndicatorLegend = string.IsNullOrWhiteSpace(IndicatorLegend)
+                ? "CERS"
+                : IndicatorLegend + " · CERS";
+        }
+    }
+
+    private static string ResolveCersStateText(StrategySignal signal)
+    {
+        if (signal.IsActionable && signal.Side == SignalSide.Buy)
+        {
+            return "진입가능";
+        }
+
+        if (signal.Side == SignalSide.Sell
+            || signal.OwnerMessage.Contains("보유", StringComparison.Ordinal))
+        {
+            return "보유중";
+        }
+
+        return "관망";
+    }
+
+    private void ApplyOfficialStrategyLabel(TradingStrategyKind strategy)
+    {
+        if (strategy == TradingStrategyKind.CERS비용회귀)
+        {
+            OfficialStrategyLabel = CersPreset.OwnerSummary;
+            RecommendedStrategyNote = CersPreset.OwnerSummary;
         }
     }
 
