@@ -236,7 +236,7 @@ public sealed class AppHarness
 
         var session = new AutoTradeSessionService();
         // Owner primary: CERS on VMAR for both practice and live-capable host.
-        // Live still requires AllowLiveOrders + kill off + ORDER_MODE=live + healthy data gate.
+        // Live still requires AllowLiveOrders + kill off + ORDER_MODE live + healthy data gate.
         session.StockKind = StockMarketKind.비전마린;
         session.FocusSymbol = WatchlistCatalog.VmarSymbol;
         session.Strategy = CersPreset.Strategy;
@@ -352,7 +352,7 @@ public sealed class AppHarness
         {
             Flag("ALLOW_LIVE_ORDERS", _settings.AllowLiveOrders),
             Flag("KILL_SWITCH off", !_settings.KillSwitch),
-            Flag("ORDER_MODE=live", _settings.OrderMode == OrderMode.Live),
+            Flag("ORDER_MODE live", _settings.OrderMode == OrderMode.Live),
             Flag("TOSS HTTP", _tossOptions.AllowLiveHttp),
             Flag("클라이언트 자격증명", _tossOptions.HasClientCredentials),
             Flag("토스 읽기 연결", _isLiveReadOnlyConnected),
