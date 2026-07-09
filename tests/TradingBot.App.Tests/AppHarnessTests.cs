@@ -1,4 +1,5 @@
 using TradingBot.App.Services;
+using TradingBot.App.ViewModels;
 using TradingBot.Domain;
 using TradingBot.Ui;
 
@@ -6,6 +7,116 @@ namespace TradingBot.App.Tests;
 
 public class AppHarnessTests
 {
+    /// <summary>
+    /// Combobox data source is catalog-driven: Domain 나스닥코어3 병합 시 KindLabels에 자동 포함.
+    /// </summary>
+    [Fact]
+    public void StockKindOptions_follow_WatchlistCatalog_KindLabels()
+    {
+        Assert.NotEmpty(WatchlistCatalog.KindLabels);
+        Assert.Equal(WatchlistCatalog.AllKinds.Count, WatchlistCatalog.KindLabels.Count);
+        Assert.Contains(StockMarketKind.나스닥.ToString(), WatchlistCatalog.KindLabels);
+
+        // When Domain ships 나스닥코어3, labels must surface it (no Avalonia hardcode).
+        if (MainWindowViewModel.TryGetCore3Kind(out var core3))
+        {
+            Assert.Contains(MainWindowViewModel.Core3KindName, WatchlistCatalog.KindLabels);
+            Assert.Contains(core3, WatchlistCatalog.AllKinds);
+            Assert.Equal(MainWindowViewModel.Core3KindName, core3.ToString());
+        }
+        else
+        {
+            // Pre-merge: UI still uses KindLabels; core name reserved for merge.
+            Assert.Equal("나스닥코어3", MainWindowViewModel.Core3KindName);
+            Assert.DoesNotContain(MainWindowViewModel.Core3KindName, WatchlistCatalog.KindLabels);
+        }
+    }
+
+    [Fact]
+    public void ResolveDefaultStockKind_prefers_core3_when_catalog_lists_it()
+    {
+        var def = MainWindowViewModel.ResolveDefaultStockKind();
+        if (MainWindowViewModel.TryGetCore3Kind(out var core3)
+            && WatchlistCatalog.KindLabels.Contains(core3.ToString(), StringComparer.Ordinal))
+        {
+            Assert.Equal(core3, def);
+        }
+        else
+        {
+            Assert.Equal(StockMarketKind.나스닥, def);
+        }
+    }
+
+    /// <summary>
+    /// Selecting core preset resolves exactly 3 symbols when Domain enum exists; otherwise merge-ready skip path.
+    /// </summary>
+    [Fact]
+    public void Selecting_core3_preset_resolves_three_symbols_when_enum_present()
+    {
+        if (!MainWindowViewModel.TryGetCore3Kind(out var core3))
+        {
+            // Prepare for merge: harness + catalog path still practice-safe on 나스닥.
+            var pre = AppHarness.CreateDefault();
+            pre.SetStockKind(StockMarketKind.나스닥);
+            var symbolsPre = pre.Session.ResolveWatchSymbols();
+            Assert.NotEmpty(symbolsPre);
+            Assert.True(pre.GetEvidenceCounts().LiveBlocked);
+            return;
+        }
+
+        var harness = AppHarness.CreateDefault();
+        harness.SetStockKind(core3);
+
+        var symbols = WatchlistCatalog.ResolveSymbols(core3);
+        Assert.Equal(3, symbols.Count);
+        Assert.Contains("QQQ", symbols);
+        Assert.Contains("NVDA", symbols);
+        Assert.Contains("AAPL", symbols);
+
+        var fromSession = harness.Session.ResolveWatchSymbols();
+        Assert.Equal(3, fromSession.Length);
+        Assert.Equal(symbols.OrderBy(s => s, StringComparer.Ordinal).ToArray(),
+            fromSession.OrderBy(s => s, StringComparer.Ordinal).ToArray());
+
+        var panel = harness.GetAutoTradePanel();
+        Assert.Equal(core3, panel.StockKind);
+        Assert.Equal(MainWindowViewModel.Core3KindName, panel.StockKindLabel);
+        var watchParts = panel.WatchSymbolsText
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Assert.Equal(3, watchParts.Length);
+        Assert.Contains("연습", panel.StockKindDescription + panel.SafetyNote, StringComparison.Ordinal);
+
+        // Core preset selection never unlocks live.
+        Assert.False(harness.IsLiveSubmissionEnabled);
+        Assert.True(harness.GetEvidenceCounts().LiveBlocked);
+
+        var startMsg = harness.StartAutoTrade();
+        Assert.Contains("실주문", startMsg, StringComparison.Ordinal);
+        Assert.Contains("연습", startMsg, StringComparison.Ordinal);
+        var panelRunning = harness.GetAutoTradePanel();
+        Assert.Contains("연습", panelRunning.SafetyNote, StringComparison.Ordinal);
+        Assert.Equal(AutoTradeSessionStatus.실행중, panelRunning.SessionStatus);
+        _ = harness.StopAutoTrade();
+        Assert.False(harness.IsLiveSubmissionEnabled);
+    }
+
+    [Fact]
+    public void Practice_safety_copy_mentions_practice_not_advice()
+    {
+        var harness = AppHarness.CreateDefault();
+        var panel = harness.GetAutoTradePanel();
+        Assert.Contains("연습", panel.SafetyNote, StringComparison.Ordinal);
+        Assert.Contains("실주문", panel.SafetyNote, StringComparison.Ordinal);
+
+        // ViewModel enriches SafetyHeadline / SafetyNote with non-advice wording on ApplyPanel.
+        Assert.Equal(
+            MainWindowViewModel.ResolveDefaultStockKind().ToString(),
+            MainWindowViewModel.TryGetCore3Kind(out _)
+                && WatchlistCatalog.KindLabels.Contains(MainWindowViewModel.Core3KindName, StringComparer.Ordinal)
+                ? MainWindowViewModel.Core3KindName
+                : StockMarketKind.나스닥.ToString());
+    }
+
     [Fact]
     public async Task GetDashboardAsync_populates_ConnectionLabel_and_ConnectionModeLabel()
     {

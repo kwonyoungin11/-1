@@ -14,10 +14,20 @@ namespace TradingBot.App.ViewModels;
 
 /// <summary>
 /// 상단 차트 2/3 + 하단 자동매매 필수 조작 1/3.
-/// 버블 크기 = 체결 규모(수량×가격 · 거래대금). 투자 조언 아님 · 실주문 차단.
+/// 버블 크기 = 체결 규모(수량×가격 · 거래대금). 연습 전용 · 투자 조언 아님 · 실주문 차단.
+/// 대상 주식 콤보 = <see cref="WatchlistCatalog.KindLabels"/> (Domain 코어3 병합 시 자동 노출).
 /// </summary>
 public partial class MainWindowViewModel : ViewModelBase
 {
+    /// <summary>
+    /// Domain <c>StockMarketKind.나스닥코어3</c> 이름 (병합 전에도 문자열로 탐지).
+    /// 심볼 목록은 Domain <see cref="WatchlistCatalog"/> 가 소유 (QQQ·NVDA·AAPL).
+    /// </summary>
+    public const string Core3KindName = "나스닥코어3";
+
+    private const string PracticeSafetyHeadline =
+        "실거래 잠김 · 실제 주문은 나가지 않습니다 · 연습 전용 · 투자 조언 아님";
+
     private readonly AppHarness _harness;
     private bool _suppressSelectionEcho;
 
@@ -29,18 +39,42 @@ public partial class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel(AppHarness harness)
     {
         _harness = harness ?? throw new ArgumentNullException(nameof(harness));
+        // KindLabels는 AllKinds 기반 — Domain이 나스닥코어3를 추가하면 콤보에 자동 반영.
         StockKindOptions = new ObservableCollection<string>(WatchlistCatalog.KindLabels);
         StrategyOptions = new ObservableCollection<string>(StrategyCatalog.Labels);
         SymbolOptions = new ObservableCollection<string>();
-        SelectedStockKind = StockMarketKind.나스닥.ToString();
+        var defaultKind = ResolveDefaultStockKind();
+        SelectedStockKind = defaultKind.ToString();
+        _harness.SetStockKind(defaultKind);
         SelectedStrategy = TradingStrategyKind.단순연습전략.ToString();
         RefreshSymbolOptions();
         BuildEmptyChart();
         ApplyPanel(_harness.GetAutoTradePanel());
         ConnectionLabel = _harness.ConnectionLabel;
         ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel);
-        SafetyHeadline = "실거래 잠김 · 실제 주문은 나가지 않습니다";
+        SafetyHeadline = PracticeSafetyHeadline;
     }
+
+    /// <summary>
+    /// Domain에 나스닥코어3가 있고 KindLabels에 있으면 기본 선택; 없으면 나스닥.
+    /// </summary>
+    public static StockMarketKind ResolveDefaultStockKind()
+    {
+        if (TryGetCore3Kind(out var core3)
+            && WatchlistCatalog.KindLabels.Contains(core3.ToString(), StringComparer.Ordinal))
+        {
+            return core3;
+        }
+
+        return StockMarketKind.나스닥;
+    }
+
+    /// <summary>
+    /// 병합 전·후 모두 컴파일 가능한 코어3 탐지 (enum 멤버 직접 참조 금지).
+    /// </summary>
+    public static bool TryGetCore3Kind(out StockMarketKind kind) =>
+        Enum.TryParse(Core3KindName, ignoreCase: false, out kind)
+        && Enum.IsDefined(kind);
 
     public ObservableCollection<string> StockKindOptions { get; }
     public ObservableCollection<string> StrategyOptions { get; }
@@ -85,6 +119,9 @@ public partial class MainWindowViewModel : ViewModelBase
             var panel = _harness.GetAutoTradePanel();
             ApplyPanel(panel);
             RebuildChart();
+            StatusLine = kind.ToString().Equals(Core3KindName, StringComparison.Ordinal)
+                ? $"대상 · {kind} (코어3 연습 유니버스) · 연습 전용 · 투자 조언 아님"
+                : $"대상 · {kind} · 연습 전용 · 투자 조언 아님";
         }
     }
 
@@ -153,11 +190,11 @@ public partial class MainWindowViewModel : ViewModelBase
             ConnectionLabel = _harness.ConnectionLabel;
             ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel);
             RebuildChart();
-            StatusLine = $"갱신 완료 · {ConnectionPill} · 실주문 없음";
+            StatusLine = $"갱신 완료 · {ConnectionPill} · 실주문 없음 · 연습 전용 · 투자 조언 아님";
         }
         catch
         {
-            StatusLine = "오류 · 실주문은 하지 않습니다";
+            StatusLine = "오류 · 실주문은 하지 않습니다 · 연습 전용 · 투자 조언 아님";
             ConnectionLabel = "읽기 연결 오류";
             ConnectionPill = "오류";
         }
@@ -203,7 +240,16 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         ChartTitle = $"{p.StockKindLabel} · {p.FocusSymbol}";
-        SafetyHeadline = "실거래 잠김 · 실제 주문은 나가지 않습니다 · 연습 모드";
+        SafetyHeadline = PracticeSafetyHeadline;
+        // Session SafetyNote에 투자 조언 고지가 없으면 ViewModel에서 보강 (Domain 병합 전 대비).
+        if (!SafetyNote.Contains("투자 조언", StringComparison.Ordinal)
+            && !SafetyNote.Contains("투자 권유", StringComparison.Ordinal))
+        {
+            SafetyNote = string.IsNullOrWhiteSpace(SafetyNote)
+                ? "연습 세션만 제어합니다. 실주문 차단. 투자 조언 아님."
+                : $"{SafetyNote} 투자 조언 아님.";
+        }
+
         _suppressSelectionEcho = false;
     }
 
