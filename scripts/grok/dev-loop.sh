@@ -50,9 +50,13 @@ run_dotnet_gates() {
     echo "warning: dotnet not installed — skipping build/test"
     return 0
   fi
-  run_gate "dotnet-restore" dotnet restore
-  run_gate "dotnet-build" dotnet build --configuration Release --no-restore
-  run_gate "dotnet-test" dotnet test --configuration Release --no-build --verbosity quiet
+  local failed=0
+  run_gate "dotnet-restore" dotnet restore || failed=1
+  if [[ "$failed" -ne 0 ]]; then return 1; fi
+  run_gate "dotnet-build" dotnet build --configuration Release --no-restore || failed=1
+  if [[ "$failed" -ne 0 ]]; then return 1; fi
+  run_gate "dotnet-test" dotnet test --configuration Release --no-build --verbosity quiet || failed=1
+  return "$failed"
 }
 
 attempt=1

@@ -2,15 +2,14 @@
 
 ```text
 현재 날짜: 2026-07-09
-개발 방식: worktree + dev-loop + 병렬 에이전트 (오너 확정)
+개발 방식: worktree + dev-loop + 병렬 에이전트
 정책: docs/PARALLEL_AGENTS.md
 
-Phase 0-3: 완료
-병렬 스트림 (진행):
-  A: Phase 4 dry-run ledger / audit
-  B: Observability audit module
-  C: Cockpit UI binding models
+Wave 01 통합:
+  A dry-run ledger — 통합
+  B observability audit — 통합
+  C cockpit dashboard models — 통합
 
 live order: blocked
-활성 worktree: .worktrees/active-dev
+다음: dev-loop 검증 후 main 반영
 ```
