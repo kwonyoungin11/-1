@@ -1,6 +1,6 @@
 # Phase 1 — 사용자 중심 Cockpit 설계
 
-**상태:** 상세 설계 완료 → **오너 화면 구조 승인 대기**  
+**상태:** **오너 승인 완료** (2026-07-09) → Phase 2로 진행 가능  
 **작업 위치:** `.worktrees/active-dev` (`feature/worktree-all-dev`)  
 **돈 위험:** 없음 (화면·문서·상태 모델만, 실주문 없음)  
 **실거래와의 연결:** 실거래 때 오너가 **무엇을 보고 승인·정지할지**를 지금 고정한다.
@@ -80,6 +80,8 @@
 
 ## 9. Phase 2로 넘어가는 조건
 
-- [ ] 오너 화면 구조 승인  
-- [ ] dev-loop PASS  
-- [ ] Live Lock / Kill Switch / 차단 사유가 홈에 있는 것 합의  
+- [x] 오너 화면 구조 승인 (2026-07-09) — `docs/cockpit/PHASE_01_APPROVAL.md`  
+- [x] dev-loop PASS (설계 커밋 시)  
+- [x] Live Lock / Kill Switch / 차단 사유가 홈에 있는 것 합의  
+
+**Phase 1 종료.** 다음: `docs/plans/PHASE_02_toss_readonly.md`

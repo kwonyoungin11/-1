@@ -26,7 +26,8 @@
 ## 현재 위치
 
 - Phase 0: 하네스·worktree·dev-loop 완료
-- **Phase 1: 상세 설계 완료 → 오너 화면 구조 승인 대기**
+- Phase 1: **오너 승인 완료** (2026-07-09) — `docs/cockpit/PHASE_01_APPROVAL.md`
+- **다음: Phase 2 토스 읽기 전용 연결**
 - 활성 worktree: `.worktrees/active-dev`
 
 ## 작업 규칙
@@ -34,14 +35,14 @@
 1. worktree에서만 구현
 2. 단계 통과 증거 없이 다음 phase로 강제 이동 금지
 3. 실거래(Phase 7) 전 Phase 6 필수
-4. UI는 사용자 중심 cockpit 우선
+4. UI는 사용자 중심 cockpit 우선 (승인된 MVP 8화면)
 5. 병합 전 `bash scripts/grok/dev-loop.sh`
 
 ## 다음 실행
 
-1. 오너: Phase 1 화면 구조 승인 (`docs/cockpit/SCREEN_MAP.md` + WIREFRAME)
-2. Phase 2 read-only Toss 상세 플랜
-3. (승인 후) cockpit UI 골격 구현 착수
+1. Phase 2 상세 플랜 확정 및 read-only 클라이언트 설계
+2. cockpit에 연결 상태·계좌 마스킹 슬롯 데이터 붙이기 (주문 없음)
+3. UI 프레임워크는 구현 직전 오너 재확인 (브라우저 추천)
 
 ## 개발 루프 (오너 확정 2026-07-09)
 

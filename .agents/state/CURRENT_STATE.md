@@ -5,20 +5,15 @@
 프로젝트: C# / .NET 토스증권 Open API 나스닥 자동매매
 최종 목적: 실거래
 UI: 사용자 중심 cockpit
-개발: worktree + dev-loop
 
-Phase: 1 상세 설계 완료 / 오너 승인 대기
-산출물:
-  docs/plans/PHASE_01_cockpit.md
-  docs/cockpit/SCREEN_MAP.md
-  docs/cockpit/WIREFRAME.md
-  docs/cockpit/OWNER_WALKTHROUGH.md
-  TradingBot.Ui cockpit snapshot model + tests
+Phase 0: 완료
+Phase 1: 오너 승인 완료 (2026-07-09) — docs/cockpit/PHASE_01_APPROVAL.md
+Phase 2: 착수 준비 — docs/plans/PHASE_02_toss_readonly.md
 
 활성 worktree: .worktrees/active-dev
 브랜치: feature/worktree-all-dev
 live order: blocked
+ALLOW_LIVE_ORDERS=false / KILL_SWITCH=true / ORDER_MODE=dry_run
 
-다음 오너 게이트: 화면 구조 승인 여부
-다음 개발: 승인 후 Phase 2 플랜 또는 UI 골격 구현
+다음 작업: Phase 2 read-only Toss client (mock-first, no order APIs)
 ```
