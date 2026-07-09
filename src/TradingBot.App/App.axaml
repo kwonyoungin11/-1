@@ -2,14 +2,117 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="TradingBot.App.App"
              xmlns:local="using:TradingBot.App"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
-
-    <Application.DataTemplates>
-        <local:ViewLocator/>
-    </Application.DataTemplates>
-  
-    <Application.Styles>
-        <FluentTheme />
-    </Application.Styles>
+             RequestedThemeVariant="Dark">
+  <Application.DataTemplates>
+    <local:ViewLocator/>
+  </Application.DataTemplates>
+  <Application.Styles>
+    <FluentTheme />
+    <Style Selector="Window.glass-root">
+      <Setter Property="Background" Value="#CC0B1220"/>
+      <Setter Property="Foreground" Value="#F1F5F9"/>
+    </Style>
+    <Style Selector="TextBlock.title">
+      <Setter Property="FontSize" Value="22"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="#F8FAFC"/>
+    </Style>
+    <Style Selector="TextBlock.headline">
+      <Setter Property="FontSize" Value="16"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="#FECACA"/>
+    </Style>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="#CBD5E1"/>
+    </Style>
+    <Style Selector="TextBlock.section-blue">
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="#93C5FD"/>
+    </Style>
+    <Style Selector="TextBlock.sub">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="#94A3B8"/>
+    </Style>
+    <Style Selector="TextBlock.big-warn">
+      <Setter Property="FontSize" Value="22"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="#FCA5A5"/>
+    </Style>
+    <Style Selector="Border.glass-bar">
+      <Setter Property="Background" Value="#66111827"/>
+      <Setter Property="BorderBrush" Value="#55FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="14"/>
+      <Setter Property="BoxShadow" Value="0 8 32 0 #40000000"/>
+    </Style>
+    <Style Selector="Border.glass-card">
+      <Setter Property="Background" Value="#59111827"/>
+      <Setter Property="BorderBrush" Value="#40FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="14"/>
+      <Setter Property="BoxShadow" Value="0 10 28 0 #33000000"/>
+    </Style>
+    <Style Selector="Border.glass-danger">
+      <Setter Property="Background" Value="#667F1D1D"/>
+      <Setter Property="BorderBrush" Value="#66FCA5A5"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="14"/>
+    </Style>
+    <Style Selector="Border.glass-action">
+      <Setter Property="Background" Value="#552563EB"/>
+      <Setter Property="BorderBrush" Value="#6693C5FD"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="14"/>
+    </Style>
+    <Style Selector="Border.glass-row">
+      <Setter Property="Background" Value="#330B1220"/>
+      <Setter Property="BorderBrush" Value="#22FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="10"/>
+    </Style>
+    <Style Selector="Border.pill-kill">
+      <Setter Property="Background" Value="#B3991B1B"/>
+      <Setter Property="BorderBrush" Value="#66FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="999"/>
+      <Setter Property="Padding" Value="12,6"/>
+    </Style>
+    <Style Selector="Border.pill-lock">
+      <Setter Property="Background" Value="#B37F1D1D"/>
+      <Setter Property="BorderBrush" Value="#66FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="999"/>
+      <Setter Property="Padding" Value="12,6"/>
+    </Style>
+    <Style Selector="Border.pill-mode">
+      <Setter Property="Background" Value="#991E3A5F"/>
+      <Setter Property="BorderBrush" Value="#55FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="999"/>
+      <Setter Property="Padding" Value="12,6"/>
+    </Style>
+    <Style Selector="Border.pill-ok">
+      <Setter Property="Background" Value="#9914532D"/>
+      <Setter Property="BorderBrush" Value="#55FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="999"/>
+      <Setter Property="Padding" Value="12,6"/>
+    </Style>
+    <Style Selector="Border.pill-kill TextBlock, Border.pill-lock TextBlock, Border.pill-mode TextBlock, Border.pill-ok TextBlock">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="Button.glass-btn">
+      <Setter Property="Background" Value="#992563EB"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Padding" Value="16,8"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="BorderBrush" Value="#66FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+  </Application.Styles>
 </Application>

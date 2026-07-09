@@ -1,0 +1,59 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style Selector="Window.cockpit">
+    <Setter Property="Background" Value="#0B1220"/>
+    <Setter Property="Foreground" Value="#E8EEF7"/>
+  </Style>
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="#94A3B8"/>
+  </Style>
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="22"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+  </Style>
+  <Style Selector="TextBlock.h2">
+    <Setter Property="FontSize" Value="14"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="#CBD5E1"/>
+  </Style>
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="#111827"/>
+    <Setter Property="BorderBrush" Value="#1F2937"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="Padding" Value="14"/>
+  </Style>
+  <Style Selector="Border.pill-danger">
+    <Setter Property="Background" Value="#7F1D1D"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Padding" Value="10,5"/>
+  </Style>
+  <Style Selector="Border.pill-kill">
+    <Setter Property="Background" Value="#991B1B"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Padding" Value="10,5"/>
+  </Style>
+  <Style Selector="Border.pill-mode">
+    <Setter Property="Background" Value="#1E3A5F"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Padding" Value="10,5"/>
+  </Style>
+  <Style Selector="Border.pill-safe">
+    <Setter Property="Background" Value="#14532D"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Padding" Value="10,5"/>
+  </Style>
+  <Style Selector="Border.card-action">
+    <Setter Property="Background" Value="#0F2744"/>
+    <Setter Property="BorderBrush" Value="#2563EB"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="Padding" Value="14"/>
+  </Style>
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="#2563EB"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="Padding" Value="14,8"/>
+    <Setter Property="CornerRadius" Value="8"/>
+  </Style>
+</Styles>
