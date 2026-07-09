@@ -37,36 +37,50 @@
       </Grid>
     </Border>
 
-    <!-- Chart -->
-    <Border Grid.Row="1" Classes="glass-card" Padding="10" Margin="0,0,0,10" Background="#FFFFFF">
-      <Grid RowDefinitions="Auto,*">
-        <Grid ColumnDefinitions="*,Auto" Margin="4,0,4,8">
+    <!-- Chart: price + volume panes (TradingView-like) -->
+    <Border Grid.Row="1" Classes="glass-card" Padding="8" Margin="0,0,0,10" Background="#FFFFFF">
+      <Grid RowDefinitions="Auto,*,0.38*">
+        <Grid ColumnDefinitions="*,Auto" Margin="6,2,6,6">
           <StackPanel Spacing="2">
             <TextBlock Classes="section" Text="{Binding ChartTitle}" FontSize="14"/>
             <TextBlock Classes="sub" Text="{Binding ChartSubtitle}"/>
             <TextBlock Classes="sub" Text="{Binding IndicatorLegend}" Foreground="#475569"/>
-            <TextBlock Classes="metric" Text="{Binding LastPriceLabel}" FontSize="13"/>
+            <TextBlock Classes="metric" Text="{Binding LastPriceLabel}" FontSize="12"/>
           </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
-            <Border Classes="pill-mode" Padding="8,4">
-              <TextBlock Text="ENTRY / SL / TP"/>
-            </Border>
-            <Border Classes="pill-mode" Padding="8,4">
-              <TextBlock Text="TV layout"/>
-            </Border>
+            <Border Classes="pill-mode" Padding="8,4"><TextBlock Text="KST"/></Border>
+            <Border Classes="pill-mode" Padding="8,4"><TextBlock Text="Crosshair"/></Border>
+            <Border Classes="pill-mode" Padding="8,4"><TextBlock Text="Sections"/></Border>
           </StackPanel>
         </Grid>
+        <!-- Price pane -->
         <lvc:CartesianChart Grid.Row="1"
                             Series="{Binding Series}"
                             XAxes="{Binding XAxes}"
                             YAxes="{Binding YAxes}"
+                            Sections="{Binding Sections}"
                             DrawMarginFrame="{Binding DrawMarginFrame}"
                             DrawMargin="{Binding DrawMargin}"
                             TooltipPosition="Top"
+                            FindingStrategy="CompareOnlyX"
                             ZoomMode="X"
                             AnimationsSpeed="0:0:0"
                             LegendPosition="Hidden"
                             Background="#FFFFFF"/>
+        <!-- Volume pane -->
+        <lvc:CartesianChart Grid.Row="2"
+                            Series="{Binding VolumeSeries}"
+                            XAxes="{Binding VolumeXAxes}"
+                            YAxes="{Binding VolumeYAxes}"
+                            DrawMarginFrame="{Binding VolumeDrawMarginFrame}"
+                            DrawMargin="{Binding VolumeDrawMargin}"
+                            TooltipPosition="Top"
+                            FindingStrategy="CompareOnlyX"
+                            ZoomMode="X"
+                            AnimationsSpeed="0:0:0"
+                            LegendPosition="Hidden"
+                            Background="#FFFFFF"
+                            Margin="0,2,0,0"/>
       </Grid>
     </Border>
 
