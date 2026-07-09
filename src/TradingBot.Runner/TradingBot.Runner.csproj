@@ -14,5 +14,6 @@
     <ProjectReference Include="..\TradingBot.Observability\TradingBot.Observability.csproj" />
     <ProjectReference Include="..\TradingBot.Ui\TradingBot.Ui.csproj" />
     <ProjectReference Include="..\TradingBot.Infrastructure.Toss\TradingBot.Infrastructure.Toss.csproj" />
+    <ProjectReference Include="..\TradingBot.Backtesting\TradingBot.Backtesting.csproj" />
   </ItemGroup>
 </Project>
