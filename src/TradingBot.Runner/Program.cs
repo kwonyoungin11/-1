@@ -1,6 +1,15 @@
 using TradingBot.Runner;
 
-// Thin entry: composition lives in TradingBotHarness. Live path stays blocked.
+// Thin entry: default harness, or offline backtest host.
+// Live order path stays blocked in both modes.
+
+if (args.Length > 0
+    && args[0].Equals("backtest", StringComparison.OrdinalIgnoreCase))
+{
+    var backtestArgs = args.Skip(1).ToArray();
+    return await BacktestCommand.RunAsync(backtestArgs, CancellationToken.None);
+}
+
 var harness = TradingBotHarness.CreateDefault();
 var result = await harness.RunOnceAsync(cancellationToken: CancellationToken.None);
 

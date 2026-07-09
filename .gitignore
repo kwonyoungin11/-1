@@ -67,3 +67,7 @@ logs/private/
 # Git worktrees (isolated dev folders — never commit)
 .worktrees/
 worktrees/
+
+# large historical candle caches (regenerate via backtest host)
+artifacts/candles/
+

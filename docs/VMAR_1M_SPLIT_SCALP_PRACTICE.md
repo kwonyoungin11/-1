@@ -27,3 +27,6 @@
 - ALLOW_LIVE_ORDERS=false
 - KILL_SWITCH=true
 - ORDER_MODE=dry_run
+
+## 관련
+- 백테스트·CERS 방법론: [`docs/BACKTEST_CUSTOM_CERS.md`](BACKTEST_CUSTOM_CERS.md) (연습 UI와 별개 · 실주문 없음)
