@@ -342,7 +342,7 @@ public sealed class AppHarness
         var summary =
             $"LIVE_READY=false; LIVE_OWNER_UNLOCK_STATUS={ownerStatus}; "
             + $"status={evaluation.Status}; "
-            + $"gatedLiveRouterType={_gatedLiveRouter.GetType().Name}; "
+            + $"gatedLiveRouterType={(_gatedLiveRouter?.GetType().Name ?? "none")}; "
             + "practiceLoop=dry_run_paper_only";
 
         return new AppLiveReadinessReport(

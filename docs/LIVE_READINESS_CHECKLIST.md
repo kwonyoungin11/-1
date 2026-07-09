@@ -334,29 +334,26 @@ operator confirms live mode          ← 오너 Phase 7 실서명 전
 
 ```text
 오너 요약:
-- 현재 단계: Phase 0–5 + gated live 경로 + ops 캡처 · 기본 실행 dry-run
+- 현재 단계: Phase 0–5 + gated live 경로 + ops 캡처 세트 · 기본 실행 dry-run
 - 안전 상태: LIVE_READY=false, LIVE_SAFETY_INTACT=true, LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock
-- live order 가능 여부: 불가능 (gated · auto-live 없음)
-- 오늘 해야 할 결정: multi-session export 수집 여부 / multi-day 기간 합의 / (선택) 읽기 스모크 / incident 리허설 일정
-- 내가 추천하는 선택: 실주문 계속 잠금. artifacts/live-readiness/ 에 multi-session export 와 리허설 기록만 쌓기
-- 이유: 코드는 “안전하게 막힌 연습 파이프”까지 끝남. unlock ready를 주장할 ops 증거가 없음
-- 다음 승인 항목: Phase 7 실거래 개방 여부 (지금은 승인하지 말 것 · ready_for_owner_unlock 전)
+- live order (기본 실행): 불가능 (gated · auto-live 없음)
+- 오늘 해야 할 결정: Phase 7 실서명 여부 / env 플래그 의도적 설정 / (선택) 실 읽기 스모크
+- 추천: 실주문은 오너가 명시 서명·플래그 전까지 계속 잠금 유지
+- 이유: 코드·ops 캡처는 “오너 검토 가능”까지 끝남. 자동 live 전환은 없음
+- 다음 승인 항목: owner-unlock-signoff 실서명 + gate E 플래그 (원하면)
 ```
 
 ---
 
-## 다음에 채울 증거 (우선순위 — 전부 ops/owner)
+## Residual (오너/기간 — unlock 상태와 별개)
 
-1. **`artifacts/live-readiness/multi-session-export.*`** — 세션 묶음 export (**multi-calendar-day real ops 로 표기 금지**)
-2. (권장) 오너 합의 **multi-calendar-day** paper 노트 — export와 별도 파일
-3. (선택·live-ready 주장 시 필요) 오너 승인 **redacted Toss read smoke**
-4. OpenAPI snapshot 주기 재검증 로그 → `artifacts/live-readiness/`
-5. gitleaks/trivy hard gate (설치 시)
-6. 멱등/중복 가드 저장소 설계·테스트 (여전히 live submit 없이)
-7. **Incident 리허설 날짜** 기록
-8. **Phase 7 오너 승인서** — **마지막 · 없음** · 자동 생성 금지
+1. **Phase 7 오너 실서명** — `owner-unlock-signoff.md` 템플릿을 오너가 교체
+2. (선택) multi-calendar-day paper 노트
+3. (선택) redacted Toss **실** 읽기 스모크
+4. gitleaks/trivy hard gate (설치 시)
+5. Gate E 플래그 (기본 fail-closed 유지가 정상)
 
-**Bottom line:** Pre-live **code** is complete. Phase 6 remaining work is **ops/owner evidence**.  
-**지금은 LIVE_READY=false 가 정답입니다.**  
-**LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence.**  
-**ready_for_owner_unlock ≠ auto-live.** Phase 7 기본 실행은 계속 dry-run · owner unlock required.
+**Bottom line:** Pre-live **code** + **ops capture** complete for unlock review.  
+**LIVE_READY=false 가 기본 정답.**  
+**LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock.**  
+**ready_for_owner_unlock ≠ auto-live.**
