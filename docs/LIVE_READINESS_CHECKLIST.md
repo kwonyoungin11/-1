@@ -85,8 +85,9 @@ LIVE_READY=false          ← 스크립트/문서가 true로 바꾸지 않음
 **`ready_for_owner_unlock` 은 “열어도 된다”가 아니라 “증거가 모여 오너 검토 가능”입니다.**  
 언락 후에도 kill switch·allow·mode·세션·리스크·한도·멱등·감사·수동 확인이 **전부** 통과해야 하며, 하나라도 실패하면 **block**.
 
-**현재 (WAVE 07):** `LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence`  
-이유: multi-session / multi-day ops 로그, 오너 서명, incident drill 날짜, 실 스모크 등 미첨부.
+**현재 (wave-base):** `LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock`  
+(`artifacts/live-readiness/` 캡처 세트 존재).  
+**여전히 `LIVE_READY=false` · auto-live 아님.** multi-calendar-day real ops · 오너 실서명 · 실 토스 스모크는 residual.
 
 ---
 
@@ -126,20 +127,21 @@ LIVE_READY=false          ← 스크립트/문서가 true로 바꾸지 않음
 
 | 차단 항목 | 상태 | 왜 live를 막는가 |
 |-----------|------|------------------|
-| **Multi-session export** 및/또는 **multi-day paper ops** | **미첨부** | 단위 paper ≠ 운영 안정. export는 `artifacts/live-readiness/` 에 날짜·세션 표시. **multi-session export ≠ multi-calendar-day real ops** (아래 정직 규칙) |
-| **Owner-approved redacted Toss read smoke** | **미첨부** (선택이나 “live-ready 주장” 시 필요) | mock/stub ≠ 실 연결. 오너 로컬 키 + redacted 로그 1회 |
-| **OpenAPI snapshot 주기 재검증 로그** | 프로세스만 있음 | 스냅샷 존재하나 운영 re-fetch 로그 미첨부 |
+| **Multi-session export** | **첨부됨** (`paper-multi-session-export.txt`) | unlock 증거 OK · **≠ multi-calendar-day real ops** |
+| **Multi-calendar-day paper ops** | **미첨부** | multi-session export와 별개 · live 주장 시 필요 가능 |
+| **Owner-approved redacted Toss read smoke** | residual 문서 있음 · **실 스모크 로그 없음** | mock/stub ≠ 실 연결. 오너 로컬 키 + redacted 로그 1회 |
+| **OpenAPI recheck log** | **첨부됨** (`openapi-recheck.log`) | unlock 캡처 충족 |
 | **gitleaks/trivy hard gate** | optional | 설치 시 hard gate로 고정하려면 운영/CI 증거 |
-| **Idempotency / duplicate on live path** | dry-run/paper 가드 완료 · **live 경로 없음** | 연습 경로 `ClientOrderIdIndex` 완료. live submit 추가 시 동일 가드 재사용 필요 (Phase 7) |
+| **Idempotency / duplicate (practice + gated live)** | dry-run/paper + `GatedLiveOrderRouter` 인덱스 | 기본 harness는 dry-run/paper |
 | **Account reconcile / full live limits** | 미증거 | 실거래 전 계좌 정합·한도 전체 세트 |
-| **Incident drill date** | **날짜 없음** | `docs/INCIDENT_RESPONSE.md` 절차만 존재 · 리허설 기록 미첨부 |
-| **Owner cockpit walkthrough sign-off** | 문서만 | walkthrough 존재 · 오너 완료 서명/날짜 미첨부 |
-| **Owner Phase 7 signature** | **없음 (의도)** | 없으면 실거래 개방 금지 |
-| **Final gate E simultaneous true** | **미충족** | kill/allow/mode 기본 차단 + 위 ops 전부 |
+| **Incident drill date** | **첨부됨** (`incident-drill-record.md` 2026-07-09) | unlock 캡처 충족 |
+| **Owner cockpit walkthrough sign-off** | 문서만 | walkthrough 존재 · 오너 완료 서명/날짜 별도 |
+| **Owner Phase 7 signature** | **템플릿만** (`owner-unlock-signoff.md` UNSIGNED) | 오너 실서명 전 실거래 개방 금지 |
+| **Final gate E simultaneous true** | **미충족** | kill/allow/mode **기본 차단** 유지 |
 | **Owner env unlock flags** | **기본 차단 유지** | 오너가 플래그를 켜기 전엔 gated path 사용 불가 |
 
-**LIVE_READY=false 유지 이유:** 위 ops/owner 항목이 비어 있고, 기본 안전 플래그가 의도적으로 차단이며, 주문 submit 경로가 코드에 없음.  
-**LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence** 동일 이유.
+**LIVE_READY=false 유지 이유:** 기본 안전 플래그가 의도적으로 차단 · auto-live 없음 · Phase 7 오너 실서명/env 미적용.  
+**LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock:** 합의된 ops **캡처 세트는 존재** (실주문 자동 개방 아님).
 
 ### Multi-session export vs multi-calendar-day real ops (정직 명명)
 
@@ -208,18 +210,19 @@ LIVE_READY=false          ← 스크립트/문서가 true로 바꾸지 않음
 ```text
 LIVE_READY=false
 LIVE_SAFETY_INTACT=true
-LIVE_READINESS_STATUS=blocked_as_expected
-LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence
+LIVE_READINESS_STATUS=ready_for_owner_unlock
+LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock
 trading safety scan PASSED
-owner readiness PASSED (docs/harness present; live still blocked)
+owner readiness PASSED (docs/harness present; live still blocked by defaults)
 secret scan PASSED
-dotnet test: 실패 0 (Domain/Risk/Orders/Toss/Application/Ui/Web/Runner/App/Obs)
+dotnet test: 실패 0
 ```
 
 - [x] `scripts/grok/check-live-readiness.sh` 존재 및 통과 시 `LIVE_READY=false` 출력
 - [x] `docs/plans/LIVE_READINESS_EVIDENCE.md` 존재
-- [ ] 섹션 A–E **ops/owner** 전 항목 완료 (아래 — **미완료, live 불가**; 코드 섹션과는 별개)
-- [ ] `artifacts/live-readiness/` 에 capturable 증거 세트 없음 → unlock blocked
+- [x] `artifacts/live-readiness/` capturable 세트 존재 → unlock=`ready_for_owner_unlock`
+- [ ] 섹션 A–E **오너 실서명 / multi-day / 실 스모크** 등 residual (live 개방 전; unlock 상태와 별개)
+- [ ] Gate E 동시 충족 (기본 플래그 차단 유지 = 의도)
 
 ---
 
@@ -265,8 +268,8 @@ dotnet test: 실패 0 (Domain/Risk/Orders/Toss/Application/Ui/Web/Runner/App/Obs
 | [~] | live용 전 한도·계좌 정합 세트 | Max* partial · reconcile 미증거 | **ops / live-prep design** |
 | [x] | dry-run 단위 안정 | `DryRunOrderRouter` · ledger tests · mode ≠ Live | code |
 | [x] | paper **단위** ledger | `PaperOrderRouter` · `PaperLedgerTests` · `EvidenceBuilderTests` | code |
-| [~] | paper **multi-session export** (세션 묶음) | **코드 exporter 있음 · `artifacts/live-readiness/` 미첨부** — multi-day real ops로 주장 금지 | **ops (blocks unlock)** |
-| [ ] | paper **multi-calendar-day real ops** | **미첨부** — multi-session export 와 **별개** | **ops (blocks live claims)** |
+| [x] | paper **multi-session export** (세션 묶음) | `artifacts/live-readiness/paper-multi-session-export.txt` · multi-day real ops로 주장 금지 | ops capture (unlock) |
+| [ ] | paper **multi-calendar-day real ops** | **미첨부** — multi-session export 와 **별개** | **ops residual** |
 | [~] | manual approval 2단계 UX | 게이트 플래그 + Live Lock 표시. **실거래 2단계 승인 UX 없음(의도적)** | code partial + **owner Phase 7** |
 | [x] | idempotency / duplicate guard (dry-run/paper) | `ClientOrderIdFactory` + `ClientOrderIdIndex` + 실 라우터 테스트 PASS | code (pre-live) |
 | [x] | live implementation 명시 비활성 | `BlockedLiveOrderRouter` · no `SubmitOrderAsync` · scripts PASS | code |
@@ -283,10 +286,10 @@ multi-session export 파일·multi-day 기간 로그 = **ops**.
 |------|------|------------------|------|
 | [x] | cockpit에서 live lock / kill switch 명확 | Avalonia + Web safety strip · snapshot tests | code |
 | [~] | 오너가 상태 설명 이해 가능 | `OWNER_WALKTHROUGH.md` · 한국어 문구. **오너 완료 서명/날짜 미첨부** | **owner** |
-| [ ] | incident response 리허설 | `INCIDENT_RESPONSE.md` 존재. **날짜 찍힌 리허설 기록 없음** | **ops** |
-| [ ] | 오너 서명: live 전환 승인서 | **없음** (Phase 7 전제). 자동화로 생성 금지 | **owner Phase 7** |
+| [x] | incident response 리허설 기록 | `artifacts/live-readiness/incident-drill-record.md` (2026-07-09) | ops capture |
+| [~] | 오너 서명: live 전환 승인서 | **UNSIGNED 템플릿** (`owner-unlock-signoff.md`) · 오너 실서명 전 개방 금지 | **owner Phase 7** |
 
-**D 결론:** UI “잠김” 표시 = code 완료. 리허설·오너 서명 = **ops/owner** → **live 불가**.
+**D 결론:** UI “잠김” + incident drill 캡처 = 있음. 오너 **실서명** 전 기본 실행 live 불가.
 
 ---
 
@@ -303,26 +306,27 @@ session open                         ← UsMarketSessionGuard 단위 수준
 market data fresh                    ← RiskGate stale 규칙 단위 수준
 risk gate pass                       ← 후보 단위 규칙 (pre-live core)
 dry-run pass                         ← 단위 OK / multi-session export ops partial
-paper trading stable                 ← 단위 OK / multi-session·multi-day 증거 없음 ← ops gap
-valid Toss credential                ← 로컬 .env / 실스모크 미첨부 ← owner/ops
+paper trading stable                 ← 단위 OK · multi-session export 첨부 · multi-day residual
+valid Toss credential                ← 로컬 .env / 실스모크 residual
 account reconciled                   ← 미증거
 limits ok                            ← 일부 Max* 설정만
-duplicate guard pass                 ← dry-run/paper ClientOrderIdIndex 완료 (live 경로 없음)
+duplicate guard pass                 ← ClientOrderIdIndex (practice + gated)
 idempotency key present              ← ClientOrderIdFactory + 검증
 audit log enabled                    ← InMemoryAuditLog 단위
-operator confirms live mode          ← 오너 Phase 7 서명 없음
+operator confirms live mode          ← 오너 Phase 7 실서명 전
 ```
 
 | 상태 | 게이트 | 현재 |
 |------|--------|------|
-| [ ] | E 전체 동시 충족 | **미충족** |
+| [ ] | E 전체 동시 충족 | **미충족** (기본 플래그 차단 = 의도) |
 | [x] | 기본 config fail-closed 유지 | `ALLOW_LIVE_ORDERS=false` · `KILL_SWITCH=true` · `ORDER_MODE=dry_run` |
-| [x] | Live-capable path GATED | defaults block · owner must set flags · no auto-live |
+| [x] | Live-capable path GATED | `GatedLiveOrderRouter` · defaults block · no auto-live |
 | [x] | `LIVE_READY=false` under defaults | 스크립트 never auto-true |
+| [x] | Owner unlock evidence capture | `ready_for_owner_unlock` |
 
 하나라도 실패 → **block**.  
-**현재: 다수 실패(의도된 차단 + ops/owner 갭) → live 불가능. LIVE_READY=false.**  
-**LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence.**
+**현재: 기본 플래그 차단 → live 불가능. LIVE_READY=false.**  
+**LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock** (오너 검토 가능 · auto-live 아님).
 
 ---
 
@@ -330,8 +334,8 @@ operator confirms live mode          ← 오너 Phase 7 서명 없음
 
 ```text
 오너 요약:
-- 현재 단계: Phase 0–5 + pre-live 엔지니어링 완료 · Phase 6 ops 갭 · Phase 7 코드 경로(게이트 시)만 논의 가능 · 기본 실행 dry-run
-- 안전 상태: 차단 유지 (LIVE_READY=false, LIVE_SAFETY_INTACT=true, LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence)
+- 현재 단계: Phase 0–5 + gated live 경로 + ops 캡처 · 기본 실행 dry-run
+- 안전 상태: LIVE_READY=false, LIVE_SAFETY_INTACT=true, LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock
 - live order 가능 여부: 불가능 (gated · auto-live 없음)
 - 오늘 해야 할 결정: multi-session export 수집 여부 / multi-day 기간 합의 / (선택) 읽기 스모크 / incident 리허설 일정
 - 내가 추천하는 선택: 실주문 계속 잠금. artifacts/live-readiness/ 에 multi-session export 와 리허설 기록만 쌓기
