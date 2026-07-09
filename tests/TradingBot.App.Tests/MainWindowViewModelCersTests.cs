@@ -46,12 +46,15 @@ public class MainWindowViewModelCersTests
     public void NonCers_strategy_hides_cers_metrics()
     {
         var harness = CreateTestHarness();
-        harness.SetStrategy(TradingStrategyKind.일분분할스캘프);
-
+        // Ctor defaults non-live to CERS; switch strategy after bind to hide metrics.
         var vm = new MainWindowViewModel(harness);
+        Assert.True(vm.IsCersStrategy);
+
+        vm.SelectedStrategy = TradingStrategyKind.일분분할스캘프.ToString();
 
         Assert.False(vm.IsCersStrategy);
         Assert.Equal(TradingStrategyKind.일분분할스캘프.ToString(), vm.SelectedStrategy);
+        Assert.Equal(TradingStrategyKind.일분분할스캘프, harness.Session.Strategy);
     }
 
     [Fact]
