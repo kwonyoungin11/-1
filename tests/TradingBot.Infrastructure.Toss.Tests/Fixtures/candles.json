@@ -1,0 +1,25 @@
+{
+  "result": {
+    "candles": [
+      {
+        "timestamp": "2026-03-25T09:32:00+09:00",
+        "openPrice": "185.70",
+        "highPrice": "186.10",
+        "lowPrice": "185.50",
+        "closePrice": "186.00",
+        "volume": "15200",
+        "currency": "USD"
+      },
+      {
+        "timestamp": "2026-03-25T09:31:00+09:00",
+        "openPrice": "185.50",
+        "highPrice": "185.80",
+        "lowPrice": "185.40",
+        "closePrice": "185.70",
+        "volume": "18400",
+        "currency": "USD"
+      }
+    ],
+    "nextBefore": "2026-03-25T09:31:00+09:00"
+  }
+}

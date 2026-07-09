@@ -125,4 +125,26 @@ public sealed class MockTossMarketDataClient : ITossMarketDataClient
             IsHolidayOrClosed: false,
             OwnerMessage: $"미국 시장 {d}: mock 정규장 세션 있음"));
     }
+
+    public Task<IReadOnlyList<CandlePoint>> GetCandlesAsync(
+        string symbol,
+        string interval,
+        int count,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(symbol))
+        {
+            return Task.FromResult<IReadOnlyList<CandlePoint>>(Array.Empty<CandlePoint>());
+        }
+
+        // Synthetic series for cockpit chart when live HTTP is off (no network).
+        var clamped = Math.Clamp(count <= 0 ? 160 : count, 1, 200);
+        _ = interval; // mock ignores interval; live client validates 1m|1d
+        var series = TradingBot.Application.MockCandleSeriesFactory.CreateSeries(
+            symbol.Trim(),
+            clamped,
+            DateTimeOffset.UtcNow);
+        return Task.FromResult(series);
+    }
 }

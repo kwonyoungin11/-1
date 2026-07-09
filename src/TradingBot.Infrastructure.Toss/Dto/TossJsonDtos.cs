@@ -149,3 +149,45 @@ public sealed class BuyingPowerResultDto
     [JsonPropertyName("cashBuyingPower")]
     public string? CashBuyingPower { get; set; }
 }
+
+/// <summary>GET /api/v1/candles envelope (OpenAPI 1.2.2 CandlePageResponse).</summary>
+public sealed class CandlesResponseDto
+{
+    [JsonPropertyName("result")]
+    public CandlePageResponseDto? Result { get; set; }
+}
+
+public sealed class CandlePageResponseDto
+{
+    [JsonPropertyName("candles")]
+    public List<CandleDto>? Candles { get; set; }
+
+    [JsonPropertyName("nextBefore")]
+    public string? NextBefore { get; set; }
+}
+
+/// <summary>OpenAPI Candle: OHLCV as decimal strings + timestamp + currency.</summary>
+public sealed class CandleDto
+{
+    [JsonPropertyName("timestamp")]
+    public string? Timestamp { get; set; }
+
+    [JsonPropertyName("openPrice")]
+    public string? OpenPrice { get; set; }
+
+    [JsonPropertyName("highPrice")]
+    public string? HighPrice { get; set; }
+
+    [JsonPropertyName("lowPrice")]
+    public string? LowPrice { get; set; }
+
+    [JsonPropertyName("closePrice")]
+    public string? ClosePrice { get; set; }
+
+    [JsonPropertyName("volume")]
+    public string? Volume { get; set; }
+
+    [JsonPropertyName("currency")]
+    public string? Currency { get; set; }
+}
+
