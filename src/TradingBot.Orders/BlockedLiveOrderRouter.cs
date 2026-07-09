@@ -19,6 +19,13 @@ public sealed class BlockedLiveOrderRouter : IOrderRouter
         _context = context ?? new LiveOrderContext();
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Always false. Even when every live gate flag is open, this router still refuses submission
+    /// (<c>live_not_implemented</c>) and never calls Toss order create/modify/cancel HTTP.
+    /// </remarks>
+    public bool IsLiveSubmissionEnabled => false;
+
     public Task<OrderRouteResult> RouteAsync(OrderCandidate candidate, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(candidate);

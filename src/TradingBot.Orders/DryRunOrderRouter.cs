@@ -12,6 +12,10 @@ public sealed class DryRunOrderRouter : IOrderRouter
         _ledger = ledger;
     }
 
+    /// <inheritdoc />
+    /// <remarks>Always false — dry-run never issues Toss order HTTP.</remarks>
+    public bool IsLiveSubmissionEnabled => false;
+
     public Task<OrderRouteResult> RouteAsync(OrderCandidate candidate, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(candidate);
