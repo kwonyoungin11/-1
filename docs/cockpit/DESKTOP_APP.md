@@ -62,9 +62,32 @@ dotnet run --project src/TradingBot.App
 - 실 읽기: `.env`에 키 + `TOSS_ALLOW_LIVE_HTTP=true` (주문 API 여전히 없음)
 - UI: 상단 뱃지 `mock` / `토스 읽기` + 하단 연결 문구 (레이아웃 변경 없음)
 
+## 실 포트폴리오 → UI 세션 바인딩 (pw10)
+
+`AppHarness.GetDashboardAsync` 가 `ConnectionStatus.LiveReadOnlyConnected` 일 때만:
+
+| 항목 | 동작 |
+|------|------|
+| 잔액 | `CashBuyingPowerUsd` / `CashBuyingPower`(병합 시) → 없으면 `MarketValueUsdSummary` 파싱 → 없으면 연습 유지 |
+| 잔액 라벨 | `잔액 X (실계좌 읽기)` · mock 은 `잔액 X (연습)` |
+| StartingBalance | 첫 실잔액 1회만 설정 (기본 연습 100k 일 때) |
+| 워치 심볼 | 보유 심볼 ∪ 현재 워치 (보유 없으면 카탈로그 유지) |
+| FocusSymbol | 첫 보유 → 시세 있는 첫 종목 → 워치 첫 종목 |
+| 차트 | 실 캔들 API 있으면 캐시 사용, 없으면 **실시세 last price seed** 로 mock 봉 |
+| SafetyNote | 여전히 **실주문 차단** |
+| ConnectionPill | 실 HTTP 모드 → **토스 읽기** |
+
+세션 API (`AutoTradeSessionService`):
+
+- `ApplyExternalBalance(decimal, setStartingIfUnset)`
+- `ApplyExternalWatchSymbols(string[])`
+- `SetDataSourceLabel(string)` — `"연습"` / `"실계좌 읽기"`
+
+**아님:** 실주문 · live 기본 해제 · 투자 권유.
+
 ## 안전
 - 시작/종료 = **연습 세션** 제어 (실주문 차단 유지)
 - 차트 매수/매도 = **표시 마커** (주문 실행 버튼 아님)
-- 잔액·수익률 = **연습 기준** 표시 (실 읽기 연결 후에도 연습 세션 잔액과 분리 가능)
+- 잔액·수익률 = mock 시 **연습** · Live 읽기 시 **실계좌 읽기** 라벨 (주문 실행 아님)
 - 상태/헤더 카피: **연습 전용 · 투자 조언 아님 · 실주문 없음**
 - 프리셋·전략 선택은 **자동매매 연습 설정**일 뿐, 종목 추천이 아님

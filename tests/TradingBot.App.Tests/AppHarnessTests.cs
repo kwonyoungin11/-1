@@ -131,9 +131,9 @@ public class AppHarnessTests
         Assert.False(string.IsNullOrWhiteSpace(harness.ConnectionLabel));
         Assert.False(string.IsNullOrWhiteSpace(harness.ConnectionModeLabel));
 
-        // Mock / read-only path: owner-facing messages never imply live order capability.
+        // Read-only path (mock or approved live HTTP): never implies live order capability.
         Assert.Contains("실주문", harness.ConnectionLabel, StringComparison.Ordinal);
-        Assert.Contains("mock", harness.ConnectionModeLabel, StringComparison.OrdinalIgnoreCase);
+        AssertConnectionModeIsReadOnly(harness.ConnectionModeLabel);
 
         // Dashboard connection summary is aligned with harness label after refresh.
         Assert.Equal(harness.ConnectionLabel, dash.Snapshot.ConnectionSummary);
@@ -197,7 +197,7 @@ public class AppHarnessTests
         // Connection labels remain populated after a practice-cycle dashboard refresh.
         Assert.False(string.IsNullOrWhiteSpace(harness.ConnectionLabel));
         Assert.False(string.IsNullOrWhiteSpace(harness.ConnectionModeLabel));
-        Assert.Contains("mock", harness.ConnectionModeLabel, StringComparison.OrdinalIgnoreCase);
+        AssertConnectionModeIsReadOnly(harness.ConnectionModeLabel);
 
         var stopMsg = harness.StopAutoTrade();
         Assert.Contains("종료", stopMsg, StringComparison.Ordinal);
@@ -485,5 +485,159 @@ public class AppHarnessTests
         _ = harness.StopAutoTrade();
         Assert.False(harness.IsLiveSubmissionEnabled);
         Assert.True(harness.GetTradingEvidenceSummary().LiveBlocked);
+    }
+
+    [Fact]
+    public async Task Dashboard_bind_keeps_live_blocked_and_labels_consistent_with_connection()
+    {
+        var harness = AppHarness.CreateDefault();
+        var before = harness.Session.Balance;
+        Assert.Equal(AppHarness.DefaultPracticeStartingBalance, before);
+
+        var dash = await harness.GetDashboardAsync();
+        Assert.Equal(LiveLockState.Locked, dash.Snapshot.LiveLock);
+        AssertConnectionModeIsReadOnly(harness.ConnectionModeLabel);
+
+        var panel = harness.GetAutoTradePanel();
+        Assert.Contains("실주문", panel.SafetyNote, StringComparison.Ordinal);
+        // mock → 연습 라벨; LiveReadOnlyConnected → 실계좌 읽기 라벨 (주문 아님)
+        var isLiveHttpMode = harness.ConnectionModeLabel.Contains("실 HTTP", StringComparison.Ordinal);
+        if (!isLiveHttpMode)
+        {
+            Assert.Contains("연습", panel.BalanceLabel, StringComparison.Ordinal);
+            Assert.DoesNotContain("실계좌 읽기", panel.BalanceLabel, StringComparison.Ordinal);
+            Assert.Equal(before, harness.Session.Balance);
+        }
+        else
+        {
+            // Live 읽기 성공 시 실잔액 라벨, 실패/오류 시 연습 유지 — 둘 다 실주문 차단
+            Assert.True(
+                panel.BalanceLabel.Contains("연습", StringComparison.Ordinal)
+                || panel.BalanceLabel.Contains("실계좌 읽기", StringComparison.Ordinal));
+        }
+
+        var (candles, markers) = harness.GetChartData();
+        Assert.True(candles.Count >= 10);
+        Assert.NotEmpty(markers);
+        Assert.False(harness.IsLiveSubmissionEnabled);
+    }
+
+    /// <summary>mock 또는 실 HTTP 읽기 전용 — 주문 모드가 아님.</summary>
+    private static void AssertConnectionModeIsReadOnly(string modeLabel)
+    {
+        Assert.False(string.IsNullOrWhiteSpace(modeLabel));
+        var ok = modeLabel.Contains("mock", StringComparison.OrdinalIgnoreCase)
+                 || modeLabel.Contains("실 HTTP", StringComparison.Ordinal);
+        Assert.True(ok, $"Expected mock or live-read-only mode label, got: {modeLabel}");
+        Assert.DoesNotContain("주문 실행", modeLabel, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyExternalBalance_via_session_updates_panel_on_harness()
+    {
+        var harness = AppHarness.CreateDefault();
+        harness.Session.SetDataSourceLabel("실계좌 읽기");
+        harness.Session.ApplyExternalBalance(5_500.25m, setStartingIfUnset: true);
+
+        var panel = harness.GetAutoTradePanel();
+        Assert.Equal(5_500.25m, panel.Balance);
+        Assert.Contains("실계좌 읽기", panel.BalanceLabel, StringComparison.Ordinal);
+        Assert.Contains("5,500.25", panel.BalanceLabel, StringComparison.Ordinal);
+        Assert.Contains("실주문", panel.SafetyNote, StringComparison.Ordinal);
+        Assert.False(harness.IsLiveSubmissionEnabled);
+        Assert.True(harness.GetEvidenceCounts().LiveBlocked);
+    }
+
+    [Fact]
+    public void ApplyRealPortfolio_live_snapshot_binds_balance_watch_and_focus()
+    {
+        var harness = AppHarness.CreateDefault();
+        harness.SetStockKind(StockMarketKind.나스닥코어3);
+
+        var portfolio = new ReadOnlyPortfolioSnapshot
+        {
+            ConnectionStatus = ConnectionStatus.LiveReadOnlyConnected,
+            ConnectionOwnerMessage = "실 HTTP 읽기 전용 연결됨 (실주문 없음)",
+            Accounts = Array.Empty<AccountSummary>(),
+            Holdings =
+            [
+                new HoldingSummary("TSLA", "Tesla", "USD", 2m, 250m),
+                new HoldingSummary("AAPL", "Apple", "USD", 1m, 190m),
+            ],
+            Quotes =
+            [
+                new QuoteSnapshot("TSLA", 250m, "USD", DateTimeOffset.UtcNow),
+                new QuoteSnapshot("AAPL", 190m, "USD", DateTimeOffset.UtcNow),
+            ],
+            UsMarket = null,
+            MarketValueUsdSummary = "440.00",
+            AsOfUtc = DateTimeOffset.UtcNow,
+            BlockMessages = ["주문 API 미사용 — read-only 단계"],
+        };
+
+        harness.ApplyRealPortfolio(portfolio);
+
+        Assert.Equal(440.00m, harness.Session.Balance);
+        Assert.Equal(440.00m, harness.Session.StartingBalance);
+        Assert.Equal("실계좌 읽기", harness.Session.DataSourceLabel);
+
+        var watch = harness.Session.ResolveWatchSymbols();
+        Assert.Contains("TSLA", watch);
+        Assert.Contains("AAPL", watch);
+        // Core focus symbols kept via union with current watch
+        Assert.Contains("QQQ", watch);
+        Assert.Contains("NVDA", watch);
+
+        Assert.Equal("TSLA", harness.Session.ResolveFocusSymbol());
+
+        var panel = harness.GetAutoTradePanel();
+        Assert.Contains("실계좌 읽기", panel.BalanceLabel, StringComparison.Ordinal);
+        Assert.Contains("실주문", panel.SafetyNote, StringComparison.Ordinal);
+        Assert.False(harness.IsLiveSubmissionEnabled);
+    }
+
+    [Fact]
+    public void TryResolveRealBalance_prefers_market_value_when_no_cash_property()
+    {
+        var portfolio = new ReadOnlyPortfolioSnapshot
+        {
+            ConnectionStatus = ConnectionStatus.LiveReadOnlyConnected,
+            ConnectionOwnerMessage = "test",
+            Accounts = Array.Empty<AccountSummary>(),
+            Holdings = Array.Empty<HoldingSummary>(),
+            Quotes = Array.Empty<QuoteSnapshot>(),
+            UsMarket = null,
+            MarketValueUsdSummary = "1500.25",
+            AsOfUtc = DateTimeOffset.UtcNow,
+            BlockMessages = Array.Empty<string>(),
+        };
+
+        var bal = AppHarness.TryResolveRealBalance(portfolio);
+        Assert.Equal(1500.25m, bal);
+    }
+
+    [Fact]
+    public void ApplyRealPortfolio_ignores_mock_connection()
+    {
+        var harness = AppHarness.CreateDefault();
+        var before = harness.Session.Balance;
+
+        var portfolio = new ReadOnlyPortfolioSnapshot
+        {
+            ConnectionStatus = ConnectionStatus.MockConnected,
+            ConnectionOwnerMessage = "mock",
+            Accounts = Array.Empty<AccountSummary>(),
+            Holdings = [new HoldingSummary("MSFT", "Microsoft", "USD", 1m, 400m)],
+            Quotes = Array.Empty<QuoteSnapshot>(),
+            UsMarket = null,
+            MarketValueUsdSummary = "9999",
+            AsOfUtc = DateTimeOffset.UtcNow,
+            BlockMessages = Array.Empty<string>(),
+        };
+
+        harness.ApplyRealPortfolio(portfolio);
+        Assert.Equal(before, harness.Session.Balance);
+        Assert.Equal("연습", harness.Session.DataSourceLabel);
+        Assert.Contains("연습", harness.GetAutoTradePanel().BalanceLabel, StringComparison.Ordinal);
     }
 }

@@ -26,8 +26,56 @@ public class AutoTradeSessionServiceTests
         Assert.Equal("나스닥", p.StockKindLabel);
         Assert.Equal("단순연습전략", p.StrategyLabel);
         Assert.Contains("잔액", p.BalanceLabel, StringComparison.Ordinal);
+        Assert.Contains("연습", p.BalanceLabel, StringComparison.Ordinal);
         Assert.Contains("%", p.ReturnRateLabel, StringComparison.Ordinal);
         Assert.True(p.CanStart);
+    }
+
+    [Fact]
+    public void ApplyExternalBalance_updates_panel_and_optional_starting()
+    {
+        var s = new AutoTradeSessionService();
+        Assert.Equal(AutoTradeSessionService.DefaultPracticeStartingBalance, s.StartingBalance);
+        Assert.Equal(AutoTradeSessionService.DefaultPracticeStartingBalance, s.Balance);
+
+        s.SetDataSourceLabel("실계좌 읽기");
+        s.ApplyExternalBalance(12_345.67m, setStartingIfUnset: true);
+
+        Assert.Equal(12_345.67m, s.Balance);
+        Assert.Equal(12_345.67m, s.StartingBalance);
+
+        var p = s.ToPanelSnapshot();
+        Assert.Equal(12_345.67m, p.Balance);
+        Assert.Contains("12,345.67", p.BalanceLabel, StringComparison.Ordinal);
+        Assert.Contains("실계좌 읽기", p.BalanceLabel, StringComparison.Ordinal);
+        Assert.DoesNotContain("(연습)", p.BalanceLabel, StringComparison.Ordinal);
+        Assert.Contains("실주문", p.SafetyNote, StringComparison.Ordinal);
+
+        // Starting only set once from default practice
+        s.ApplyExternalBalance(99_000m, setStartingIfUnset: true);
+        Assert.Equal(99_000m, s.Balance);
+        Assert.Equal(12_345.67m, s.StartingBalance);
+    }
+
+    [Fact]
+    public void ApplyExternalWatchSymbols_overrides_catalog_until_stock_kind_changes()
+    {
+        var s = new AutoTradeSessionService { StockKind = StockMarketKind.나스닥 };
+        s.ApplyExternalWatchSymbols(["TSLA", "aapl", "TSLA"]);
+        var watch = s.ResolveWatchSymbols();
+        Assert.Equal(2, watch.Length);
+        Assert.Contains("TSLA", watch);
+        Assert.Contains("AAPL", watch);
+
+        s.FocusSymbol = "TSLA";
+        Assert.Equal("TSLA", s.ResolveFocusSymbol());
+        Assert.Contains("TSLA", s.ToPanelSnapshot().WatchSymbolsText, StringComparison.Ordinal);
+
+        // Stock kind change clears external watch override
+        s.StockKind = StockMarketKind.나스닥코어3;
+        var core = s.ResolveWatchSymbols();
+        Assert.Equal(3, core.Length);
+        Assert.Contains("QQQ", core);
     }
 
     [Fact]
