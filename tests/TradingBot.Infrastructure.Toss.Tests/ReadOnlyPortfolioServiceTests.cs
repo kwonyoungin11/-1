@@ -16,6 +16,9 @@ public class ReadOnlyPortfolioServiceTests
         Assert.NotEmpty(snap.Accounts);
         Assert.NotEmpty(snap.Holdings);
         Assert.Equal(2, snap.Quotes.Count);
+        Assert.Equal(3500.50m, snap.CashBuyingPower);
+        Assert.Equal("USD", snap.CashCurrency);
+        Assert.Equal(1500.25m, snap.MarketValueUsdDecimal);
         Assert.Contains(snap.BlockMessages, m => m.Contains("주문 API 미사용", StringComparison.Ordinal));
     }
 

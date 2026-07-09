@@ -12,6 +12,11 @@ public interface ITossAccountClient
     Task<IReadOnlyList<AccountSummary>> GetAccountsAsync(CancellationToken cancellationToken);
 
     Task<HoldingsReadModel> GetHoldingsAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Cash-only buying power for the given currency (KRW or USD). Read-only; no orders.
+    /// </summary>
+    Task<BuyingPowerSnapshot> GetBuyingPowerAsync(string currency, CancellationToken cancellationToken);
 }
 
 public interface ITossMarketDataClient

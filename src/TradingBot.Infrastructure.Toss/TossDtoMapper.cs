@@ -61,6 +61,18 @@ public static class TossDtoMapper
         return new UsMarketSessionSnapshot(date, closed, msg);
     }
 
+    public static BuyingPowerSnapshot MapBuyingPower(BuyingPowerResponseDto dto)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+        var result = dto.Result;
+        return new BuyingPowerSnapshot(
+            Currency: result?.Currency,
+            CashBuyingPower: ParseDecimal(result?.CashBuyingPower));
+    }
+
+    /// <summary>Best-effort parse of holdings market-value USD summary string.</summary>
+    public static decimal? ParseMarketValueUsd(string? marketValueUsd) => ParseDecimal(marketValueUsd);
+
     public static TossAccessToken MapToken(OAuth2TokenResponseDto dto)
     {
         ArgumentNullException.ThrowIfNull(dto);

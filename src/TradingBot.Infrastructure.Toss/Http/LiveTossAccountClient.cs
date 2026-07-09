@@ -46,6 +46,22 @@ public sealed class LiveTossAccountClient : ITossAccountClient
         return TossDtoMapper.MapHoldings(dto);
     }
 
+    public async Task<BuyingPowerSnapshot> GetBuyingPowerAsync(
+        string currency,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(currency);
+        LiveHttpGuard.EnsureAllowed(_options);
+        var seq = await ResolveAccountSeqAsync(cancellationToken).ConfigureAwait(false);
+        var ccy = Uri.EscapeDataString(currency.Trim().ToUpperInvariant());
+        var dto = await GetJsonAsync<BuyingPowerResponseDto>(
+                new Uri($"api/v1/buying-power?currency={ccy}", UriKind.Relative),
+                accountSeqHeader: seq,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return TossDtoMapper.MapBuyingPower(dto);
+    }
+
     private async Task<string> ResolveAccountSeqAsync(CancellationToken cancellationToken)
     {
         if (!string.IsNullOrWhiteSpace(_options.AccountSeq))

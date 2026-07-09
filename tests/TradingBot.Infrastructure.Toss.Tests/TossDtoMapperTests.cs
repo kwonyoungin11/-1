@@ -61,4 +61,20 @@ public class TossDtoMapperTests
         Assert.Equal("2026-07-09", cal.Date);
         Assert.False(cal.IsHolidayOrClosed);
     }
+
+    [Fact]
+    public void Maps_buying_power()
+    {
+        var bp = TossDtoMapper.MapBuyingPower(Load<BuyingPowerResponseDto>("buying_power.json"));
+        Assert.Equal("USD", bp.Currency);
+        Assert.Equal(3500.5m, bp.CashBuyingPower);
+    }
+
+    [Fact]
+    public void ParseMarketValueUsd_parses_numeric_summary()
+    {
+        Assert.Equal(2500.00m, TossDtoMapper.ParseMarketValueUsd("2500.00"));
+        Assert.Null(TossDtoMapper.ParseMarketValueUsd(null));
+        Assert.Null(TossDtoMapper.ParseMarketValueUsd("not-a-number"));
+    }
 }

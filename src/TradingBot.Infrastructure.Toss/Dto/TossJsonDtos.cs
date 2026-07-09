@@ -133,3 +133,19 @@ public sealed class UsMarketDayDto
     [JsonPropertyName("regularMarket")]
     public object? RegularMarket { get; set; }
 }
+
+/// <summary>Wrapper for GET /api/v1/buying-power (OpenAPI BuyingPowerResponse under result).</summary>
+public sealed class BuyingPowerResponseDto
+{
+    [JsonPropertyName("result")]
+    public BuyingPowerResultDto? Result { get; set; }
+}
+
+public sealed class BuyingPowerResultDto
+{
+    [JsonPropertyName("currency")]
+    public string? Currency { get; set; }
+
+    [JsonPropertyName("cashBuyingPower")]
+    public string? CashBuyingPower { get; set; }
+}

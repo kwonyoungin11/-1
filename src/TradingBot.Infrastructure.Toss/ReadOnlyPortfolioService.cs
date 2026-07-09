@@ -59,6 +59,10 @@ public sealed class ReadOnlyPortfolioService : IReadOnlyPortfolioService
 
             var accounts = await _accounts.GetAccountsAsync(cancellationToken).ConfigureAwait(false);
             var holdings = await _accounts.GetHoldingsAsync(cancellationToken).ConfigureAwait(false);
+            // NASDAQ path defaults to USD cash buying power (OpenAPI: currency query required).
+            var buyingPower = await _accounts
+                .GetBuyingPowerAsync("USD", cancellationToken)
+                .ConfigureAwait(false);
             var quotes = await _market.GetPricesAsync(watchSymbols, cancellationToken).ConfigureAwait(false);
             var us = await _market.GetUsMarketCalendarAsync(null, cancellationToken).ConfigureAwait(false);
 
@@ -76,6 +80,9 @@ public sealed class ReadOnlyPortfolioService : IReadOnlyPortfolioService
                 Quotes = quotes,
                 UsMarket = us,
                 MarketValueUsdSummary = holdings.MarketValueUsd,
+                MarketValueUsdDecimal = TossDtoMapper.ParseMarketValueUsd(holdings.MarketValueUsd),
+                CashBuyingPower = buyingPower.CashBuyingPower,
+                CashCurrency = buyingPower.Currency,
                 AsOfUtc = _clock.UtcNow,
                 BlockMessages = new[]
                 {
@@ -97,6 +104,9 @@ public sealed class ReadOnlyPortfolioService : IReadOnlyPortfolioService
                 Quotes = Array.Empty<QuoteSnapshot>(),
                 UsMarket = null,
                 MarketValueUsdSummary = null,
+                MarketValueUsdDecimal = null,
+                CashBuyingPower = null,
+                CashCurrency = null,
                 AsOfUtc = _clock.UtcNow,
                 BlockMessages = new[]
                 {

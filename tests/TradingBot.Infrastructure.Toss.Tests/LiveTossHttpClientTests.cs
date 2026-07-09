@@ -27,10 +27,16 @@ public class LiveTossHttpClientTests
         Assert.Equal(ConnectionStatus.LiveReadOnlyConnected, snap.ConnectionStatus);
         Assert.NotEmpty(snap.Accounts);
         Assert.NotEmpty(snap.Quotes);
+        Assert.Equal(3500.5m, snap.CashBuyingPower);
+        Assert.Equal("USD", snap.CashCurrency);
+        Assert.Equal(100m, snap.MarketValueUsdDecimal);
         Assert.DoesNotContain(handler.Paths, p => p.Contains("orders", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(handler.Paths, p => p.Contains("oauth2/token", StringComparison.Ordinal));
         Assert.Contains(handler.Paths, p => p.Contains("api/v1/accounts", StringComparison.Ordinal));
         Assert.Contains(handler.Paths, p => p.Contains("api/v1/prices", StringComparison.Ordinal));
+        Assert.Contains(handler.Paths, p => p.Contains("api/v1/buying-power", StringComparison.Ordinal));
+        Assert.Contains(handler.Paths, p => p.Contains("currency=USD", StringComparison.Ordinal));
+        Assert.True(handler.AccountHeaderSeenOnBuyingPower);
     }
 
     [Fact]
@@ -64,6 +70,7 @@ public class LiveTossHttpClientTests
     private sealed class StubHandler : HttpMessageHandler
     {
         public List<string> Paths { get; } = new();
+        public bool AccountHeaderSeenOnBuyingPower { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -84,6 +91,13 @@ public class LiveTossHttpClientTests
             else if (path.Contains("api/v1/holdings", StringComparison.Ordinal))
             {
                 json = """{"result":{"marketValue":{"amount":{"krw":"0","usd":"100"}},"items":[{"symbol":"AAPL","name":"Apple","currency":"USD","quantity":"1","lastPrice":"190"}]}}""";
+            }
+            else if (path.Contains("api/v1/buying-power", StringComparison.Ordinal))
+            {
+                AccountHeaderSeenOnBuyingPower =
+                    request.Headers.TryGetValues("X-Tossinvest-Account", out var vals)
+                    && vals.Any(v => !string.IsNullOrWhiteSpace(v));
+                json = """{"result":{"currency":"USD","cashBuyingPower":"3500.5"}}""";
             }
             else if (path.Contains("api/v1/prices", StringComparison.Ordinal))
             {

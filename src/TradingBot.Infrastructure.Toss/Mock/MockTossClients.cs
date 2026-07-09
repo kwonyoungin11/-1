@@ -67,6 +67,29 @@ public sealed class MockTossAccountClient : ITossAccountClient
         };
         return Task.FromResult(TossDtoMapper.MapHoldings(dto));
     }
+
+    public Task<BuyingPowerSnapshot> GetBuyingPowerAsync(
+        string currency,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(currency);
+        var ccy = currency.Trim().ToUpperInvariant();
+        var cash = ccy switch
+        {
+            "KRW" => "5000000",
+            _ => "3500.50",
+        };
+        var dto = new BuyingPowerResponseDto
+        {
+            Result = new BuyingPowerResultDto
+            {
+                Currency = ccy is "KRW" or "USD" ? ccy : "USD",
+                CashBuyingPower = cash,
+            },
+        };
+        return Task.FromResult(TossDtoMapper.MapBuyingPower(dto));
+    }
 }
 
 public sealed class MockTossMarketDataClient : ITossMarketDataClient
