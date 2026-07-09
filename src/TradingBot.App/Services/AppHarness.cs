@@ -50,6 +50,8 @@ public sealed class AppHarness
     private IReadOnlyList<QuoteSnapshot> _lastQuotes = Array.Empty<QuoteSnapshot>();
     private string? _cachedCandlesSymbol;
     private IReadOnlyList<CandlePoint>? _cachedRealCandles;
+    private bool _newsDay;
+    private bool _symbolWarningActive;
 
     public AppHarness(
         TradingSafetySettings settings,
@@ -196,8 +198,34 @@ public sealed class AppHarness
             MaxDailyLossPercent: 3m,
             DayStartEquity: dayStart,
             CurrentEquity: equity,
-            TrendFollow: TrendFollowParameters.CreateSafeDefaults());
+            TrendFollow: TrendFollowParameters.CreateSafeDefaults(),
+            NewsDay: _newsDay,
+            SymbolWarningActive: _symbolWarningActive);
     }
+
+    /// <summary>Owner toggle: news/event day — size 50%, no aggressive limit chase.</summary>
+    public bool NewsDay
+    {
+        get => _newsDay;
+        set => _newsDay = value;
+    }
+
+    /// <summary>Set from Toss warnings (or tests). Blocks new entries when true.</summary>
+    public bool SymbolWarningActive
+    {
+        get => _symbolWarningActive;
+        set => _symbolWarningActive = value;
+    }
+
+    /// <summary>Policy evaluation for new entries (does not place orders).</summary>
+    public WorkingOrderDecision EvaluateEntryGate(bool sessionOpen = true, bool trendFilterOk = true) =>
+        LimitOrderLifecyclePolicy.EvaluateNewEntryGate(
+            killOrDailyLoss: _settings.KillSwitch,
+            dataStale: false,
+            sessionOpen: sessionOpen,
+            symbolWarningActive: _symbolWarningActive,
+            newsDay: _newsDay,
+            trendFilterOk: trendFilterOk);
 
     /// <summary>
     /// Real <see cref="GatedLiveOrderRouter"/> with fail-closed context and no-op transport.
@@ -261,8 +289,14 @@ public sealed class AppHarness
         var practice = BuildPracticeContext();
         var risk = SpacexRiskParameters.CreateSafeDefaults() with
         {
-            RiskPercentPerTrade = practice.RiskPercentPerTrade,
+            RiskPercentPerTrade = practice.EffectiveRiskPercentPerTrade,
         };
+        if (practice.SymbolWarningActive || practice.EffectiveRiskPercentPerTrade <= 0m)
+        {
+            return TradeBracketPlan.Invalid(
+                WatchlistCatalog.SpaceXSymbol,
+                "종목 경고 또는 리스크 0 — 지정가 계획 중단 · 실주문 없음");
+        }
         var trend = practice.TrendFollow ?? TrendFollowParameters.CreateSafeDefaults();
         return TradeBracketPlanner.PlanLongLimit(
             WatchlistCatalog.SpaceXSymbol,

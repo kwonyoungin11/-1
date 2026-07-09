@@ -97,6 +97,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private bool _canStart = true;
     [ObservableProperty] private bool _canStop;
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private bool _newsDay;
+    [ObservableProperty] private string _contingencyLabel = string.Empty;
 
     [ObservableProperty] private ISeries[] _series = Array.Empty<ISeries>();
     [ObservableProperty] private ISeries[] _volumeSeries = Array.Empty<ISeries>();
@@ -262,9 +264,22 @@ public partial class MainWindowViewModel : ViewModelBase
         _suppressSelectionEcho = false;
     }
 
+    partial void OnNewsDayChanged(bool value)
+    {
+        _harness.NewsDay = value;
+        ApplyBracket(_harness.GetActiveBracketPlan());
+        var gate = _harness.EvaluateEntryGate();
+        ContingencyLabel = gate.OwnerMessage;
+        StatusLine = value
+            ? "뉴스데이 ON · 사이즈 50% · 재호가 억제 · 감성 자동매매 없음"
+            : "뉴스데이 OFF · 정상 계획 사이즈";
+        RebuildChart();
+    }
+
     private void BuildEmptyChart()
     {
         ApplyBracket(_harness.GetActiveBracketPlan());
+        ContingencyLabel = _harness.EvaluateEntryGate().OwnerMessage;
         RebuildChart();
     }
 

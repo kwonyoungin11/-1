@@ -11,8 +11,16 @@ public sealed record PracticeStrategyContext(
     decimal MaxDailyLossPercent = 3m,
     decimal? DayStartEquity = null,
     decimal? CurrentEquity = null,
-    TrendFollowParameters? TrendFollow = null)
+    TrendFollowParameters? TrendFollow = null,
+    /// <summary>Owner news-day: halve size, no aggressive reprice (not auto news trading).</summary>
+    bool NewsDay = false,
+    /// <summary>Symbol regulatory warning / halt-style flag from data layer.</summary>
+    bool SymbolWarningActive = false)
 {
     /// <summary>Safe practice defaults (100k equity, 1% risk, 2% stop, 3% max daily loss).</summary>
     public static PracticeStrategyContext CreateSafeDefaults() => new();
+
+    /// <summary>Effective risk % after news-day / warning multipliers.</summary>
+    public decimal EffectiveRiskPercentPerTrade =>
+        RiskPercentPerTrade * LimitOrderLifecyclePolicy.SizeMultiplier(NewsDay, SymbolWarningActive);
 }
