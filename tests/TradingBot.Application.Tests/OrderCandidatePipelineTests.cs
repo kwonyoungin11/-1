@@ -31,7 +31,39 @@ public class OrderCandidatePipelineTests
         Assert.True(result[0].IsAcceptedForDryRun);
         Assert.Equal("BUY", result[0].Candidate.Side);
         Assert.Equal(2m, result[0].Candidate.Quantity);
-        Assert.True(result[0].Candidate.ClientOrderId.StartsWith("cand-", StringComparison.Ordinal) || result[0].Candidate.ClientOrderId.StartsWith("dry-", StringComparison.Ordinal));
+        ClientOrderIdFactory.Validate(result[0].Candidate.ClientOrderId);
+        Assert.True(
+            result[0].Candidate.ClientOrderId.StartsWith(ClientOrderIdFactory.Prefix + "-", StringComparison.Ordinal) ||
+            ClientOrderIdFactory.IsValid(result[0].Candidate.ClientOrderId));
+    }
+
+    [Fact]
+    public void Pipeline_assigns_unique_client_order_ids_per_candidate()
+    {
+        var now = DateTimeOffset.Parse("2026-07-09T16:00:00Z");
+        var quotes = new[]
+        {
+            new QuoteSnapshot("AAPL", 190m, "USD", now),
+            new QuoteSnapshot("MSFT", 400m, "USD", now),
+        };
+        var settings = new TradingSafetySettings
+        {
+            MaxOrderNotional = 10_000m,
+            MarketDataMaxStalenessSeconds = 60,
+        };
+
+        var pipeline = new OrderCandidatePipeline();
+        var result = pipeline.BuildCandidates(
+            quotes,
+            settings,
+            defaultOrderQuantity: 1m,
+            nowUtc: now,
+            strategy: TradingStrategyKind.단순연습전략);
+
+        Assert.Equal(2, result.Count);
+        var ids = result.Select(r => r.Candidate.ClientOrderId).ToArray();
+        Assert.All(ids, id => ClientOrderIdFactory.Validate(id));
+        Assert.Equal(ids.Length, ids.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]

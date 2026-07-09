@@ -50,13 +50,15 @@ public sealed class OrderCandidatePipeline
 
             var qty = signal.SuggestedQuantity ?? 0m;
             var price = signal.ReferencePrice;
+            var side = signal.Side == SignalSide.Buy ? "BUY" : "SELL";
+            var clientOrderId = ClientOrderIdFactory.CreateUnique(signal.Symbol, side, nowUtc);
             var candidate = new OrderCandidate(
                 Symbol: signal.Symbol,
-                Side: signal.Side == SignalSide.Buy ? "BUY" : "SELL",
+                Side: side,
                 OrderType: "LIMIT",
                 Quantity: qty,
                 LimitPrice: price,
-                ClientOrderId: $"cand-{signal.Symbol}-{nowUtc.ToUnixTimeMilliseconds()}",
+                ClientOrderId: clientOrderId,
                 CreatedAtUtc: nowUtc);
 
             positions.TryGetValue(signal.Symbol, out var pos);
