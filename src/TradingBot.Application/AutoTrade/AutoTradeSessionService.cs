@@ -58,6 +58,12 @@ public sealed class AutoTradeSessionService
         get { lock (_gate) { return _balance; } }
     }
 
+    /// <summary>Practice day-start / session starting equity (default 100_000).</summary>
+    public decimal StartingBalance
+    {
+        get { lock (_gate) { return _startingBalance; } }
+    }
+
     public string[] ResolveWatchSymbols()
     {
         lock (_gate)

@@ -23,7 +23,8 @@ public sealed class OrderCandidatePipeline
         bool marketSessionKnown = true,
         IReadOnlyDictionary<string, decimal>? positions = null,
         UsMarketSessionSnapshot? usMarket = null,
-        TradingStrategyKind strategy = TradingStrategyKind.단순연습전략)
+        TradingStrategyKind strategy = TradingStrategyKind.단순연습전략,
+        PracticeStrategyContext? practiceContext = null)
     {
         ArgumentNullException.ThrowIfNull(quotes);
         ArgumentNullException.ThrowIfNull(settings);
@@ -69,6 +70,8 @@ public sealed class OrderCandidatePipeline
                 Quantity = qty,
                 LimitPrice = price,
                 CurrentPositionQuantity = pos,
+                DayStartEquity = practiceContext?.DayStartEquity,
+                CurrentEquity = practiceContext?.CurrentEquity,
                 QuoteTimestampUtc = quote.TimestampUtc,
                 NowUtc = nowUtc,
                 HasMissingData = price is null || qty <= 0,

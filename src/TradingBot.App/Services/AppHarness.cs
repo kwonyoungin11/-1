@@ -109,14 +109,26 @@ public sealed class AppHarness
         && !_settings.KillSwitch
         && _settings.OrderMode == OrderMode.Live;
 
+    /// <summary>Default practice notional for day-start equity and MaxDailyLoss base.</summary>
+    public const decimal DefaultPracticeStartingBalance = 100_000m;
+
+    /// <summary>
+    /// Absolute MaxDailyLoss for CreateDefault (3% of <see cref="DefaultPracticeStartingBalance"/>).
+    /// RiskGate uses <see cref="DailyLossGuard.EvaluateAbsolute"/> — not a percent field.
+    /// </summary>
+    public const decimal DefaultPracticeMaxDailyLossAbsolute = 3_000m;
+
     public static AppHarness CreateDefault()
     {
+        // MaxDailyLoss is absolute USD (not %). 3% of 100k practice notional = 3_000.
+        // Equity inputs come from BuildPracticeContext so RiskGate can evaluate fail-closed correctly.
         var settings = new TradingSafetySettings
         {
             AllowLiveOrders = false,
             KillSwitch = true,
             OrderMode = OrderMode.DryRun,
             MaxOrderNotional = 50_000m,
+            MaxDailyLoss = DefaultPracticeMaxDailyLossAbsolute,
             MarketDataMaxStalenessSeconds = TradingSafetyDefaults.MarketDataMaxStalenessSeconds,
         };
         var toss = TossReadOnlyFactory.LoadOptionsFromEnvironment();
@@ -134,6 +146,13 @@ public sealed class AppHarness
         // under CreateDefault fail-closed settings. Prefer GatedLiveOrderRouter when present
         // in Orders assembly; fall back to BlockedLiveOrderRouter (always IsLiveSubmissionEnabled=false).
         var gatedLive = CreateGatedLiveRouterOrBlocked(settings);
+
+        // Prefer 나스닥코어3 practice universe when catalog lists it (already in Domain).
+        var session = new AutoTradeSessionService
+        {
+            StockKind = StockMarketKind.나스닥코어3,
+        };
+
         return new AppHarness(
             settings,
             portfolio,
@@ -144,9 +163,23 @@ public sealed class AppHarness
             paperLedger,
             paper,
             audit,
-            new AutoTradeSessionService(),
+            session,
             toss,
             gatedLiveRouter: gatedLive);
+    }
+
+    /// <summary>
+    /// Practice equity for RiskGate daily loss: session Balance as current,
+    /// session StartingBalance (or <see cref="DefaultPracticeStartingBalance"/>) as day start.
+    /// </summary>
+    public PracticeStrategyContext BuildPracticeContext()
+    {
+        var dayStart = _session.StartingBalance > 0m
+            ? _session.StartingBalance
+            : DefaultPracticeStartingBalance;
+        return new PracticeStrategyContext(
+            DayStartEquity: dayStart,
+            CurrentEquity: _session.Balance);
     }
 
     /// <summary>
@@ -244,6 +277,8 @@ public sealed class AppHarness
 
         if (_session.Status == AutoTradeSessionStatus.실행중)
         {
+            // Pass session equity so MaxDailyLoss (absolute) can evaluate fail-closed correctly.
+            var practiceContext = BuildPracticeContext();
             evaluated = _pipeline.BuildCandidates(
                 portfolio.Quotes,
                 _settings,
@@ -252,7 +287,8 @@ public sealed class AppHarness
                 marketSessionOpen: usSession.IsOpenForOrders,
                 marketSessionKnown: usSession.IsKnown,
                 usMarket: portfolio.UsMarket,
-                strategy: strategy);
+                strategy: strategy,
+                practiceContext: practiceContext);
 
             foreach (var item in evaluated.Where(e => e.IsAcceptedForDryRun))
             {
