@@ -11,7 +11,7 @@ public enum BracketStopSource
 /// <summary>
 /// Planned LIMIT entry + stop + take-profit levels (bracket / OCO plan).
 /// Display and dry-run metadata only unless owner unlocks live orders.
-/// Not investment advice.
+/// Not investment advice. Commissions are estimates (Toss US schedule).
 /// </summary>
 public sealed record TradeBracketPlan(
     string Symbol,
@@ -29,7 +29,10 @@ public sealed record TradeBracketPlan(
     decimal? Atr,
     BracketStopSource StopSource,
     bool IsValid,
-    string OwnerMessage)
+    string OwnerMessage,
+    decimal EstimatedCommissionUsd = 0m,
+    decimal NetRewardAmount = 0m,
+    decimal NetRewardRiskRatio = 0m)
 {
     public static TradeBracketPlan Invalid(string symbol, string reason) => new(
         Symbol: symbol,
@@ -101,7 +104,6 @@ public static class TradeBracketPlanner
                 "손절 거리 비정상 — 계획 무효 · 실주문 없음");
         }
 
-        // Limit entry: slightly below last for BUY (patient limit), ATR fraction or tiny %
         var offset = risk.UseAtrStops && atr is double a2 && a2 > 0
             ? (decimal)a2 * risk.LimitOffsetAtrFraction
             : lastPrice * 0.001m;
@@ -116,7 +118,6 @@ public static class TradeBracketPlanner
 
         var takeProfit = Math.Round(entry + (stopDistance * tpR), 2, MidpointRounding.AwayFromZero);
 
-        // Sizer uses stop % of entry
         var stopPct = entry > 0m ? (stopDistance / entry) * 100m : risk.FallbackStopLossPercent;
         var size = PositionRiskSizer.Calculate(
             equity,
@@ -149,7 +150,13 @@ public static class TradeBracketPlanner
         var riskAmt = size.Quantity * stopDistance;
         var rewardAmt = size.Quantity * (takeProfit - entry);
         var rr = riskAmt > 0m ? Math.Round(rewardAmt / riskAmt, 2) : tpR;
-        var notional = size.Quantity * entry;
+        var buyNotional = size.Quantity * entry;
+        var sellNotionalTp = size.Quantity * takeProfit;
+        var fees = TossUsEquityCommissionSchedule.EstimateRoundTrip(buyNotional, sellNotionalTp);
+        var netReward = Math.Max(0m, rewardAmt - fees.TotalUsd);
+        // Net risk roughly risk + buy fee (stop exit still pays sell fees) — conservative: risk + full RT fees
+        var netRisk = riskAmt + fees.TotalUsd;
+        var netRr = netRisk > 0m ? Math.Round(netReward / netRisk, 2) : 0m;
         var srcLabel = source == BracketStopSource.Atr ? $"ATR×{risk.AtrStopMultiple}" : $"%{risk.FallbackStopLossPercent}";
 
         return new TradeBracketPlan(
@@ -164,12 +171,16 @@ public static class TradeBracketPlanner
             RiskAmount: Math.Round(riskAmt, 2),
             RewardAmount: Math.Round(rewardAmt, 2),
             RewardRiskRatio: rr,
-            Notional: Math.Round(notional, 2),
+            Notional: Math.Round(buyNotional, 2),
             Atr: atr is double ad2 ? Math.Round((decimal)ad2, 4) : null,
             StopSource: source,
             IsValid: true,
             OwnerMessage:
-                $"지정가 계획 LIMIT {entry:N2} · SL {stop:N2} ({srcLabel}) · TP {takeProfit:N2} ({tpR}R) · " +
-                $"수량 {size.Quantity:N0} · 리스크 ${riskAmt:N2} · R:R 1:{rr:N2} · 실주문 잠금 · 투자 조언 아님");
+                $"지정가 LIMIT {entry:N2} · SL {stop:N2} ({srcLabel}) · TP {takeProfit:N2} ({tpR}R) · " +
+                $"수량 {size.Quantity:N0} · 리스크 ${riskAmt:N2} · 수수료≈${fees.TotalUsd:N2} · " +
+                $"R:R 1:{rr:N2} (수수료후≈1:{netRr:N2}) · 실주문 잠금 · 투자 조언 아님",
+            EstimatedCommissionUsd: fees.TotalUsd,
+            NetRewardAmount: Math.Round(netReward, 2),
+            NetRewardRiskRatio: netRr);
     }
 }

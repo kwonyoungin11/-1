@@ -15,13 +15,21 @@ public static class StrategyCatalog
     public static IReadOnlyList<string> Labels { get; } =
         All.Select(s => s.ToString()).ToArray();
 
+    /// <summary>SPCX 자동매매 콕핏 1순위 권장 (고변동·이벤트·수수료 고려).</summary>
+    public static TradingStrategyKind RecommendedForSpacex => TradingStrategyKind.추세추종;
+
     public static string Describe(TradingStrategyKind kind) => kind switch
     {
-        TradingStrategyKind.관망만 => "신호·후보 없음 · 차트·잔액만 관찰",
-        TradingStrategyKind.단순연습전략 => "연습용 단순 매수 후보 (파이프라인 검증)",
-        TradingStrategyKind.추세추종 => "단기 상승 추세 → 매수, 하락 추세 → 매도 후보 (연습 파라미터 · 투자 조언 아님)",
-        TradingStrategyKind.평균회귀 => "단기 과열 → 매도, 과매도 → 매수 후보 (반대 매매)",
-        TradingStrategyKind.모멘텀돌파 => "변동 큰 구간 돌파 후보 · 규모(버블) 확대",
+        TradingStrategyKind.관망만 =>
+            "신호 없음 · 차트·잔액만 · 수수료 0 · 데이터 불안정 시 안전",
+        TradingStrategyKind.단순연습전략 =>
+            "파이프라인 검증용 · SPCX 실전 1순위 아님",
+        TradingStrategyKind.추세추종 =>
+            "★ SPCX 권장 · 추세 방향 + LIMIT·ATR손절·2R익절 · 15m/60m 권장 · 투자 조언 아님",
+        TradingStrategyKind.평균회귀 =>
+            "과열 반대 매매 · SPCX 고변동·강한 추세에선 칼날 위험 · 주의",
+        TradingStrategyKind.모멘텀돌파 =>
+            "강한 돌파 구간 보조 · 수량↑ · 거짓 돌파·수수료 주의 · 투자 조언 아님",
         _ => "전략",
     };
 

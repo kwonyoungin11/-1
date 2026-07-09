@@ -52,12 +52,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
         SelectedStockKind = StockMarketKind.스페이스X.ToString();
         _harness.SetStockKind(StockMarketKind.스페이스X);
-        SelectedStrategy = TradingStrategyKind.추세추종.ToString();
-        _harness.SetStrategy(TradingStrategyKind.추세추종);
         SelectedSymbol = WatchlistCatalog.SpaceXSymbol;
         _harness.SetFocusSymbol(WatchlistCatalog.SpaceXSymbol);
-        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(ChartTimeframe.분봉1);
-        _harness.SetTimeframe(ChartTimeframe.분봉1);
+        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(ChartTimeframe.분봉15);
+        _harness.SetTimeframe(ChartTimeframe.분봉15);
+        SelectedStrategy = StrategyCatalog.RecommendedForSpacex.ToString();
+        _harness.SetStrategy(StrategyCatalog.RecommendedForSpacex);
 
         BuildEmptyChart();
         ApplyPanel(_harness.GetAutoTradePanel());
@@ -83,7 +83,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _selectedStockKind = "스페이스X";
     [ObservableProperty] private string _selectedStrategy = "추세추종";
     [ObservableProperty] private string _selectedSymbol = WatchlistCatalog.SpaceXSymbol;
-    [ObservableProperty] private string _selectedTimeframe = "1m";
+    [ObservableProperty] private string _selectedTimeframe = "15m";
     [ObservableProperty] private string _stockKindDescription = string.Empty;
     [ObservableProperty] private string _strategyDescription = string.Empty;
     [ObservableProperty] private string _chartTitle = "SPCX";
@@ -98,7 +98,11 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _riskAmountLabel = "—";
     [ObservableProperty] private string _rewardRiskLabel = "—";
     [ObservableProperty] private string _atrLabel = "—";
+    [ObservableProperty] private string _commissionLabel = "—";
+    [ObservableProperty] private string _netRrLabel = "—";
     [ObservableProperty] private string _orderTypeLabel = "LIMIT · 지정가 계획";
+    [ObservableProperty] private string _recommendedStrategyNote =
+        "SPCX 권장: 추세추종 · 15m/60m · LIMIT+ATR손절 · 1m 스캘핑 비권장(수수료) · 투자 조언 아님";
     [ObservableProperty] private string _connectionLabel = "연결 확인 전";
     [ObservableProperty] private string _connectionPill = "mock";
     [ObservableProperty] private bool _canStart = true;
@@ -282,6 +286,12 @@ public partial class MainWindowViewModel : ViewModelBase
         AtrLabel = plan.Atr is decimal a
             ? $"{a:N4} ({plan.StopSource})"
             : plan.StopSource.ToString();
+        CommissionLabel = plan.EstimatedCommissionUsd > 0m
+            ? $"≈ ${plan.EstimatedCommissionUsd:N2} (왕복 추정)"
+            : plan.IsValid ? "≈ $0 ~ 소액" : "—";
+        NetRrLabel = plan.NetRewardRiskRatio > 0m
+            ? $"1 : {plan.NetRewardRiskRatio:N2}"
+            : "—";
         BracketSummary = plan.OwnerMessage;
     }
 

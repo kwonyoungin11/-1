@@ -87,7 +87,7 @@
           <StackPanel Spacing="5">
             <TextBlock Classes="section" Text="지정가 · 익절 · 손절 (계획)"/>
             <TextBlock Classes="sub" Text="{Binding OrderTypeLabel}" Foreground="#7DD3FC"/>
-            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="3" ColumnSpacing="10">
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="3" ColumnSpacing="10">
               <TextBlock Classes="sub" Text="지정가 ENTRY"/>
               <TextBlock Grid.Column="1" FontWeight="Bold" Foreground="#38BDF8" Text="{Binding EntryLimitLabel}"/>
               <TextBlock Grid.Row="1" Classes="sub" Text="손절 SL"/>
@@ -98,11 +98,16 @@
               <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding QuantityPlanLabel}"/>
               <TextBlock Grid.Row="4" Classes="sub" Text="계획 리스크"/>
               <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding RiskAmountLabel}"/>
-              <TextBlock Grid.Row="5" Classes="sub" Text="손익비 R:R"/>
+              <TextBlock Grid.Row="5" Classes="sub" Text="R:R (수수료 전)"/>
               <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding RewardRiskLabel}"/>
-              <TextBlock Grid.Row="6" Classes="sub" Text="ATR"/>
-              <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding AtrLabel}" FontSize="11"/>
+              <TextBlock Grid.Row="6" Classes="sub" Text="예상 수수료"/>
+              <TextBlock Grid.Row="6" Grid.Column="1" Foreground="#FBBF24" Text="{Binding CommissionLabel}"/>
+              <TextBlock Grid.Row="7" Classes="sub" Text="R:R (수수료 후)"/>
+              <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding NetRrLabel}"/>
+              <TextBlock Grid.Row="8" Classes="sub" Text="ATR"/>
+              <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding AtrLabel}" FontSize="11"/>
             </Grid>
+            <TextBlock Classes="sub" Text="{Binding RecommendedStrategyNote}" TextWrapping="Wrap" Foreground="#93C5FD" FontSize="10"/>
             <TextBlock Classes="sub" Text="{Binding BracketSummary}" TextWrapping="Wrap" FontSize="10" Opacity="0.9"/>
           </StackPanel>
         </Border>

@@ -157,7 +157,8 @@ public sealed class AppHarness
             StockKind = StockMarketKind.스페이스X,
             FocusSymbol = WatchlistCatalog.SpaceXSymbol,
             Strategy = TradingStrategyKind.추세추종,
-            Timeframe = ChartTimeframe.분봉1,
+            // SPCX: 15m default (fee + volatility); not 1m scalping
+            Timeframe = ChartTimeframe.분봉15,
         };
 
         return new AppHarness(
