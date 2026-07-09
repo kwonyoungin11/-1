@@ -38,7 +38,9 @@
           <Border Classes="pill-ok" Padding="9,4"><TextBlock Text="{Binding ConnectionPill}"/></Border>
           <Border Classes="pill-ok" Padding="9,4"><TextBlock Text="{Binding DataSourcePill}"/></Border>
           <Border Classes="pill-mode" Padding="9,4"><TextBlock Text="{Binding BotStatePill}"/></Border>
-          <Border Classes="pill-mode" Padding="9,4"><TextBlock Text="VMAR"/></Border>
+          <Border Classes="pill-mode" Padding="9,4">
+            <TextBlock Classes="stock-ticker" Text="{Binding FocusSymbolPill}" FontWeight="Bold"/>
+          </Border>
           <Border Classes="pill-mode" Padding="9,4"><TextBlock Text="KST"/></Border>
         </StackPanel>
       </Grid>
@@ -48,9 +50,37 @@
     <Border Grid.Row="1" Classes="glass-card-deep" Padding="10" Margin="0,0,0,8" MinHeight="460">
       <Grid RowDefinitions="Auto,Auto,7*,1.5*,1.5*">
 
-        <!-- Row 0: ChartTitle + one large price + change + TF ladder + DataSourcePill -->
+        <!-- Row 0: stock switcher + ChartTitle + price + change + TF ladder + DataSourcePill -->
         <Grid ColumnDefinitions="*,Auto" Margin="4,2,4,0">
-          <StackPanel Orientation="Horizontal" Spacing="10" MinWidth="0">
+          <StackPanel Orientation="Horizontal" Spacing="10" MinWidth="0" VerticalAlignment="Bottom">
+            <!-- Prominent VMAR / SPCX switch (owner-obvious) -->
+            <Border Classes="stock-switch" Padding="4,3" VerticalAlignment="Bottom"
+                    Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1" CornerRadius="8">
+              <ItemsControl ItemsSource="{Binding StockKindChips}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="4"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:StockKindChipVm">
+                    <Button Classes="stock-btn"
+                            Classes.selected="{Binding IsSelected}"
+                            Content="{Binding TickerLabel}"
+                            Command="{Binding SelectCommand}"
+                            MinWidth="64" MinHeight="28" FontSize="13" FontWeight="Bold"
+                            Padding="12,4">
+                      <ToolTip.Tip>
+                        <StackPanel Spacing="2">
+                          <TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/>
+                          <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.85"/>
+                        </StackPanel>
+                      </ToolTip.Tip>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
             <TextBlock Text="{Binding ChartTitle}" FontSize="14" FontWeight="Bold" Foreground="#131722"
                        VerticalAlignment="Bottom"/>
             <TextBlock Text="{Binding LastCloseText}" FontSize="28" FontWeight="Bold" Foreground="#131722"
@@ -197,18 +227,59 @@
       <Border Classes="glass-card" Padding="12,10">
         <StackPanel Spacing="7">
           <TextBlock Classes="caption-3d" Text="전략"/>
-          <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="5" RowDefinitions="Auto,Auto" RowSpacing="6">
+          <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="5">
             <TextBlock Classes="sub" Text="전략" VerticalAlignment="Center"/>
             <ComboBox Grid.Column="1" MinHeight="30" FontSize="12"
                       ItemsSource="{Binding StrategyOptions}" SelectedItem="{Binding SelectedStrategy}"/>
             <TextBlock Grid.Column="2" Classes="sub" Text="{Binding SelectedTimeframe, StringFormat=봉 · {0}}"
                        VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#2962FF" FontWeight="Bold"/>
-            <TextBlock Grid.Row="1" Classes="sub" Text="종목" VerticalAlignment="Center"/>
-            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding WatchSymbolsText}"
-                       FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
-            <CheckBox Grid.Row="1" Grid.Column="2"
-                      IsChecked="{Binding NewsDay}" Content="뉴스데이 50%" FontSize="12"/>
           </Grid>
+          <!-- 종목 전환: VMAR / SPCX chips (obvious for non-developer) -->
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="caption-3d" Text="종목 전환" VerticalAlignment="Center"/>
+              <CheckBox Grid.Column="1"
+                        IsChecked="{Binding NewsDay}" Content="뉴스데이 50%" FontSize="12"
+                        VerticalAlignment="Center"/>
+            </Grid>
+            <Border Classes="stock-switch" Padding="4,4"
+                    Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1" CornerRadius="8">
+              <ItemsControl ItemsSource="{Binding StockKindChips}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="4"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:StockKindChipVm">
+                    <Button Classes="stock-btn"
+                            Classes.selected="{Binding IsSelected}"
+                            Content="{Binding TickerLabel}"
+                            Command="{Binding SelectCommand}"
+                            MinWidth="72" MinHeight="30" FontSize="13" FontWeight="Bold"
+                            Padding="14,5">
+                      <ToolTip.Tip>
+                        <StackPanel Spacing="2">
+                          <TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/>
+                          <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.85"/>
+                        </StackPanel>
+                      </ToolTip.Tip>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Classes="stock-name" Text="{Binding StockDisplayName}"
+                         FontWeight="Bold" FontSize="13" Foreground="#131722"
+                         VerticalAlignment="Center"/>
+              <TextBlock Classes="stock-ticker" Text="{Binding FocusSymbolPill}"
+                         FontSize="12" FontWeight="SemiBold" Foreground="#2962FF"
+                         VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Text="{Binding StockSwitchHint}" FontSize="10" Foreground="#64748B"
+                       TextWrapping="Wrap" LineHeight="14"/>
+          </StackPanel>
           <TextBlock Text="{Binding StrategyDescription}" FontSize="11" Foreground="#2962FF"
                      TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                      ToolTip.Tip="{Binding StrategyDescription}"/>
@@ -316,7 +387,7 @@
         <Border Grid.Row="1" Classes="glass-card" Padding="12,10">
           <StackPanel Spacing="4">
             <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Classes="caption-3d" Text="뉴스"/>
+              <TextBlock Classes="caption-3d" Text="{Binding NewsCardTitle}"/>
               <Border Grid.Column="1" Classes="btn-3d-ghost">
                 <Button Classes="glass-btn-ghost" Content="뉴스 갱신" Padding="10,5" FontSize="11"
                         Command="{Binding RefreshNewsOnlyCommand}"/>

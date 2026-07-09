@@ -85,3 +85,5 @@
 | 색, 간격, 카드 배치 | Live Lock 기본값 의미 변경 |
 | 아이콘 | 차단 사유 숨기기 |
 | 타이포 | 원클릭 실주문 추가 |
+
+종목 전환 칩(VMAR/SPCX): `docs/cockpit/STOCK_SWITCH_UI.md`

@@ -256,6 +256,85 @@
       <Setter Property="Foreground" Value="#2962FF"/>
     </Style>
 
+    <!-- Stock symbol switcher: segmented ticker chips (VMAR / SPCX) -->
+    <Style Selector="Button.stock-btn">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="#787B86"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="MinWidth" Value="56"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.stock-btn:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#F0F3FA"/>
+      <Setter Property="Foreground" Value="#131722"/>
+    </Style>
+    <Style Selector="Button.stock-btn.selected">
+      <Setter Property="Background" Value="#2962FF"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+    <Style Selector="Button.stock-btn.selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1E53E4"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+
+    <Style Selector="Border.stock-switch">
+      <Setter Property="Background" Value="#F0F3FA"/>
+      <Setter Property="BorderBrush" Value="#E0E3EB"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="3"/>
+    </Style>
+
+    <Style Selector="Border.stock-switch-card">
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#E0E3EB"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Padding" Value="10,8"/>
+      <Setter Property="BoxShadow" Value="0 4 12 0 #14000000, 0 1 0 0 #FFFFFF"/>
+    </Style>
+
+    <Style Selector="TextBlock.stock-ticker">
+      <Setter Property="FontSize" Value="15"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="#131722"/>
+      <Setter Property="FontFamily" Value="Menlo, Monaco, Consolas, monospace"/>
+    </Style>
+    <Style Selector="TextBlock.stock-name">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Foreground" Value="#787B86"/>
+    </Style>
+
+    <Style Selector="Button.stock-btn-compact">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="#787B86"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="8,4"/>
+      <Setter Property="MinWidth" Value="48"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.stock-btn-compact:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#F0F3FA"/>
+      <Setter Property="Foreground" Value="#131722"/>
+    </Style>
+    <Style Selector="Button.stock-btn-compact.selected">
+      <Setter Property="Background" Value="#2962FF"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+    <Style Selector="Button.stock-btn-compact.selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1E53E4"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+
     <!-- Last-price tag: direction-colored border (green up / red down) -->
     <Style Selector="Border.price-tag">
       <Setter Property="Background" Value="#F8F9FD"/>

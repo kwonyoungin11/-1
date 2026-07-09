@@ -40,11 +40,17 @@ public partial class MainWindowViewModel : ViewModelBase
         TimeframeOptions = new ObservableCollection<string>(ChartTimeframeCatalog.Labels);
         TimeframeChips = new ObservableCollection<TimeframeChipVm>(
             ChartTimeframeCatalog.Labels.Select(label => new TimeframeChipVm(label, SelectTimeframeCore)));
+        StockKindChips = new ObservableCollection<StockKindChipVm>(
+            WatchlistCatalog.AllKinds.Select(CreateStockKindChip));
+        StockSwitchHint =
+            "종목 전환 시 전략·시간봉 프리셋 적용 · 실주문 잠금 유지";
 
+        // Suppress selection handlers during initial harness/VM bind-up.
+        _suppressSelectionEcho = true;
         if (_harness.IsLiveSubmissionEnabled)
         {
-            SelectedStockKind = StockMarketKind.스페이스X.ToString();
             _harness.SetStockKind(StockMarketKind.스페이스X);
+            SelectedStockKind = StockMarketKind.스페이스X.ToString();
             SelectedSymbol = WatchlistCatalog.SpaceXSymbol;
             _harness.SetFocusSymbol(WatchlistCatalog.SpaceXSymbol);
             SelectedTimeframe = ChartTimeframeCatalog.UiLabel(SpacexOfficialStrategyPreset.Timeframe);
@@ -56,8 +62,8 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         else
         {
-            SelectedStockKind = StockMarketKind.비전마린.ToString();
             _harness.SetStockKind(StockMarketKind.비전마린);
+            SelectedStockKind = StockMarketKind.비전마린.ToString();
             SelectedSymbol = WatchlistCatalog.VmarSymbol;
             _harness.SetFocusSymbol(WatchlistCatalog.VmarSymbol);
             SelectedTimeframe = ChartTimeframeCatalog.UiLabel(VmarOneMinuteScalpPreset.Timeframe);
@@ -68,7 +74,10 @@ public partial class MainWindowViewModel : ViewModelBase
             RecommendedStrategyNote = VmarOneMinuteScalpPreset.OwnerSummary;
         }
 
+        _suppressSelectionEcho = false;
+        SyncStockKindChips();
         SyncTimeframeChips();
+        ApplyStockKindUiLabels();
 
         BuildEmptyChart();
         ApplyPanel(_harness.GetAutoTradePanel());
@@ -79,6 +88,20 @@ public partial class MainWindowViewModel : ViewModelBase
         SafetyHeadline = ResolveSafetyHeadline();
         ChartSubtitle = "토스 실봉 로딩 중… · 한국시간(KST)";
         _ = BootstrapRealDataAsync();
+    }
+
+    private StockKindChipVm CreateStockKindChip(StockMarketKind kind)
+    {
+        var symbols = WatchlistCatalog.ResolveSymbols(kind);
+        var ticker = symbols.Count > 0
+            ? symbols[0]
+            : WatchlistCatalog.VmarSymbol;
+        return new StockKindChipVm(
+            kindLabel: kind.ToString(),
+            tickerLabel: ticker,
+            displayName: ResolveStockDisplayName(kind),
+            subtitle: ResolveStockKindSubtitle(kind),
+            onSelect: SelectStockKindCore);
     }
 
     private async Task BootstrapRealDataAsync()
@@ -99,6 +122,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<string> SymbolOptions { get; }
     public ObservableCollection<string> TimeframeOptions { get; }
     public ObservableCollection<TimeframeChipVm> TimeframeChips { get; }
+    public ObservableCollection<StockKindChipVm> StockKindChips { get; }
 
     [ObservableProperty] private string _title = "토스 · VMAR 자동매매";
     [ObservableProperty] private string _safetyHeadline = string.Empty;
@@ -112,6 +136,10 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _selectedStrategy = "일분분할스캘프";
     [ObservableProperty] private string _selectedSymbol = WatchlistCatalog.VmarSymbol;
     [ObservableProperty] private string _selectedTimeframe = "15m";
+    [ObservableProperty] private string _focusSymbolPill = WatchlistCatalog.VmarSymbol;
+    [ObservableProperty] private string _stockDisplayName = "비전마린";
+    [ObservableProperty] private string _newsCardTitle = "VMAR 뉴스";
+    [ObservableProperty] private string _stockSwitchHint = string.Empty;
     [ObservableProperty] private string _stockKindDescription = string.Empty;
     [ObservableProperty] private string _strategyDescription = string.Empty;
     [ObservableProperty] private string _chartTitle = "VMAR";
@@ -199,23 +227,120 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        ApplyStockKindSelection(kind);
+    }
+
+    /// <summary>Chip / combo entry: apply harness presets for the selected kind (no live unlock).</summary>
+    [RelayCommand]
+    private void SelectStockKind(string? kindLabel) => SelectStockKindCore(kindLabel);
+
+    private void SelectStockKindCore(string? kindLabel)
+    {
+        if (string.IsNullOrWhiteSpace(kindLabel))
+        {
+            return;
+        }
+
+        if (!Enum.TryParse<StockMarketKind>(kindLabel, out var kind))
+        {
+            return;
+        }
+
+        if (string.Equals(SelectedStockKind, kind.ToString(), StringComparison.Ordinal))
+        {
+            SyncStockKindChips();
+            return;
+        }
+
+        // Triggers OnSelectedStockKindChanged → ApplyStockKindSelection.
+        SelectedStockKind = kind.ToString();
+    }
+
+    private void ApplyStockKindSelection(StockMarketKind kind)
+    {
+        // Harness applies SPCX vs VMAR strategy/timeframe presets; never unlocks live orders.
         _harness.SetStockKind(kind);
         RefreshSymbolOptions();
 
         _suppressSelectionEcho = true;
-        SelectedStockKind = StockMarketKind.비전마린.ToString();
-        SelectedStrategy = VmarOneMinuteScalpPreset.Strategy.ToString();
-        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(VmarOneMinuteScalpPreset.Timeframe);
-        OfficialStrategyLabel = VmarOneMinuteScalpPreset.OwnerSummary;
-        RecommendedStrategyNote = VmarOneMinuteScalpPreset.OwnerSummary;
+        SelectedStockKind = kind.ToString();
+        if (kind == StockMarketKind.스페이스X)
+        {
+            SelectedStrategy = SpacexOfficialStrategyPreset.Strategy.ToString();
+            SelectedTimeframe = ChartTimeframeCatalog.UiLabel(SpacexOfficialStrategyPreset.Timeframe);
+            OfficialStrategyLabel = SpacexOfficialStrategyPreset.OwnerSummary;
+            RecommendedStrategyNote = SpacexOfficialStrategyPreset.OwnerSummary;
+        }
+        else
+        {
+            SelectedStrategy = VmarOneMinuteScalpPreset.Strategy.ToString();
+            SelectedTimeframe = ChartTimeframeCatalog.UiLabel(VmarOneMinuteScalpPreset.Timeframe);
+            OfficialStrategyLabel = VmarOneMinuteScalpPreset.OwnerSummary;
+            RecommendedStrategyNote = VmarOneMinuteScalpPreset.OwnerSummary;
+        }
+
         _suppressSelectionEcho = false;
+        SyncStockKindChips();
         SyncTimeframeChips();
+        ApplyStockKindUiLabels();
 
         ApplyPanel(_harness.GetAutoTradePanel());
         RebuildChart();
-        StatusLine = $"대상 · {WatchlistCatalog.Describe(StockMarketKind.비전마린)} · 토스 실데이터";
+        StatusLine = $"대상 · {WatchlistCatalog.Describe(kind)} · 토스 실데이터";
         _ = RefreshAsync();
     }
+
+    private void SyncStockKindChips()
+    {
+        foreach (var chip in StockKindChips)
+        {
+            chip.IsSelected = string.Equals(
+                chip.KindLabel,
+                SelectedStockKind,
+                StringComparison.Ordinal);
+        }
+    }
+
+    private void ApplyStockKindUiLabels()
+    {
+        var kind = Enum.TryParse<StockMarketKind>(SelectedStockKind, out var parsed)
+            ? parsed
+            : StockMarketKind.비전마린;
+        var focus = _harness.Session.ResolveFocusSymbol();
+        if (string.IsNullOrWhiteSpace(focus))
+        {
+            var symbols = WatchlistCatalog.ResolveSymbols(kind);
+            focus = symbols.Count > 0 ? symbols[0] : WatchlistCatalog.VmarSymbol;
+        }
+
+        FocusSymbolPill = focus;
+        StockDisplayName = ResolveStockDisplayName(kind);
+        NewsCardTitle = $"{focus} 뉴스";
+        Title = ResolveWindowTitle(kind, _harness.IsLiveSubmissionEnabled);
+    }
+
+    private static string ResolveStockDisplayName(StockMarketKind kind) => kind switch
+    {
+        StockMarketKind.스페이스X => "스페이스X",
+        StockMarketKind.비전마린 => "비전마린",
+        _ => kind.ToString(),
+    };
+
+    private static string ResolveStockKindSubtitle(StockMarketKind kind) => kind switch
+    {
+        StockMarketKind.스페이스X => "추세추종 15m",
+        StockMarketKind.비전마린 => "1분·15m 분할연습",
+        _ => string.Empty,
+    };
+
+    private static string ResolveWindowTitle(StockMarketKind kind, bool live) =>
+        (kind, live) switch
+        {
+            (StockMarketKind.스페이스X, true) => "토스 · SPCX 실거래",
+            (StockMarketKind.스페이스X, false) => "토스 · SPCX 연습",
+            (StockMarketKind.비전마린, true) => "토스 · VMAR 실거래",
+            _ => "토스 · VMAR 자동매매",
+        };
 
     partial void OnSelectedStrategyChanged(string value)
     {
@@ -415,6 +540,7 @@ public partial class MainWindowViewModel : ViewModelBase
         StockKindDescription = p.StockKindDescription;
         StrategyDescription = p.StrategyDescription;
         SelectedSymbol = focus;
+        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(_harness.Timeframe);
         ChartTitle = $"{focus} · {SelectedTimeframe}";
         ChartSubtitle = ChartTimeframeCatalog.TryParse(SelectedTimeframe, out var tfApply)
             ? ChartTimeframeCatalog.Describe(tfApply) + " · 버블=거래대금"
@@ -427,6 +553,9 @@ public partial class MainWindowViewModel : ViewModelBase
                 : $"{SafetyNote} {ResolveSafetyNoteSuffix()}";
         }
 
+        SyncStockKindChips();
+        SyncTimeframeChips();
+        ApplyStockKindUiLabels();
         ApplySafetyPills();
         ApplyLiveUiLabels();
         _suppressSelectionEcho = false;
@@ -438,9 +567,7 @@ public partial class MainWindowViewModel : ViewModelBase
         SessionBasisLabel = _harness.IsLiveSubmissionEnabled
             ? "실계좌 기준 · 실주문 가능 · 수익 보장 아님"
             : "연습 세션 기준 · 수익 보장 아님";
-        Title = _harness.IsLiveSubmissionEnabled
-            ? "토스 · SPCX 실거래"
-            : "토스 · VMAR 자동매매";
+        ApplyStockKindUiLabels();
     }
 
     private void ApplyConnectionAndDataPills()
@@ -856,6 +983,13 @@ public partial class MainWindowViewModel : ViewModelBase
         DataSourcePill = _harness.ChartUsesRealCandles
             ? "토스 실봉"
             : ShortDataSourcePill(_harness.ChartDataSourceLabel);
+        FocusSymbolPill = focus;
+        NewsCardTitle = $"{focus} 뉴스";
+        if (Enum.TryParse<StockMarketKind>(SelectedStockKind, out var kindRebuild))
+        {
+            StockDisplayName = ResolveStockDisplayName(kindRebuild);
+            Title = ResolveWindowTitle(kindRebuild, _harness.IsLiveSubmissionEnabled);
+        }
     }
 
     public void UpdateHoverFromChartX(double xCoordinate)
