@@ -50,6 +50,20 @@ This file is the project constitution. Global Python AGENTS.md rules do **not** 
 - Fail-closed: unknown, missing data, stale quotes, API errors → **block**.
 - No investment advice; no stock buy/sell recommendations; no profit guarantees.
 
+### MANDATORY: parallel worktrees + max agents (오너 확정 · 예외 없음)
+
+**필수 사항입니다. 선택·권장이 아닙니다. 위반 시 작업을 중단하고 절차를 고칩니다.**
+
+1. **모든 구현·문서·설정 변경은 git worktree에서만** 한다. `main` 루트에서 기능 코딩 금지.
+2. **2개 이상 독립 작업**이 있으면 **반드시 병렬 에이전트**로 동시에 실행한다.
+3. **최대 병렬 필수:** 파일 구역이 안 겹치는 한 에이전트를 **가능한 최대로** 띄운다 (목표 **5–8**, 최소 2).  
+   “한 에이전트가 전부” 는 **금지**.
+4. 에이전트마다 **전용 worktree + 전용 브랜치 + 전용 경로 구역** 필수.
+5. 웨이브 시작: `bash scripts/grok/parallel-wave-setup.sh` 또는 동등 worktree 생성.
+6. 통합은 오케스트레이터가 wave-base로 병합 → `dev-loop`/테스트 → main.
+7. 상세 헌법: `docs/PARALLEL_AGENTS.md`, `docs/WORKTREE_POLICY.md`  
+   스킬: `.grok/skills/parallel-worktree-max-agents/SKILL.md`
+
 ## Trading safety defaults
 
 ```text
@@ -140,13 +154,15 @@ Toss has **REST only** per official OpenAPI 1.2.2 snapshot (2026-07-09) — no T
 
 See `docs/LIVE_READINESS_CHECKLIST.md`. Until every item is evidenced: **live remains impossible**.
 
-## Worktree 필수 (오너 확정 2026-07-09)
+## Worktree 필수 (오너 확정 2026-07-09) — MANDATORY
 
-- **모든 개발 작업은 git worktree에서 진행한다.**
-- 기본 활성 작업 경로: `.worktrees/active-dev` (브랜치 `feature/worktree-all-dev`)
-- main 루트는 안정 정식본. 기능 구현을 main에서 직접 하지 않는다.
+- **모든 개발 작업은 git worktree에서 진행한다. (필수)**
+- 통합 base: `.worktrees/wave-base` (`feature/parallel-wave-base`)
+- 에이전트 작업실: `.worktrees/pwXX-*` (`feature/pwXX-*`)
+- main 루트는 안정 정식본. **기능 구현을 main에서 직접 하지 않는다. (필수)**
 - 상세: `docs/WORKTREE_POLICY.md`
-- 새 작업실: `bash scripts/grok/new-worktree.sh <이름> [브랜치]`
+- 단일 작업실: `bash scripts/grok/new-worktree.sh <이름> [브랜치] [base]`
+- 병렬 웨이브: `bash scripts/grok/parallel-wave-setup.sh <wave> <base-branch> <agent-slugs...>`
 
 ## 개발 루프 필수 (오너 확정 2026-07-09)
 
@@ -154,9 +170,12 @@ See `docs/LIVE_READINESS_CHECKLIST.md`. Until every item is evidenced: **live re
 - 실패 시 수정 후 재검증. 최대 시도 한도 준수. safety BLOCK은 우회 금지.
 - **실주문 루프와 혼동 금지.** 상세: `docs/DEV_LOOP.md`
 
-## 병렬 에이전트 필수 (오너 확정 2026-07-09)
+## 병렬 에이전트 필수 (오너 확정 2026-07-09) — MANDATORY · MAX
 
-- **모든 개발은 병렬 에이전트로 분할 실행**하는 것을 기본으로 한다.
+- **필수:** 독립 작업이 2개 이상이면 **병렬 에이전트 + 에이전트별 worktree**.
+- **필수:** 겹치지 않는 작업은 **최대 개수**로 동시 실행 (목표 5–8).
+- **금지:** main 코딩, 단일 에이전트에 전체 위임, 구역 겹침, 검증 없는 병합.
 - 상세: `docs/PARALLEL_AGENTS.md`
+- 스킬: `.grok/skills/parallel-worktree-max-agents/SKILL.md`
 - 오케스트레이터가 구역·안전·dev-loop·병합을 책임진다.
 

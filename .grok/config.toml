@@ -17,6 +17,19 @@ forbid_secret_stdout = true
 forbid_env_cat = true
 require_official_toss_docs = true
 
+# MANDATORY development process (owner 2026-07-09)
+[process]
+require_git_worktree = true
+forbid_feature_work_on_main = true
+require_parallel_agents = true
+require_max_parallel_agents = true
+min_parallel_agents = 2
+target_parallel_agents = 8
+parallel_policy = "docs/PARALLEL_AGENTS.md"
+worktree_policy = "docs/WORKTREE_POLICY.md"
+parallel_skill = ".grok/skills/parallel-worktree-max-agents/SKILL.md"
+wave_setup_script = "scripts/grok/parallel-wave-setup.sh"
+
 [docs]
 toss_llms_txt = "https://developers.tossinvest.com/llms.txt"
 toss_overview = "https://openapi.tossinvest.com/openapi-docs/overview.md"

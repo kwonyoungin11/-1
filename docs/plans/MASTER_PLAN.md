@@ -52,11 +52,13 @@
 
 상세 매핑은 `LIVE_READINESS_EVIDENCE.md` §4.
 
-## 작업 규칙
+## 작업 규칙 — **필수 (MANDATORY)**
 
-1. worktree에서만 구현
-2. 단계 통과 증거 없이 다음 phase로 강제 이동 금지
-3. 실거래(Phase 7) 전 Phase 6 필수
+1. **worktree에서만 구현** (main 코딩 금지)
+2. **병렬 worktree + 최대 에이전트 필수** — 독립 작업 2+ 이면 목표 5–8 에이전트 동시 (`docs/PARALLEL_AGENTS.md`)
+3. 단계 통과 증거 없이 다음 phase로 강제 이동 금지
+4. 실거래(Phase 7) 전 Phase 6 필수
+5. 웨이브 도구: `bash scripts/grok/parallel-wave-setup.sh`
 4. **UI/UX는 현재 데스크톱 콕핏 유지** (레이아웃 대변경 금지, 상태 표시만 추가)
 5. 병합 전 `bash scripts/grok/dev-loop.sh`
 6. 병렬 에이전트·worktree 정책: `docs/PARALLEL_AGENTS.md`, `docs/WORKTREE_POLICY.md`

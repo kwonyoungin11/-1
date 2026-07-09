@@ -14,4 +14,5 @@ echo "$CHANGED" | rg -qi 'risk' && remind "Risk change → risk gate tests"
 echo "$CHANGED" | rg -qi 'Ui|UX|DESIGN' && remind "UI change → update UX/UI docs"
 echo "$CHANGED" | rg -q '\.env\.example' && remind ".env.example change → placeholders only"
 echo "$CHANGED" | rg -q 'AGENTS\.md|\.grok/config' && remind "governance change → ensure no secrets hardcoded"
+echo "$CHANGED" | rg -q 'src/|tests/|docs/' && remind "MANDATORY: feature work only in git worktrees + max parallel agents (docs/PARALLEL_AGENTS.md)"
 exit 0
