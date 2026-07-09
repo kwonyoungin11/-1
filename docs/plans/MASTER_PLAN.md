@@ -20,7 +20,7 @@
 | 2 | 토스 읽기 전용 연결 | 매우 낮음 | 계좌·시세 읽기 + 마스킹 | **코드 완료** · mock 기본 · live HTTP 옵션 · **실 스모크 = ops (미완)** |
 | 3 | 신호 + 리스크 게이트 | 없음(후보만) | 위험 후보 block 테스트 | **완료 (unit / pre-live)** |
 | 4 | dry-run | 없음 | 파이프 안정·감사 로그 | **단위 완료** · multi-session export는 Phase 6 ops |
-| 5 | paper trading | 없음 | 기간 증거·오너 이해 | **unit/ledger 완료** · **multi-session export / multi-day = ops 미완** |
+| 5 | paper trading | 없음 | 기간 증거·오너 이해 | **unit/ledger 완료** · **multi-session export 첨부** · multi-day residual |
 | 6 | live readiness | 없음(아직 잠금) | 체크리스트 전부 증거 | **pre-live 완료** · ops 캡처 세트 있음 · `LIVE_READY=false` · unlock=`ready_for_owner_unlock` |
 | 7 | 실거래 개방 (좁게) | 있음 | 소액·한도·kill switch | **금지 기본** — 아래 Phase 7 정직 문구 |
 | 8 | 운영 안정화 | 관리 | 장애 대응·개선 | 미착수 |
@@ -65,19 +65,19 @@
 | No unguarded live submit path | **완료 (의도적)** |
 | 기계 차단 무결성 `LIVE_READY=false` | **OK** (script never auto-true) |
 
-### Still blocks live (ops/owner — not "dev incomplete")
+### Still blocks **default live** (ops residual / owner — unlock capture 완료와 별개)
 
 | 갭 | 상태 |
 |----|------|
-| **Multi-session export** in `artifacts/live-readiness/` | **미완** — multi-calendar-day real ops로 표기 금지 |
-| Multi-calendar-day real ops log | **미완** (export와 별개) |
-| Owner-approved redacted Toss read smoke | **미완** (선택·live-ready 주장 시 필요) |
-| OpenAPI 주기 재검증 로그 | **미완** |
-| Idempotency/duplicate on **live** path | live 경로 없음 · 연습 경로 가드만 |
-| Incident 리허설 **날짜** | **미완** |
-| Owner walkthrough 완료 서명 | **미완** |
-| 오너 Phase 7 live 승인서 | **없음 (의도)** |
-| Final gate E 동시 충족 | **미충족** |
+| **Multi-session export** in `artifacts/live-readiness/` | **완료 (첨부)** — multi-calendar-day real ops로 표기 금지 |
+| Multi-calendar-day real ops log | **미완 residual** (export와 별개) |
+| Owner-approved redacted Toss read smoke | residual 문서 있음 · 실 스모크 로그는 선택 residual |
+| OpenAPI 재검증 로그 | **완료 (첨부)** `openapi-recheck.log` |
+| Idempotency/duplicate | 연습 + gated live 인덱스 **완료** |
+| Incident 리허설 **날짜** | **완료 (첨부)** `incident-drill-record.md` |
+| Owner walkthrough 완료 서명 | residual (문서만) |
+| 오너 Phase 7 live 승인서 | **UNSIGNED 템플릿** — 오너 실서명 필요 |
+| Final gate E 동시 충족 | **미충족** (기본 플래그 차단 = 의도) |
 | Owner unlock flags | **기본 차단** (owner must set) |
 
 상세 매핑: `LIVE_READINESS_EVIDENCE.md` §0a–0e, §4.
@@ -86,8 +86,8 @@
 
 | 값 | 의미 | auto-live? |
 |----|------|------------|
-| `blocked_missing_evidence` | ops 증거 부족 · **현재 값** | 아니오 |
-| `ready_for_owner_unlock` | 증거 모여 오너 **검토 가능** | **아니오** — 기본 실행 dry-run · 수동 언락 필요 |
+| `blocked_missing_evidence` | ops 캡처 부족 · 언락 검토 비권장 | 아니오 |
+| `ready_for_owner_unlock` | 캡처 모여 오너 **검토 가능** · **현재 값** | **아니오** — 기본 실행 dry-run · 수동 언락 필요 |
 
 `ready_for_owner_unlock` ≠ `LIVE_READY=true` ≠ 실주문 허용.
 
@@ -107,7 +107,7 @@
 | auto-live | **없음** — 증거 완료·unlock ready 여도 프로세스가 스스로 live 전환하지 않음 |
 | `LIVE_READY` | 기본/자동화 경로에서 **false 유지** · script never auto-trues |
 | 소액·한도 | 오너 승인 범위 안에서만 (승인 전 논의만) |
-| 지금 진행? | **금지** — `LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence` |
+| 지금 진행? | **기본 실행 금지** — unlock=`ready_for_owner_unlock` 이어도 auto-live 없음 · 오너 서명+플래그 전 |
 
 Phase 7을 “열려 있음”으로 보고하지 않는다.  
 “게이트를 열면 코드 경로를 쓸 수 있는 설계”와 “지금 실주문 가능”을 섞지 않는다.
@@ -162,11 +162,11 @@ Phase 7을 “열려 있음”으로 보고하지 않는다.
 
 ```text
 오너 요약:
-- 현재 단계: Phase 0–5 + pre-live 엔지니어링 완료 · Phase 6 ops 갭 · Phase 7 gated (default dry-run · owner unlock required)
-- 안전 상태: fail-closed 기본값 유지, 주문 submit 경로 없음/게이트, LIVE_READY=false, unlock=blocked_missing_evidence
-- live order 가능 여부: 불가능 (auto-live 없음)
-- 오늘 해야 할 결정: multi-session export 수집 / multi-day 기간 / (선택) 읽기 스모크 / incident 리허설
-- 내가 추천하는 선택: 실주문 계속 잠금, artifacts/live-readiness/ 에 ops 증거만 쌓기
-- 이유: 코드는 연습 파이프까지 끝남. unlock ready·live를 열 조건이 없음
-- 다음 승인 항목: Phase 7 소액 실거래 — 지금은 승인하지 말 것
+- 현재 단계: Phase 0–5 + gated live 경로 + ops 캡처 · Phase 7 owner unlock 검토 가능
+- 안전 상태: fail-closed 기본값, LIVE_READY=false, LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock
+- live order (기본 실행): 불가능 (auto-live 없음)
+- 오늘 해야 할 결정: Phase 7 실서명 / env 플래그 / (선택) 실 읽기 스모크
+- 추천: 서명·플래그 전까지 실주문 잠금 유지
+- 이유: unlock ready = 오너 검토 가능 · 자동 실거래 아님
+- 다음 승인 항목: owner-unlock-signoff 실서명 + gate E 플래그 (원할 때만)
 ```
