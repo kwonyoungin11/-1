@@ -214,4 +214,90 @@ public class AppHarnessTests
         Assert.Contains("Avalonia", csproj, StringComparison.Ordinal);
         Assert.Contains("LiveChartsCore", csproj, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void CreateDefault_keeps_IsLiveSubmissionEnabled_false_and_settings_fail_closed()
+    {
+        var harness = AppHarness.CreateDefault();
+
+        Assert.False(harness.IsLiveSubmissionEnabled);
+        Assert.False(harness.SettingsWouldAllowLiveRouting);
+        // Gated live router is registered for readiness, never used under CreateDefault practice.
+        Assert.True(harness.IsGatedLiveRouterRegistered);
+    }
+
+    [Fact]
+    public void GetLiveReadinessReport_never_enables_live()
+    {
+        var harness = AppHarness.CreateDefault();
+        var report = harness.GetLiveReadinessReport();
+
+        Assert.True(report.LiveBlocked);
+        Assert.False(report.IsLiveSubmissionEnabled);
+        Assert.False(report.EnablesLive);
+        Assert.False(report.GatedLiveRouterUsedInPractice);
+        Assert.True(report.GatedLiveRouterRegistered);
+        Assert.False(report.SettingsAllowLiveOrders);
+        Assert.True(report.SettingsKillSwitch);
+        Assert.Equal(nameof(OrderMode.DryRun), report.SettingsOrderMode);
+        Assert.False(string.IsNullOrWhiteSpace(report.OwnerUnlockStatus));
+        Assert.DoesNotContain("unlocked", report.OwnerUnlockStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("LIVE_READY=true", report.Summary, StringComparison.Ordinal);
+        Assert.Contains("LIVE_READY=false", report.Summary, StringComparison.Ordinal);
+        Assert.False(harness.IsLiveSubmissionEnabled);
+    }
+
+    [Fact]
+    public async Task CreateDefault_practice_works_while_live_readiness_stays_blocked()
+    {
+        var harness = AppHarness.CreateDefault();
+        Assert.False(harness.IsLiveSubmissionEnabled);
+
+        harness.SetStockKind(StockMarketKind.나스닥);
+        harness.SetStrategy(TradingStrategyKind.단순연습전략);
+        var startMsg = harness.StartAutoTrade();
+        Assert.Contains("실주문", startMsg, StringComparison.Ordinal);
+
+        var dash = await harness.GetDashboardAsync();
+        Assert.Equal(LiveLockState.Locked, dash.Snapshot.LiveLock);
+        Assert.False(dash.IsLiveTradingVisuallyOpen);
+        Assert.Equal(OrderMode.DryRun, dash.Snapshot.OrderMode);
+
+        var report = harness.GetLiveReadinessReport();
+        Assert.True(report.LiveBlocked);
+        Assert.False(report.IsLiveSubmissionEnabled);
+        Assert.False(report.EnablesLive);
+        Assert.False(report.GatedLiveRouterUsedInPractice);
+        Assert.False(harness.SettingsWouldAllowLiveRouting);
+
+        // Practice session still running after readiness read.
+        Assert.Equal(AutoTradeSessionStatus.실행중, harness.GetAutoTradePanel().SessionStatus);
+        Assert.True(harness.GetEvidenceCounts().LiveBlocked);
+
+        _ = harness.StopAutoTrade();
+        Assert.False(harness.IsLiveSubmissionEnabled);
+        Assert.True(harness.GetLiveReadinessReport().LiveBlocked);
+    }
+
+    [Fact]
+    public void GetLiveReadinessReport_scans_repo_docs_when_available()
+    {
+        var harness = AppHarness.CreateDefault();
+        var report = harness.GetLiveReadinessReport();
+
+        // In this worktree the checklist/evidence docs and automation script exist.
+        // Report may still miss them if repo root is not discoverable; never enable live.
+        Assert.True(report.LiveBlocked);
+        Assert.False(report.EnablesLive);
+        Assert.False(report.IsLiveSubmissionEnabled);
+
+        var root = AppHarness.TryFindRepoRoot();
+        if (root is not null)
+        {
+            Assert.True(report.ChecklistPresent);
+            Assert.True(report.EvidenceDocPresent);
+            Assert.True(report.AutomationScriptPresent);
+            Assert.Equal("docs_present_owner_unlock_absent", report.OwnerUnlockStatus);
+        }
+    }
 }
