@@ -25,8 +25,8 @@
 
 ## 현재 위치
 
-- Phase 0 완료에 가까움
-- **지금 worktree에서:** Phase 0 마무리(정책) + Phase 1 착수 준비
+- Phase 0: 하네스·worktree·dev-loop 완료
+- **Phase 1: 상세 설계 완료 → 오너 화면 구조 승인 대기**
 - 활성 worktree: `.worktrees/active-dev`
 
 ## 작업 규칙
@@ -35,12 +35,13 @@
 2. 단계 통과 증거 없이 다음 phase로 강제 이동 금지
 3. 실거래(Phase 7) 전 Phase 6 필수
 4. UI는 사용자 중심 cockpit 우선
+5. 병합 전 `bash scripts/grok/dev-loop.sh`
 
 ## 다음 실행
 
-1. Phase 1 상세 플랜 (`docs/plans/PHASE_01_cockpit.md`)
-2. cockpit 와이어/상태 모델 오너 확인
-3. Phase 2 read-only Toss 상세 플랜
+1. 오너: Phase 1 화면 구조 승인 (`docs/cockpit/SCREEN_MAP.md` + WIREFRAME)
+2. Phase 2 read-only Toss 상세 플랜
+3. (승인 후) cockpit UI 골격 구현 착수
 
 ## 개발 루프 (오너 확정 2026-07-09)
 

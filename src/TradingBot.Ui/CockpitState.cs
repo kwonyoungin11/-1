@@ -1,6 +1,6 @@
 namespace TradingBot.Ui;
 
-/// <summary>High-level cockpit projection for non-developer owners. No live order actions.</summary>
+/// <summary>Legacy thin view; prefer <see cref="CockpitSnapshot"/>.</summary>
 public sealed record CockpitState(
     string BotState,
     bool LiveOrdersAllowed,
@@ -8,10 +8,14 @@ public sealed record CockpitState(
     string OrderMode,
     string SafetySummary)
 {
-    public static CockpitState CreateSafeDefault() => new(
-        BotState: "HarnessReady",
-        LiveOrdersAllowed: false,
-        KillSwitchActive: true,
-        OrderMode: "dry_run",
-        SafetySummary: "Live orders blocked. Kill switch on. Dry-run mode.");
+    public static CockpitState CreateSafeDefault()
+    {
+        var snap = CockpitSnapshot.CreateSafeDefault();
+        return new(
+            BotState: snap.BotState.ToString(),
+            LiveOrdersAllowed: snap.AllowLiveOrders,
+            KillSwitchActive: snap.KillSwitchActive,
+            OrderMode: "dry_run",
+            SafetySummary: snap.SafetyHeadline);
+    }
 }

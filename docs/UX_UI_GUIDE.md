@@ -6,6 +6,13 @@
 - **UI 원칙:** 사용자 중심 — 오너가 “지금 뭐 하는지 / 왜 막혔는지 / 다음에 뭘 하면 되는지”를 바로 이해
 - dry-run·paper 화면은 연습용이 아니라 **실거래를 열기 위한 검증 단계 UI**
 
+## Phase 1 산출물
+
+- 상세 플랜: `docs/plans/PHASE_01_cockpit.md`
+- 화면 지도: `docs/cockpit/SCREEN_MAP.md`
+- 와이어프레임: `docs/cockpit/WIREFRAME.md`
+- 오너 시나리오: `docs/cockpit/OWNER_WALKTHROUGH.md`
+
 ## 이 UI는 무엇인가?
 
 수동 주문 앱이 아닙니다. **자동매매 상태 판단 cockpit** 입니다.
