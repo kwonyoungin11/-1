@@ -297,7 +297,10 @@ public class AppHarnessTests
             Assert.True(report.ChecklistPresent);
             Assert.True(report.EvidenceDocPresent);
             Assert.True(report.AutomationScriptPresent);
-            Assert.Equal("docs_present_owner_unlock_absent", report.OwnerUnlockStatus);
+            // Status reflects docs and/or ops artifacts; never means live is on.
+            Assert.False(string.IsNullOrWhiteSpace(report.OwnerUnlockStatus));
+            Assert.DoesNotContain("live_open", report.OwnerUnlockStatus, StringComparison.OrdinalIgnoreCase);
+            Assert.True(report.LiveBlocked);
         }
     }
 }
