@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
-# Live readiness automation (docs + safety defaults only).
+# Live readiness automation (safety defaults + ops artifact presence).
 #
 # Purpose:
-#   Confirm live trading remains correctly BLOCKED and that readiness
-#   evidence harness exists. This script never enables live orders.
+#   Confirm live trading remains correctly BLOCKED under fail-closed defaults,
+#   and report whether ops artifacts under artifacts/live-readiness/ are present
+#   for owner unlock consideration. This script never enables live orders.
 #
 # Exit codes:
-#   0 — safety intact: live defaults blocked, checklist present, no live submit
-#       path in src. Prints LIVE_READY=false (expected until owner phase 7).
-#   1 — safety BROKEN (defaults allow live, kill switch off by default,
-#       non-dry-run default, or SubmitOrderAsync / live submit pattern in src).
+#   0 — safety intact (defaults fail-closed). May still be missing evidence.
+#       LIVE_READY is always false under defaults. Distinguishes:
+#         LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence
+#         LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock
+#   1 — safety BROKEN (defaults allow live / kill off / non-dry-run default,
+#       or unguarded live submit pattern). LIVE_OWNER_UNLOCK_STATUS=broken_defaults
 #
-# This is NOT a green light for live. Passing means "blocked as designed".
+# Notes:
+#   - Gated router APIs (e.g. SubmitCandidateAsync behind live gates) are allowed.
+#   - LIVE_READY is never printed true by this script alone.
+#   - C# source of truth: TradingBot.Domain.LiveReadinessEvaluator
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -23,9 +29,10 @@ echo "note: this gate never flips live flags; live stays blocked by policy"
 DEFAULTS="src/TradingBot.Domain/TradingSafetyDefaults.cs"
 CHECKLIST="docs/LIVE_READINESS_CHECKLIST.md"
 EVIDENCE="docs/plans/LIVE_READINESS_EVIDENCE.md"
+ARTIFACT_DIR="artifacts/live-readiness"
 
 broken=0
-missing_docs=0
+missing_evidence=0
 
 # --- Safety defaults (must remain fail-closed) ---
 if [[ ! -f "$DEFAULTS" ]]; then
@@ -54,51 +61,106 @@ else
   fi
 fi
 
-# --- No live order submit implementation in src ---
+# --- Live submit path policy ---
+# Fail only on unguarded legacy SubmitOrderAsync. Gated candidate APIs
+# (SubmitCandidateAsync) are allowed to exist behind live gates.
 if rg -n --glob '*.cs' -e 'SubmitOrderAsync\s*\(' src 2>/dev/null; then
-  echo "BROKEN: SubmitOrderAsync found under src (live submit path must not exist yet)"
+  echo "BROKEN: SubmitOrderAsync found under src (unguarded live submit must not exist)"
   broken=$((broken + 1))
 else
-  echo "ok: no SubmitOrderAsync in src"
+  echo "ok: no SubmitOrderAsync in src (gated SubmitCandidateAsync allowed)"
 fi
 
-# --- Evidence / checklist docs (required for exit 0) ---
+# --- Docs (informational; missing docs count as missing evidence, not broken defaults) ---
 if [[ -f "$CHECKLIST" ]]; then
   echo "ok: $CHECKLIST present"
 else
-  echo "missing: $CHECKLIST"
-  missing_docs=$((missing_docs + 1))
+  echo "missing: $CHECKLIST (evidence incomplete)"
+  missing_evidence=$((missing_evidence + 1))
 fi
 
 if [[ -f "$EVIDENCE" ]]; then
   echo "ok: $EVIDENCE present"
 else
-  # Evidence plan is part of automation harness; warn but treat as missing doc.
-  echo "missing: $EVIDENCE"
-  missing_docs=$((missing_docs + 1))
+  echo "missing: $EVIDENCE (evidence incomplete)"
+  missing_evidence=$((missing_evidence + 1))
 fi
 
-# --- Summary (never claims live ready) ---
+# --- Ops artifacts (mirror LiveReadinessEvaluator) ---
+echo "-- artifacts under $ARTIFACT_DIR --"
+if [[ ! -d "$ARTIFACT_DIR" ]]; then
+  echo "missing: $ARTIFACT_DIR/"
+  missing_evidence=$((missing_evidence + 1))
+else
+  if [[ -f "$ARTIFACT_DIR/paper-multi-session-export.txt" ]]; then
+    echo "ok: paper-multi-session-export.txt"
+  elif [[ -f "$ARTIFACT_DIR/paper-multi-session-export.json" ]]; then
+    echo "ok: paper-multi-session-export.json"
+  else
+    echo "missing: paper-multi-session-export.txt|json"
+    missing_evidence=$((missing_evidence + 1))
+  fi
+
+  if [[ ! -f "$ARTIFACT_DIR/incident-drill-record.md" ]]; then
+    echo "missing: incident-drill-record.md"
+    missing_evidence=$((missing_evidence + 1))
+  elif ! rg -n -e '\b(20[0-9]{2})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\b' \
+      "$ARTIFACT_DIR/incident-drill-record.md" >/dev/null; then
+    echo "missing: incident-drill-record.md date (YYYY-MM-DD)"
+    missing_evidence=$((missing_evidence + 1))
+  else
+    echo "ok: incident-drill-record.md (has YYYY-MM-DD)"
+  fi
+
+  if [[ -f "$ARTIFACT_DIR/openapi-recheck.log" ]]; then
+    echo "ok: openapi-recheck.log"
+  else
+    echo "missing: openapi-recheck.log"
+    missing_evidence=$((missing_evidence + 1))
+  fi
+
+  if [[ -f "$ARTIFACT_DIR/owner-unlock-signoff.md" ]]; then
+    echo "ok: owner-unlock-signoff.md"
+  else
+    echo "missing: owner-unlock-signoff.md"
+    missing_evidence=$((missing_evidence + 1))
+  fi
+
+  if [[ -f "$ARTIFACT_DIR/toss-read-smoke-redacted.log" ]]; then
+    echo "ok: toss-read-smoke-redacted.log (optional)"
+  elif [[ -f "$ARTIFACT_DIR/toss-read-smoke-residual.md" ]]; then
+    echo "ok: toss-read-smoke-residual.md (optional)"
+  else
+    echo "note: optional toss read smoke artifact absent"
+  fi
+fi
+
+# --- Summary (never claims live ready under defaults) ---
 echo ""
 echo "LIVE_READY=false"
-echo "live_not_ready: expected until owner phase 7 + full checklist evidence"
+echo "live_not_ready: defaults never auto-enable live; owner unlock is separate"
 
 if [[ "$broken" -gt 0 ]]; then
   echo "LIVE_SAFETY_INTACT=false"
   echo "LIVE_READINESS_STATUS=broken"
+  echo "LIVE_OWNER_UNLOCK_STATUS=broken_defaults"
   echo "live readiness FAILED — safety BROKEN ($broken issue(s))"
-  echo "Do not open live trading. Fix defaults / remove live submit paths first."
-  exit 1
-fi
-
-if [[ "$missing_docs" -gt 0 ]]; then
-  echo "LIVE_SAFETY_INTACT=true"
-  echo "LIVE_READINESS_STATUS=incomplete_docs"
-  echo "live readiness FAILED — safety intact but readiness docs missing ($missing_docs)"
+  echo "Do not open live trading. Fix defaults / remove unguarded live submit paths first."
   exit 1
 fi
 
 echo "LIVE_SAFETY_INTACT=true"
-echo "LIVE_READINESS_STATUS=blocked_as_expected"
-echo "live readiness automation PASSED (live remains blocked)"
+
+if [[ "$missing_evidence" -gt 0 ]]; then
+  echo "LIVE_READINESS_STATUS=blocked_missing_evidence"
+  echo "LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence"
+  echo "live readiness automation PASSED (safety intact; evidence incomplete: $missing_evidence)"
+  echo "LIVE_READY remains false until owner unlock process after full evidence."
+  exit 0
+fi
+
+echo "LIVE_READINESS_STATUS=ready_for_owner_unlock"
+echo "LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock"
+echo "live readiness automation PASSED (safety intact; required ops artifacts present)"
+echo "LIVE_READY remains false — ready for owner unlock only, not live enablement."
 exit 0
