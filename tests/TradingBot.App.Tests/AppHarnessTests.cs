@@ -433,4 +433,57 @@ public class AppHarnessTests
         Assert.True(report.LiveBlocked);
         Assert.False(report.IsLiveSubmissionEnabled);
     }
+
+    [Fact]
+    public void CreateDefault_prefers_core3_and_wires_practice_equity_context()
+    {
+        var harness = AppHarness.CreateDefault();
+
+        Assert.Equal(StockMarketKind.나스닥코어3, harness.Session.StockKind);
+        Assert.Equal(3, harness.Session.ResolveWatchSymbols().Length);
+
+        var practice = harness.BuildPracticeContext();
+        Assert.Equal(AppHarness.DefaultPracticeStartingBalance, practice.DayStartEquity);
+        Assert.Equal(harness.Session.Balance, practice.CurrentEquity);
+        Assert.Equal(harness.Session.StartingBalance, practice.DayStartEquity);
+        Assert.Equal(AppHarness.DefaultPracticeMaxDailyLossAbsolute, 3_000m);
+        Assert.False(harness.IsLiveSubmissionEnabled);
+        Assert.True(harness.GetEvidenceCounts().LiveBlocked);
+    }
+
+    [Fact]
+    public async Task CreateDefault_Start_GetDashboard_with_core3_does_not_throw_and_live_blocked()
+    {
+        var harness = AppHarness.CreateDefault();
+        Assert.Equal(StockMarketKind.나스닥코어3, harness.Session.StockKind);
+
+        // Explicit core3 + practice strategy (defaults already safe).
+        harness.SetStockKind(StockMarketKind.나스닥코어3);
+        harness.SetStrategy(TradingStrategyKind.단순연습전략);
+
+        var startMsg = harness.StartAutoTrade();
+        Assert.Contains("실주문", startMsg, StringComparison.Ordinal);
+        Assert.False(harness.IsLiveSubmissionEnabled);
+
+        // Must not throw when MaxDailyLoss is set and practice equity is wired.
+        var dash = await harness.GetDashboardAsync();
+        Assert.Equal(LiveLockState.Locked, dash.Snapshot.LiveLock);
+        Assert.False(dash.IsLiveTradingVisuallyOpen);
+        Assert.False(dash.Snapshot.AllowLiveOrders);
+        Assert.Equal(OrderMode.DryRun, dash.Snapshot.OrderMode);
+
+        var evidence = harness.GetTradingEvidenceSummary();
+        Assert.True(evidence.LiveBlocked);
+        Assert.False(evidence.IsLiveSubmissionEnabled);
+        Assert.True(harness.GetEvidenceCounts().LiveBlocked);
+
+        // Equity context still tracks session after a practice cycle.
+        var practice = harness.BuildPracticeContext();
+        Assert.Equal(harness.Session.StartingBalance, practice.DayStartEquity);
+        Assert.Equal(harness.Session.Balance, practice.CurrentEquity);
+
+        _ = harness.StopAutoTrade();
+        Assert.False(harness.IsLiveSubmissionEnabled);
+        Assert.True(harness.GetTradingEvidenceSummary().LiveBlocked);
+    }
 }

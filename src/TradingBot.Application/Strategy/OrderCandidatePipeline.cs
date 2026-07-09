@@ -95,7 +95,6 @@ public sealed class OrderCandidatePipeline
                 qty = sized.Quantity;
                 if (qty <= 0m)
                 {
-                    // Prefer sizer only when practice is provided; qty 0 → skip candidate.
                     continue;
                 }
             }
@@ -119,14 +118,14 @@ public sealed class OrderCandidatePipeline
                 Quantity = qty,
                 LimitPrice = price,
                 CurrentPositionQuantity = pos,
+                DayStartEquity = practice?.DayStartEquity,
+                CurrentEquity = practice?.CurrentEquity,
                 QuoteTimestampUtc = quote.TimestampUtc,
                 NowUtc = nowUtc,
                 HasMissingData = price is null || qty <= 0,
                 MarketSessionOpen = marketSessionOpen,
                 MarketSessionKnown = marketSessionKnown,
                 MarketSessionOwnerMessage = sessionOwnerMessage,
-                DayStartEquity = practice?.DayStartEquity,
-                CurrentEquity = practice?.CurrentEquity,
             };
 
             var risk = _riskGate.EvaluateOrderCandidate(settings, ctx);
