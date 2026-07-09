@@ -47,9 +47,14 @@ public static class TossReadOnlyFactory
 
     public static TossOptions LoadOptionsFromEnvironment()
     {
-        var env = EnvFile.LoadMergedWithProcess(FindRepoRoot());
+        var env = EnvFile.LoadMergedWithProcess(ResolveRepoRoot());
         return TossOptions.FromEnvironment(env);
     }
+
+    /// <summary>
+    /// Repo root for .env + TradingBot.sln. Walks from app bin and cwd so desktop runs always find main .env.
+    /// </summary>
+    public static string? ResolveRepoRoot() => FindRepoRoot();
 
     public static string DescribeMode(TossOptions options)
     {

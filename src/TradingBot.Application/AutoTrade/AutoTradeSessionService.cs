@@ -291,7 +291,7 @@ public sealed class AutoTradeSessionService
                 CanStart = _status == AutoTradeSessionStatus.중지,
                 CanStop = _status == AutoTradeSessionStatus.실행중,
                 SafetyNote =
-                    $"토스증권 실데이터 · {focus} 연습 콕핏 · 실주문은 오너 잠금 해제 전 차단. 버블=체결 규모.",
+                    $"토스증권 실데이터 · {focus} · dry-run/연습 모드 · 실주문 차단. 버블=체결 규모.",
             };
         }
     }

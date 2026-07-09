@@ -195,7 +195,7 @@ public sealed class AppHarness
 
     public static AppHarness CreateDefault()
     {
-        var root = TryFindRepoRoot();
+        var root = TossReadOnlyFactory.ResolveRepoRoot() ?? TryFindRepoRoot();
         var env = EnvFile.LoadMergedWithProcess(root);
         var loaded = TradingSafetySettings.FromEnvironment(env);
         var settings = new TradingSafetySettings
@@ -210,6 +210,10 @@ public sealed class AppHarness
             MaxSymbolPositionRatio = loaded.MaxSymbolPositionRatio,
             MaxOpenOrders = loaded.MaxOpenOrders,
         };
+
+        var liveHost = settings.AllowLiveOrders
+            && !settings.KillSwitch
+            && settings.OrderMode == OrderMode.Live;
 
         var toss = TossOptions.FromEnvironment(env);
         var portfolio = TossReadOnlyFactory.CreatePortfolioService(toss);
@@ -226,13 +230,21 @@ public sealed class AppHarness
             () => self!.BuildLiveOrderContext(),
             transport);
 
-        var session = new AutoTradeSessionService
+        var session = new AutoTradeSessionService();
+        if (liveHost)
         {
-            StockKind = StockMarketKind.비전마린,
-            FocusSymbol = WatchlistCatalog.VmarSymbol,
-            Strategy = VmarOneMinuteScalpPreset.Strategy,
-            Timeframe = VmarOneMinuteScalpPreset.Timeframe,
-        };
+            session.StockKind = StockMarketKind.스페이스X;
+            session.FocusSymbol = WatchlistCatalog.SpaceXSymbol;
+            session.Strategy = SpacexOfficialStrategyPreset.Strategy;
+            session.Timeframe = SpacexOfficialStrategyPreset.Timeframe;
+        }
+        else
+        {
+            session.StockKind = StockMarketKind.비전마린;
+            session.FocusSymbol = WatchlistCatalog.VmarSymbol;
+            session.Strategy = VmarOneMinuteScalpPreset.Strategy;
+            session.Timeframe = VmarOneMinuteScalpPreset.Timeframe;
+        }
 
         self = new AppHarness(
             settings,
@@ -378,7 +390,39 @@ public sealed class AppHarness
         };
     }
 
-    public AutoTradePanelSnapshot GetAutoTradePanel() => _session.ToPanelSnapshot();
+    public AutoTradePanelSnapshot GetAutoTradePanel()
+    {
+        var panel = _session.ToPanelSnapshot();
+        if (!IsLiveSubmissionEnabled)
+        {
+            return panel;
+        }
+
+        var focus = panel.FocusSymbol;
+        return new AutoTradePanelSnapshot
+        {
+            StockKind = panel.StockKind,
+            Strategy = panel.Strategy,
+            SessionStatus = panel.SessionStatus,
+            StockKindLabel = panel.StockKindLabel,
+            StrategyLabel = panel.StrategyLabel,
+            SessionStatusLabel = panel.SessionStatusLabel,
+            WatchSymbolsText = panel.WatchSymbolsText,
+            FocusSymbol = focus,
+            StockKindDescription = panel.StockKindDescription,
+            StrategyDescription = panel.StrategyDescription,
+            Balance = panel.Balance,
+            BalanceLabel = panel.BalanceLabel.Contains("실계좌", StringComparison.Ordinal)
+                ? panel.BalanceLabel
+                : $"잔액 {panel.Balance:N2} (토스 실계좌)",
+            ReturnRatePercent = panel.ReturnRatePercent,
+            ReturnRateLabel = panel.ReturnRateLabel,
+            CanStart = panel.CanStart,
+            CanStop = panel.CanStop,
+            SafetyNote =
+                $"토스 실계좌 · {focus} · 실거래 모드 · 자동매매 시 실주문 전송 · 투자 조언 아님.",
+        };
+    }
 
     public string StartAutoTrade()
     {
@@ -396,18 +440,30 @@ public sealed class AppHarness
 
     public void SetStockKind(StockMarketKind kind)
     {
-        if (kind != StockMarketKind.비전마린)
+        if (!WatchlistCatalog.AllKinds.Contains(kind))
         {
-            kind = StockMarketKind.비전마린;
+            kind = IsLiveSubmissionEnabled
+                ? StockMarketKind.스페이스X
+                : StockMarketKind.비전마린;
         }
 
         _session.StockKind = kind;
         var symbols = WatchlistCatalog.ResolveSymbols(kind);
-        var focus = symbols.Count > 0 ? symbols[0] : WatchlistCatalog.VmarSymbol;
+        var focus = symbols.Count > 0
+            ? symbols[0]
+            : (IsLiveSubmissionEnabled ? WatchlistCatalog.SpaceXSymbol : WatchlistCatalog.VmarSymbol);
         _session.FocusSymbol = focus;
 
-        _session.Strategy = VmarOneMinuteScalpPreset.Strategy;
-        SetTimeframe(VmarOneMinuteScalpPreset.Timeframe);
+        if (kind == StockMarketKind.스페이스X)
+        {
+            _session.Strategy = SpacexOfficialStrategyPreset.Strategy;
+            SetTimeframe(SpacexOfficialStrategyPreset.Timeframe);
+        }
+        else
+        {
+            _session.Strategy = VmarOneMinuteScalpPreset.Strategy;
+            SetTimeframe(VmarOneMinuteScalpPreset.Timeframe);
+        }
 
         _cachedRealCandles = null;
         _cachedCandlesSymbol = null;

@@ -41,26 +41,43 @@ public partial class MainWindowViewModel : ViewModelBase
         TimeframeChips = new ObservableCollection<TimeframeChipVm>(
             ChartTimeframeCatalog.Labels.Select(label => new TimeframeChipVm(label, SelectTimeframeCore)));
 
-        SelectedStockKind = StockMarketKind.비전마린.ToString();
-        _harness.SetStockKind(StockMarketKind.비전마린);
-        SelectedSymbol = WatchlistCatalog.VmarSymbol;
-        _harness.SetFocusSymbol(WatchlistCatalog.VmarSymbol);
-        SelectedTimeframe = ChartTimeframeCatalog.UiLabel(VmarOneMinuteScalpPreset.Timeframe);
-        _harness.SetTimeframe(VmarOneMinuteScalpPreset.Timeframe);
+        if (_harness.IsLiveSubmissionEnabled)
+        {
+            SelectedStockKind = StockMarketKind.스페이스X.ToString();
+            _harness.SetStockKind(StockMarketKind.스페이스X);
+            SelectedSymbol = WatchlistCatalog.SpaceXSymbol;
+            _harness.SetFocusSymbol(WatchlistCatalog.SpaceXSymbol);
+            SelectedTimeframe = ChartTimeframeCatalog.UiLabel(SpacexOfficialStrategyPreset.Timeframe);
+            _harness.SetTimeframe(SpacexOfficialStrategyPreset.Timeframe);
+            SelectedStrategy = SpacexOfficialStrategyPreset.Strategy.ToString();
+            _harness.SetStrategy(SpacexOfficialStrategyPreset.Strategy);
+            OfficialStrategyLabel = SpacexOfficialStrategyPreset.OwnerSummary;
+            RecommendedStrategyNote = SpacexOfficialStrategyPreset.OwnerSummary;
+        }
+        else
+        {
+            SelectedStockKind = StockMarketKind.비전마린.ToString();
+            _harness.SetStockKind(StockMarketKind.비전마린);
+            SelectedSymbol = WatchlistCatalog.VmarSymbol;
+            _harness.SetFocusSymbol(WatchlistCatalog.VmarSymbol);
+            SelectedTimeframe = ChartTimeframeCatalog.UiLabel(VmarOneMinuteScalpPreset.Timeframe);
+            _harness.SetTimeframe(VmarOneMinuteScalpPreset.Timeframe);
+            SelectedStrategy = VmarOneMinuteScalpPreset.Strategy.ToString();
+            _harness.SetStrategy(VmarOneMinuteScalpPreset.Strategy);
+            OfficialStrategyLabel = VmarOneMinuteScalpPreset.OwnerSummary;
+            RecommendedStrategyNote = VmarOneMinuteScalpPreset.OwnerSummary;
+        }
+
         SyncTimeframeChips();
-        SelectedStrategy = VmarOneMinuteScalpPreset.Strategy.ToString();
-        _harness.SetStrategy(VmarOneMinuteScalpPreset.Strategy);
-        OfficialStrategyLabel = VmarOneMinuteScalpPreset.OwnerSummary;
-        RecommendedStrategyNote = VmarOneMinuteScalpPreset.OwnerSummary;
 
         BuildEmptyChart();
         ApplyPanel(_harness.GetAutoTradePanel());
         ConnectionLabel = _harness.ConnectionLabel;
         ApplyConnectionAndDataPills();
         ApplySafetyPills();
-        SafetyHeadline = SafetyHeadlineText;
+        ApplyLiveUiLabels();
+        SafetyHeadline = ResolveSafetyHeadline();
         ChartSubtitle = "토스 실봉 로딩 중… · 한국시간(KST)";
-        Title = "토스 · VMAR 자동매매";
         _ = BootstrapRealDataAsync();
     }
 
@@ -141,6 +158,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _liveLockPill = "실주문 잠금";
     [ObservableProperty] private string _gateStatusPill = "게이트 대기";
     [ObservableProperty] private string _botStatePill = "중지";
+    [ObservableProperty] private string _startButtonLabel = "연습 시작";
+    [ObservableProperty] private string _sessionBasisLabel = "연습 세션 기준 · 수익 보장 아님";
     [ObservableProperty] private bool _canStart = true;
     [ObservableProperty] private bool _canStop;
     [ObservableProperty] private bool _isBusy;
@@ -338,9 +357,12 @@ public partial class MainWindowViewModel : ViewModelBase
             ApplyConnectionAndDataPills();
             ApplyBracket(_harness.GetActiveBracketPlan());
             ApplySafetyPills();
+            ApplyLiveUiLabels();
             ApplyNews();
             RebuildChart();
-            StatusLine = $"갱신 · {DataSourcePill} · {OrderModePill} · 실주문 잠금";
+            StatusLine = _harness.IsLiveSubmissionEnabled
+                ? $"갱신 · {DataSourcePill} · {OrderModePill} · 실거래"
+                : $"갱신 · {DataSourcePill} · {OrderModePill} · 연습";
         }
         catch (Exception ex)
         {
@@ -376,7 +398,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         _suppressSelectionEcho = true;
         SessionStatusLabel = p.SessionStatusLabel;
-        BotStatePill = MapBotStatePill(p.SessionStatusLabel);
+        BotStatePill = MapBotStatePill(p.SessionStatusLabel, _harness.IsLiveSubmissionEnabled);
         var focus = string.IsNullOrWhiteSpace(p.FocusSymbol)
             ? WatchlistCatalog.VmarSymbol
             : p.FocusSymbol;
@@ -406,7 +428,19 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         ApplySafetyPills();
+        ApplyLiveUiLabels();
         _suppressSelectionEcho = false;
+    }
+
+    private void ApplyLiveUiLabels()
+    {
+        StartButtonLabel = _harness.IsLiveSubmissionEnabled ? "실거래 시작" : "연습 시작";
+        SessionBasisLabel = _harness.IsLiveSubmissionEnabled
+            ? "실계좌 기준 · 실주문 가능 · 수익 보장 아님"
+            : "연습 세션 기준 · 수익 보장 아님";
+        Title = _harness.IsLiveSubmissionEnabled
+            ? "토스 · SPCX 실거래"
+            : "토스 · VMAR 자동매매";
     }
 
     private void ApplyConnectionAndDataPills()
@@ -458,6 +492,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         ContingencyLabel = GateStatusPill;
+        ApplyLiveUiLabels();
     }
 
     private string ResolveSafetyHeadline() =>
@@ -493,7 +528,7 @@ public partial class MainWindowViewModel : ViewModelBase
         return TruncateFit(label, 16);
     }
 
-    private static string MapBotStatePill(string session)
+    private static string MapBotStatePill(string session, bool liveTrading)
     {
         if (string.IsNullOrWhiteSpace(session))
         {
@@ -502,7 +537,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (session.Contains("실행", StringComparison.Ordinal))
         {
-            return "실행중(연습)";
+            return liveTrading ? "실행중(실거래)" : "실행중(연습)";
         }
 
         if (session.Contains("중지", StringComparison.Ordinal))
@@ -682,7 +717,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private void ApplyBracket(TradeBracketPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        OrderTypeLabel = $"{plan.OrderType} · 잠금";
+        OrderTypeLabel = _harness.IsLiveSubmissionEnabled
+            ? $"{plan.OrderType} · 실거래"
+            : $"{plan.OrderType} · 잠금";
         EntryLimitLabel = plan.EntryLimit > 0 ? plan.EntryLimit.ToString("N2") : "—";
         StopLossLabel = plan.StopPrice > 0 ? plan.StopPrice.ToString("N2") : "—";
         TakeProfitLabel = plan.TakeProfitPrice > 0 ? plan.TakeProfitPrice.ToString("N2") : "—";

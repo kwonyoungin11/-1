@@ -45,12 +45,11 @@ public class AppHarnessTests
         Assert.Equal(VmarOneMinuteScalpPreset.Timeframe, harness.Session.Timeframe);
         Assert.False(harness.IsLiveSubmissionEnabled);
 
-        // Leftover SpaceX kind maps to VMAR-only cockpit (Vmar preset).
         harness.SetStockKind(StockMarketKind.스페이스X);
-        Assert.Equal(StockMarketKind.비전마린, harness.Session.StockKind);
-        Assert.Equal(WatchlistCatalog.VmarSymbol, harness.Session.ResolveFocusSymbol());
-        Assert.Equal(VmarOneMinuteScalpPreset.Strategy, harness.Session.Strategy);
-        Assert.Equal(VmarOneMinuteScalpPreset.Timeframe, harness.Session.Timeframe);
+        Assert.Equal(StockMarketKind.스페이스X, harness.Session.StockKind);
+        Assert.Equal(WatchlistCatalog.SpaceXSymbol, harness.Session.ResolveFocusSymbol());
+        Assert.Equal(SpacexOfficialStrategyPreset.Strategy, harness.Session.Strategy);
+        Assert.Equal(SpacexOfficialStrategyPreset.Timeframe, harness.Session.Timeframe);
     }
 
     [Fact]
