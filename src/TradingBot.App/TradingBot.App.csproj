@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <RootNamespace>TradingBot.App</RootNamespace>
+    <AssemblyName>TradingBot.App</AssemblyName>
+    <!-- Desktop app for Mac/Windows/Linux (Avalonia) -->
+    <ApplicationTitle>TradingBot Cockpit</ApplicationTitle>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.5" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TradingBot.Domain\TradingBot.Domain.csproj" />
+    <ProjectReference Include="..\TradingBot.Application\TradingBot.Application.csproj" />
+    <ProjectReference Include="..\TradingBot.Infrastructure.Toss\TradingBot.Infrastructure.Toss.csproj" />
+    <ProjectReference Include="..\TradingBot.Risk\TradingBot.Risk.csproj" />
+    <ProjectReference Include="..\TradingBot.Orders\TradingBot.Orders.csproj" />
+    <ProjectReference Include="..\TradingBot.Observability\TradingBot.Observability.csproj" />
+    <ProjectReference Include="..\TradingBot.Ui\TradingBot.Ui.csproj" />
+  </ItemGroup>
+</Project>

@@ -63,7 +63,14 @@
 
 자동매매 상태 / 전략 신호 / 주문 후보 / dry-run 검증 / paper trading / live blocked / manual approval required / risk gate blocked / kill switch active / read-only connected / account masked
 
-## UI 기술 (미확정 — 오너 결정)
+## UI 기술 (오너 확정 2026-07-09)
+
+- **주 호스트: C# 데스크톱 앱** — Avalonia (`src/TradingBot.App`), Mac 창 실행
+- 부차: Blazor Web (`src/TradingBot.Web`) 선택 유지
+
+## UI 기술 (이전 메모)
+
+
 
 추천: 브라우저 dashboard (Blazor Web App)  
 대안: Mac 앱 (Avalonia) / API+별도 웹  

@@ -1,0 +1,116 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TradingBot.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="720"
+        x:Class="TradingBot.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Width="1000" Height="740"
+        MinWidth="800" MinHeight="600"
+        Title="{Binding Title}">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="8">
+            <TextBlock Text="{Binding Title}" FontSize="22" FontWeight="Bold"/>
+            <TextBlock Text="{Binding SafetyHeadline}" TextWrapping="Wrap" FontSize="16"/>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Border Padding="8,4" CornerRadius="4" Background="#7f1d1d">
+                    <TextBlock Text="{Binding LiveLockLabel, StringFormat=실거래 잠금: {0}}" Foreground="White"/>
+                </Border>
+                <Border Padding="8,4" CornerRadius="4" Background="#991b1b">
+                    <TextBlock Text="{Binding KillSwitchLabel, StringFormat=긴급정지: {0}}" Foreground="White"/>
+                </Border>
+                <Border Padding="8,4" CornerRadius="4" Background="#334155">
+                    <TextBlock Text="{Binding OrderModeLabel, StringFormat=모드: {0}}" Foreground="White"/>
+                </Border>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="새로고침" Command="{Binding RefreshCommand}" IsEnabled="{Binding !IsBusy}"/>
+                <TextBlock Text="{Binding StatusLine}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Text="매수/매도 실행 버튼 없음 · 실주문 HTTP 없음 · C# Avalonia Mac/데스크톱 앱"
+                       Opacity="0.75" FontSize="12"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,12,0,0">
+            <TextBlock Text="{Binding DryRunCount, StringFormat=dry-run 기록: {0}}"/>
+            <TextBlock Text="{Binding PaperFillCount, StringFormat=paper 가상 체결: {0}}"/>
+            <TextBlock Text="시크릿·계좌 원문은 표시하지 않습니다." Opacity="0.7" FontSize="11"/>
+        </StackPanel>
+
+        <ScrollViewer>
+            <StackPanel Spacing="16" Margin="0,12,0,0">
+                <Border BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="12">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="지금 상태" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding BotStateMessage}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding ConnectionSummary}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding MarketSummary}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding AccountSummary}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding NextAction}" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Border>
+
+                <Border BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="12">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="리스크 게이트" FontWeight="SemiBold"/>
+                        <ItemsControl ItemsSource="{Binding RiskGates}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,2">
+                                        <Run Text="{Binding Passed}"/>
+                                        <Run Text=" · "/>
+                                        <Run Text="{Binding Title}"/>
+                                        <Run Text=" — "/>
+                                        <Run Text="{Binding OwnerMessage}"/>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="12">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="주문 후보 (실주문 아님)" FontWeight="SemiBold"/>
+                        <ItemsControl ItemsSource="{Binding Candidates}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,2">
+                                        <Run Text="{Binding Symbol}"/>
+                                        <Run Text=" "/>
+                                        <Run Text="{Binding Side}"/>
+                                        <Run Text=" x"/>
+                                        <Run Text="{Binding Quantity}"/>
+                                        <Run Text=" · "/>
+                                        <Run Text="{Binding Status}"/>
+                                        <Run Text=" · 실주문="/>
+                                        <Run Text="{Binding IsLive}"/>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="12">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="감사 요약" FontWeight="SemiBold"/>
+                        <ItemsControl ItemsSource="{Binding AuditLines}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>
