@@ -12,4 +12,16 @@ public sealed record LiveReadinessEvaluation(
     string ArtifactDirectory,
     IReadOnlyList<string> MissingArtifacts,
     IReadOnlyList<string> PresentArtifacts,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes)
+{
+    /// <summary>
+    /// Machine token aligned with <c>check-live-readiness.sh</c> LIVE_OWNER_UNLOCK_STATUS.
+    /// Never implies live orders are open.
+    /// </summary>
+    public string ToOwnerUnlockStatusToken() => Status switch
+    {
+        LiveReadinessStatus.ReadyForOwnerUnlock => "ready_for_owner_unlock",
+        LiveReadinessStatus.BrokenDefaults => "broken_defaults",
+        _ => "blocked_missing_evidence",
+    };
+}

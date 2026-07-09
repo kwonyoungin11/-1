@@ -21,7 +21,7 @@
 | 3 | 신호 + 리스크 게이트 | 없음(후보만) | 위험 후보 block 테스트 | **완료 (unit / pre-live)** |
 | 4 | dry-run | 없음 | 파이프 안정·감사 로그 | **단위 완료** · multi-session export는 Phase 6 ops |
 | 5 | paper trading | 없음 | 기간 증거·오너 이해 | **unit/ledger 완료** · **multi-session export / multi-day = ops 미완** |
-| 6 | live readiness | 없음(아직 잠금) | 체크리스트 전부 증거 | **pre-live 엔지니어링 완료** · **ops/owner 갭** · `LIVE_READY=false` · unlock=`blocked_missing_evidence` |
+| 6 | live readiness | 없음(아직 잠금) | 체크리스트 전부 증거 | **pre-live 완료** · ops 캡처 세트 있음 · `LIVE_READY=false` · unlock=`ready_for_owner_unlock` |
 | 7 | 실거래 개방 (좁게) | 있음 | 소액·한도·kill switch | **금지 기본** — 아래 Phase 7 정직 문구 |
 | 8 | 운영 안정화 | 관리 | 장애 대응·개선 | 미착수 |
 
@@ -41,12 +41,12 @@
     **Pre-live development complete (code)** vs **Still blocks live (ops/owner)**  
   - **Live-capable path is GATED** · defaults block · owner must set flags  
   - `LIVE_OWNER_UNLOCK_STATUS` meanings: `ready_for_owner_unlock` vs `blocked_missing_evidence`  
-  - 현재 unlock: **`blocked_missing_evidence`**  
-  - `bash scripts/grok/check-live-readiness.sh` → `LIVE_READY=false` / `blocked_as_expected`  
+  - 현재 unlock: **`ready_for_owner_unlock`** (ops 캡처 세트 존재)  
+  - `bash scripts/grok/check-live-readiness.sh` → `LIVE_READY=false` + `LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock`  
     (**script never auto-trues `LIVE_READY`**)  
-  - Capturable ops path: `artifacts/live-readiness/` (multi-session export 등 — **아직 미첨부**)  
+  - Capturable ops path: `artifacts/live-readiness/` (**첨부됨** — multi-session export, incident drill, openapi recheck, owner signoff template, toss residual)  
   - 증거 문서: [`LIVE_READINESS_EVIDENCE.md`](LIVE_READINESS_EVIDENCE.md)  
-  - **실거래: 계속 차단**
+  - **실거래 기본: 계속 차단** (오너 플래그·서명 전)
 - **UI/UX:** 현재 차트+하단 조작 고정 · 플랜 진행은 백엔드/안전/토스 연결·**ops 증거**
 
 ## Phase 6 — pre-live code vs remaining live blockers

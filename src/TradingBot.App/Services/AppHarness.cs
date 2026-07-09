@@ -88,7 +88,8 @@ public sealed class AppHarness
     /// <summary>
     /// True when a gated live router instance is held (still not used by CreateDefault practice loop).
     /// </summary>
-    public bool IsGatedLiveRouterRegistered => _gatedLiveRouter is not null;
+    /// <summary>True when host holds a real <see cref="GatedLiveOrderRouter"/> (still unused in practice loop).</summary>
+    public bool IsGatedLiveRouterRegistered => _gatedLiveRouter is GatedLiveOrderRouter;
 
     /// <summary>
     /// Practice routers never enable live Toss order HTTP. Gated live router (if registered)
@@ -149,31 +150,21 @@ public sealed class AppHarness
     }
 
     /// <summary>
-    /// Prefer <c>GatedLiveOrderRouter</c> if another wave merges it into TradingBot.Orders;
-    /// otherwise use <see cref="BlockedLiveOrderRouter"/> (fail-closed stub).
+    /// Real <see cref="GatedLiveOrderRouter"/> with fail-closed context and no-op transport.
+    /// Practice loop never calls this router; it is registered for capability/tests only.
+    /// Under CreateDefault settings, <see cref="GatedLiveOrderRouter.IsLiveSubmissionEnabled"/> is false.
     /// </summary>
     private static IOrderRouter CreateGatedLiveRouterOrBlocked(TradingSafetySettings settings)
     {
-        // Type may land from pw07-live-router merge; reflection keeps this worktree independent.
-        var ordersAsm = typeof(BlockedLiveOrderRouter).Assembly;
-        var gatedType = ordersAsm.GetType("TradingBot.Orders.GatedLiveOrderRouter");
-        if (gatedType is not null)
+        // Fail-closed context: LiveImplementationEnabled stays false for CreateDefault host.
+        var failClosedContext = new LiveOrderContext
         {
-            try
-            {
-                var instance = Activator.CreateInstance(gatedType, settings);
-                if (instance is IOrderRouter router)
-                {
-                    return router;
-                }
-            }
-            catch
-            {
-                // Fall through to blocked stub — never throw open a live path on construction failure.
-            }
-        }
-
-        return new BlockedLiveOrderRouter(settings);
+            ManualApprovalPresent = false,
+            LiveImplementationEnabled = false,
+        };
+        // Recording transport never hits network; CallCount stays 0 when gate blocks.
+        var transport = new RecordingLiveOrderTransport();
+        return new GatedLiveOrderRouter(settings, failClosedContext, transport);
     }
 
     public AutoTradePanelSnapshot GetAutoTradePanel() => _session.ToPanelSnapshot();
@@ -323,171 +314,36 @@ public sealed class AppHarness
     }
 
     /// <summary>
-    /// Live readiness / owner-unlock status for the desktop host.
-    /// Prefer LiveReadinessEvaluator when present in loaded assemblies; otherwise scan
-    /// repo-root checklist/evidence/artifact paths via <see cref="System.IO"/>.
-    /// Never enables live submission — file presence alone cannot unlock orders.
+    /// Live readiness / owner-unlock status via shipped <see cref="LiveReadinessEvaluator"/>.
+    /// Never enables live submission — <see cref="LiveReadinessEvaluation.LiveReady"/> is always false.
     /// </summary>
     public AppLiveReadinessReport GetLiveReadinessReport()
     {
         // Fail-closed gate exercise (defaults block).
         _ = _liveOrderGate.Evaluate(_settings, new LiveOrderContext());
 
-        // If a future LiveReadinessEvaluator type is merged, prefer its Evaluate when callable.
-        var fromEvaluator = TryEvaluateViaLiveReadinessEvaluator();
-        if (fromEvaluator is not null)
-        {
-            return fromEvaluator;
-        }
+        var root = TryFindRepoRoot() ?? Directory.GetCurrentDirectory();
+        var evaluation = LiveReadinessEvaluator.Evaluate(root);
 
-        return BuildReportFromArtifactScan();
-    }
+        var checklistPresent = File.Exists(Path.Combine(root, "docs", "LIVE_READINESS_CHECKLIST.md"));
+        var evidencePresent = File.Exists(Path.Combine(root, "docs", "plans", "LIVE_READINESS_EVIDENCE.md"));
+        var scriptPresent = File.Exists(Path.Combine(root, "scripts", "grok", "check-live-readiness.sh"));
+        var artifactDirPresent = Directory.Exists(
+            Path.Combine(root, LiveReadinessEvaluator.RelativeArtifactDirectory));
 
-    private AppLiveReadinessReport? TryEvaluateViaLiveReadinessEvaluator()
-    {
-        Type? evaluatorType = null;
-        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            try
-            {
-                evaluatorType =
-                    asm.GetType("TradingBot.Risk.LiveReadinessEvaluator")
-                    ?? asm.GetType("TradingBot.Application.LiveReadinessEvaluator")
-                    ?? asm.GetType("TradingBot.Domain.LiveReadinessEvaluator");
-            }
-            catch
-            {
-                continue;
-            }
+        var ownerFiles = evaluation.PresentArtifacts
+            .Where(n => n.Contains("owner", StringComparison.OrdinalIgnoreCase)
+                        || n.Contains("signoff", StringComparison.OrdinalIgnoreCase)
+                        || n.Contains("unlock", StringComparison.OrdinalIgnoreCase))
+            .Select(n => Path.Combine(LiveReadinessEvaluator.RelativeArtifactDirectory, n))
+            .ToList();
 
-            if (evaluatorType is not null)
-            {
-                break;
-            }
-        }
-
-        if (evaluatorType is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            var evaluate = evaluatorType.GetMethod(
-                "Evaluate",
-                System.Reflection.BindingFlags.Public
-                | System.Reflection.BindingFlags.Static
-                | System.Reflection.BindingFlags.Instance);
-
-            object? result = null;
-            if (evaluate is not null && evaluate.IsStatic)
-            {
-                result = evaluate.Invoke(null, null);
-            }
-            else if (evaluate is not null)
-            {
-                var instance = Activator.CreateInstance(evaluatorType);
-                result = evaluate.Invoke(instance, null);
-            }
-
-            if (result is null)
-            {
-                return null;
-            }
-
-            // Map common property names if the evaluator returns a DTO; still force LiveBlocked.
-            var t = result.GetType();
-            string ownerStatus = ReadStringProp(t, result, "OwnerUnlockStatus")
-                ?? ReadStringProp(t, result, "Status")
-                ?? "evaluator_present_live_blocked";
-            bool checklist = ReadBoolProp(t, result, "ChecklistPresent") ?? false;
-            bool evidence = ReadBoolProp(t, result, "EvidenceDocPresent") ?? false;
-            bool artifactDir = ReadBoolProp(t, result, "LiveReadinessArtifactDirPresent") ?? false;
-            bool script = ReadBoolProp(t, result, "AutomationScriptPresent") ?? false;
-            IReadOnlyList<string> files =
-                ReadStringListProp(t, result, "OwnerUnlockArtifactFiles")
-                ?? Array.Empty<string>();
-
-            return new AppLiveReadinessReport(
-                LiveBlocked: true,
-                IsLiveSubmissionEnabled: IsLiveSubmissionEnabled,
-                OwnerUnlockStatus: ownerStatus,
-                ChecklistPresent: checklist,
-                EvidenceDocPresent: evidence,
-                LiveReadinessArtifactDirPresent: artifactDir,
-                AutomationScriptPresent: script,
-                GatedLiveRouterRegistered: IsGatedLiveRouterRegistered,
-                GatedLiveRouterUsedInPractice: false,
-                SettingsAllowLiveOrders: _settings.AllowLiveOrders,
-                SettingsKillSwitch: _settings.KillSwitch,
-                SettingsOrderMode: _settings.OrderMode.ToString(),
-                OwnerUnlockArtifactFiles: files,
-                Summary: "LiveReadinessEvaluator present; desktop host still LiveBlocked=true.");
-        }
-        catch
-        {
-            // Evaluator wiring failed — fall back to artifact scan. Never open live.
-            return null;
-        }
-    }
-
-    private AppLiveReadinessReport BuildReportFromArtifactScan()
-    {
-        var root = TryFindRepoRoot();
-        var checklistPresent = root is not null
-            && File.Exists(Path.Combine(root, "docs", "LIVE_READINESS_CHECKLIST.md"));
-        var evidencePresent = root is not null
-            && File.Exists(Path.Combine(root, "docs", "plans", "LIVE_READINESS_EVIDENCE.md"));
-        var scriptPresent = root is not null
-            && File.Exists(Path.Combine(root, "scripts", "grok", "check-live-readiness.sh"));
-
-        var artifactDir = root is null
-            ? null
-            : Path.Combine(root, "artifacts", "live-readiness");
-        var artifactDirPresent = artifactDir is not null && Directory.Exists(artifactDir);
-
-        var ownerFiles = new List<string>();
-        if (artifactDirPresent && root is not null)
-        {
-            try
-            {
-                foreach (var path in Directory.EnumerateFiles(
-                             artifactDir!,
-                             "*",
-                             SearchOption.AllDirectories))
-                {
-                    var name = Path.GetFileName(path);
-                    if (name.Contains("owner", StringComparison.OrdinalIgnoreCase)
-                        || name.Contains("unlock", StringComparison.OrdinalIgnoreCase)
-                        || name.Contains("phase7", StringComparison.OrdinalIgnoreCase)
-                        || name.Contains("signature", StringComparison.OrdinalIgnoreCase)
-                        || name.Contains("signoff", StringComparison.OrdinalIgnoreCase))
-                    {
-                        ownerFiles.Add(Path.GetRelativePath(root, path));
-                    }
-                }
-            }
-            catch (IOException)
-            {
-                // IO failure must not open live; report empty owner files.
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // Same fail-closed handling.
-            }
-        }
-
-        var ownerStatus = ResolveOwnerUnlockStatus(
-            ownerFiles.Count,
-            artifactDirPresent,
-            checklistPresent,
-            evidencePresent);
-
+        var ownerStatus = evaluation.ToOwnerUnlockStatusToken();
         var summary =
-            "LIVE_READY=false; desktop CreateDefault uses dry-run/paper only; "
-            + $"OwnerUnlockStatus={ownerStatus}; "
-            + $"gatedLiveRouterRegistered={IsGatedLiveRouterRegistered}; "
-            + "gatedLiveRouterUsedInPractice=false";
+            $"LIVE_READY=false; LIVE_OWNER_UNLOCK_STATUS={ownerStatus}; "
+            + $"status={evaluation.Status}; "
+            + $"gatedLiveRouterType={_gatedLiveRouter.GetType().Name}; "
+            + "practiceLoop=dry_run_paper_only";
 
         return new AppLiveReadinessReport(
             LiveBlocked: true,
@@ -504,31 +360,6 @@ public sealed class AppHarness
             SettingsOrderMode: _settings.OrderMode.ToString(),
             OwnerUnlockArtifactFiles: ownerFiles,
             Summary: summary);
-    }
-
-    private static string ResolveOwnerUnlockStatus(
-        int ownerFileCount,
-        bool artifactDirPresent,
-        bool checklistPresent,
-        bool evidencePresent)
-    {
-        if (ownerFileCount > 0)
-        {
-            // Artifacts may exist for ops logging; they do not unlock live in AppHarness.
-            return "artifacts_present_but_live_still_blocked";
-        }
-
-        if (artifactDirPresent)
-        {
-            return "artifact_dir_present_no_owner_unlock";
-        }
-
-        if (checklistPresent || evidencePresent)
-        {
-            return "docs_present_owner_unlock_absent";
-        }
-
-        return "owner_unlock_absent";
     }
 
     /// <summary>
@@ -551,32 +382,4 @@ public sealed class AppHarness
         return null;
     }
 
-    private static string? ReadStringProp(Type t, object instance, string name)
-    {
-        var p = t.GetProperty(name);
-        return p?.GetValue(instance) as string;
-    }
-
-    private static bool? ReadBoolProp(Type t, object instance, string name)
-    {
-        var p = t.GetProperty(name);
-        if (p?.GetValue(instance) is bool b)
-        {
-            return b;
-        }
-
-        return null;
-    }
-
-    private static IReadOnlyList<string>? ReadStringListProp(Type t, object instance, string name)
-    {
-        var p = t.GetProperty(name);
-        var v = p?.GetValue(instance);
-        return v switch
-        {
-            IReadOnlyList<string> list => list,
-            IEnumerable<string> e => e.ToList(),
-            _ => null,
-        };
-    }
 }

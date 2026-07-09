@@ -1,9 +1,9 @@
 # Live Readiness Checklist
 
-**현재 상태: NOT READY — live order 불가능**  
-**LIVE_READY = false (고정 기대값 — 이 문서/자동화가 true로 바꾸지 않음)**  
-**LIVE_OWNER_UNLOCK_STATUS = blocked_missing_evidence (ops 증거 미완 · 오너 언락 불가)**  
-**기준일: 2026-07-09 · WAVE 07 docs honesty (`feature/pw07-docs-live`)**
+**현재 상태: live order 기본 불가 · 오너 언락 검토 가능**  
+**LIVE_READY = false (고정 기대값 — 이 문서/자동화가 true로 바꾸지 않음 · auto-live 아님)**  
+**LIVE_OWNER_UNLOCK_STATUS = ready_for_owner_unlock** (`artifacts/live-readiness/` 캡처 세트 존재 · 기본 실행은 여전히 차단)  
+**기준일: 2026-07-09 · wave-base / WAVE 07 통합**
 
 모든 항목이 재현 가능한 증거와 함께 완료되고, 오너가 Phase 7 승인서를 서명하기 전까지  
 **실주문(live order)은 열지 않습니다.**
@@ -176,8 +176,10 @@ LIVE_READY=false          ← 스크립트/문서가 true로 바꾸지 않음
 | `README.md` (optional) | 폴더 인덱스 | 탐색 | 비밀 금지 |
 
 **금지:** 토큰, `.env`, 계좌번호, 미마스킹 API 응답, 수익 보장 문구.  
-**현재 (이 docs worktree):** `artifacts/live-readiness/` 캡처 세트 **미첨부** → `blocked_missing_evidence`.  
-ops 웨이브가 파일을 생성해도: multi-session export·unsigned template·residual smoke 만으로 **auto-live / multi-day real ops / 실 스모크 완료**를 주장하지 않는다.
+**현재 (wave-base):** `artifacts/live-readiness/` 캡처 세트 **첨부됨**  
+(`paper-multi-session-export.txt`, `incident-drill-record.md`, `openapi-recheck.log`, `owner-unlock-signoff.md` 템플릿, `toss-read-smoke-residual.md`)  
+→ `LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock`.  
+**주의:** multi-session export·unsigned template·residual smoke 만으로 **auto-live / multi-calendar-day real ops / 실 Toss 스모크 완료**를 주장하지 않는다. `LIVE_READY=false` 유지.
 
 ---
 

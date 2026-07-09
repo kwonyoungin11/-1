@@ -1,9 +1,9 @@
 # Live Readiness Evidence — How Evidence Is Collected
 
-**Status: LIVE REMAINS BLOCKED (`LIVE_READY=false`)**  
-**Owner unlock: `LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence`**  
+**Status: LIVE REMAINS BLOCKED under defaults (`LIVE_READY=false` · not auto-live)**  
+**Owner unlock: `LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock`** (ops capture set present under `artifacts/live-readiness/`)  
 **Date baseline: 2026-07-09**  
-**Worktree snapshot: `feature/pw07-docs-live` (WAVE 07 — gated path + unlock honesty)**
+**Worktree snapshot: `feature/parallel-wave-base` (WAVE 07 integrated)**
 
 This document explains **how** readiness evidence is collected and verified, and maps  
 **current codebase artifacts** to [`docs/LIVE_READINESS_CHECKLIST.md`](../LIVE_READINESS_CHECKLIST.md).
@@ -21,17 +21,17 @@ Owner must set flags. Default launch stays dry-run. Scripts never auto-true `LIV
 
 | 항목 | 값 |
 |------|-----|
-| 실거래 가능? | **아니오** (`LIVE_READY=false`) |
-| 오너 언락 상태 | **`blocked_missing_evidence`** (ops 미완) |
-| Pre-live **code** | **완료** (Phase 0–5 엔지니어링 + mock/dry-run/paper unit/cockpit/safety/export) |
-| Phase 6 **ops/owner** | **갭 남음** (multi-session export 파일, multi-day, 실 스모크, incident 날짜, Phase 7 서명 등) |
-| Live-capable path | **GATED** — defaults block · owner must set flags · no auto-live |
-| 기계 게이트 | `check-live-readiness.sh` → `LIVE_READY=false` + exit 0 (정상 차단) |
+| 실거래 기본 가능? | **아니오** (`LIVE_READY=false` · auto-live 없음) |
+| 오너 언락 상태 | **`ready_for_owner_unlock`** (ops 캡처 세트 있음 · 기본 실행은 차단) |
+| Pre-live **code** | **완료** (Phase 0–5 + gated live router + evaluator + export) |
+| Phase 6 **ops capture** | **첨부됨** (`artifacts/live-readiness/*`) · multi-calendar-day real ops / 실 토스 스모크 / 오너 실서명 = 별도 residual |
+| Live-capable path | **GATED** — `GatedLiveOrderRouter` · defaults block · owner must set flags · no auto-live |
+| 기계 게이트 | `check-live-readiness.sh` → `LIVE_READY=false` + `ready_for_owner_unlock` |
 | 안전 스캔 | `check-trading-safety.sh` PASSED |
-| 단위 테스트 | `dotnet test` 실패 0 (2026-07-09, 이 worktree) |
-| 주문 API | **미구현** · `SubmitOrderAsync` 없음 · `BlockedLiveOrderRouter` / `BlockedTossOrderClient` |
-| 증거 폴더 | `artifacts/live-readiness/` — **캡처 세트 미첨부** |
-| 다음 | multi-session export 저장 · (선택) redacted 읽기 스모크 · incident drill · Phase 7 전 개방 금지 |
+| 단위 테스트 | `dotnet test` 실패 0 (wave-base) |
+| 주문 경로 | 게이트형 `GatedLiveOrderRouter` + transport · 기본 harness는 dry-run/paper |
+| 증거 폴더 | `artifacts/live-readiness/` — **캡처 세트 존재** |
+| 다음 | 오너 실서명 · env 플래그 · (선택) 실 읽기 스모크 · 기본 실행은 계속 dry-run |
 
 ---
 

@@ -63,4 +63,5 @@
 [ ] multi-session export 를 multi-calendar-day real ops 로 허위 표기하지 않음
 ```
 
-**현재:** 날짜 찍힌 리허설 기록 **없음** → Phase 6 ops 갭 · `LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence` 유지 요인 중 하나.
+**현재:** 날짜 찍힌 리허설 기록 **있음** — `artifacts/live-readiness/incident-drill-record.md` (2026-07-09).  
+`LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock` 와 정합. **그래도 `LIVE_READY=false` · auto-live 아님.**

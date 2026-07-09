@@ -297,10 +297,29 @@ public class AppHarnessTests
             Assert.True(report.ChecklistPresent);
             Assert.True(report.EvidenceDocPresent);
             Assert.True(report.AutomationScriptPresent);
-            // Status reflects docs and/or ops artifacts; never means live is on.
-            Assert.False(string.IsNullOrWhiteSpace(report.OwnerUnlockStatus));
-            Assert.DoesNotContain("live_open", report.OwnerUnlockStatus, StringComparison.OrdinalIgnoreCase);
+            // Shipped evaluator token; with artifacts present → ready_for_owner_unlock.
+            Assert.Equal("ready_for_owner_unlock", report.OwnerUnlockStatus);
             Assert.True(report.LiveBlocked);
+            Assert.False(report.EnablesLive);
+            Assert.True(harness.IsGatedLiveRouterRegistered);
+            Assert.False(harness.IsLiveSubmissionEnabled);
         }
+    }
+
+    [Fact]
+    public void CreateDefault_registers_real_GatedLiveOrderRouter_not_blocked_stub()
+    {
+        var harness = AppHarness.CreateDefault();
+        Assert.True(harness.IsGatedLiveRouterRegistered);
+        Assert.False(harness.IsLiveSubmissionEnabled);
+        Assert.False(harness.SettingsWouldAllowLiveRouting);
+
+        // Drive shipped LiveReadinessEvaluator via harness on real repo root.
+        var report = harness.GetLiveReadinessReport();
+        Assert.Equal("ready_for_owner_unlock", report.OwnerUnlockStatus);
+        Assert.Contains("ready_for_owner_unlock", report.Summary, StringComparison.Ordinal);
+        Assert.Contains("GatedLiveOrderRouter", report.Summary, StringComparison.Ordinal);
+        Assert.True(report.LiveBlocked);
+        Assert.False(report.IsLiveSubmissionEnabled);
     }
 }
