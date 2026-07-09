@@ -1,0 +1,8 @@
+{
+  "lsp": {
+    "csharp": {
+      "priority": 100,
+      "disabled": false
+    }
+  }
+}
