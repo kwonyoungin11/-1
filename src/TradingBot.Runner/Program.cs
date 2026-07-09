@@ -10,6 +10,14 @@ if (args.Length > 0
     return await BacktestCommand.RunAsync(backtestArgs, CancellationToken.None);
 }
 
+if (args.Length > 0
+    && (args[0].Equals("backtest-split", StringComparison.OrdinalIgnoreCase)
+        || args[0].Equals("split-backtest", StringComparison.OrdinalIgnoreCase)))
+{
+    var splitArgs = args.Skip(1).ToArray();
+    return await SplitBacktestCommand.RunAsync(splitArgs, CancellationToken.None);
+}
+
 var harness = TradingBotHarness.CreateDefault();
 var result = await harness.RunOnceAsync(cancellationToken: CancellationToken.None);
 
