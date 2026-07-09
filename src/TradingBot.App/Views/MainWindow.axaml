@@ -4,12 +4,12 @@
         xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="860"
         x:Class="TradingBot.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Classes="glass-root"
-        Width="1200" Height="820"
-        MinWidth="960" MinHeight="680"
+        Width="1280" Height="860"
+        MinWidth="1024" MinHeight="720"
         TransparencyLevelHint="AcrylicBlur,Blur,Transparent"
         Background="#E00B1220"
         ExtendClientAreaToDecorationsHint="True"
@@ -19,10 +19,9 @@
     <vm:MainWindowViewModel/>
   </Design.DataContext>
 
-  <!-- 위 2/3 차트 · 아래 1/3 조작 -->
   <Grid RowDefinitions="2*,*" Margin="12,32,12,12">
 
-    <!-- ===== 차트 영역 (상단 2/3) — 버블 + TradingView 스타일 ===== -->
+    <!-- 차트 -->
     <Border Grid.Row="0" Classes="glass-card" Margin="0,0,0,10" Padding="8" Background="#E0080A0E">
       <Grid RowDefinitions="Auto,*">
         <Grid ColumnDefinitions="*,Auto" Margin="4,0,4,6">
@@ -35,7 +34,7 @@
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
             <Border Classes="pill-lock"><TextBlock Text="실주문 잠금"/></Border>
             <Border Classes="pill-ok"><TextBlock Text="{Binding ConnectionPill}"/></Border>
-            <Border Classes="pill-mode"><TextBlock Text="버블차트"/></Border>
+            <Border Classes="pill-mode"><TextBlock Text="지정가 계획"/></Border>
             <Border Classes="pill-mode"><TextBlock Text="SPCX"/></Border>
           </StackPanel>
         </Grid>
@@ -53,31 +52,25 @@
       </Grid>
     </Border>
 
-    <!-- ===== 조작 영역 (하단 1/3) ===== -->
-    <Border Grid.Row="1" Classes="glass-bar" Padding="14">
-      <Grid ColumnDefinitions="2*,*,*,Auto" ColumnSpacing="14">
+    <!-- 조작 + 리스크 -->
+    <Border Grid.Row="1" Classes="glass-bar" Padding="12">
+      <Grid ColumnDefinitions="1.4*,1.1*,*,*" ColumnSpacing="12">
 
-        <!-- 종목 SPCX · 시간봉 · 전략 · 시작/종료 -->
-        <StackPanel Spacing="6">
-          <TextBlock Classes="section" Text="토스 · 스페이스X 자동매매"/>
-          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="5" ColumnSpacing="10">
-            <TextBlock Classes="sub" Text="종목" VerticalAlignment="Center"/>
-            <ComboBox Grid.Column="1" ItemsSource="{Binding SymbolOptions}"
-                      SelectedItem="{Binding SelectedSymbol}" MinWidth="168" IsEnabled="False"/>
-            <TextBlock Grid.Row="1" Classes="sub" Text="시간봉" VerticalAlignment="Center"/>
-            <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding TimeframeOptions}"
-                      SelectedItem="{Binding SelectedTimeframe}" MinWidth="168"
-                      ToolTip.Tip="1m~240m·1D·1W (5m+는 토스 1m 집계, 1W는 1d 집계)"/>
-            <TextBlock Grid.Row="2" Classes="sub" Text="매매 전략" VerticalAlignment="Center"/>
-            <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding StrategyOptions}"
-                      SelectedItem="{Binding SelectedStrategy}" MinWidth="168"/>
-            <TextBlock Grid.Row="3" Classes="sub" Text="유니버스" VerticalAlignment="Top" Margin="0,2,0,0"/>
-            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding WatchSymbolsText}"
-                       TextWrapping="Wrap" FontSize="11" Opacity="0.9"/>
+        <!-- 전략 조작 -->
+        <StackPanel Spacing="5">
+          <TextBlock Classes="section" Text="전략 · 시간봉"/>
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="4" ColumnSpacing="8">
+            <TextBlock Classes="sub" Text="시간봉" VerticalAlignment="Center"/>
+            <ComboBox Grid.Column="1" ItemsSource="{Binding TimeframeOptions}"
+                      SelectedItem="{Binding SelectedTimeframe}" MinWidth="140"/>
+            <TextBlock Grid.Row="1" Classes="sub" Text="전략" VerticalAlignment="Center"/>
+            <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding StrategyOptions}"
+                      SelectedItem="{Binding SelectedStrategy}" MinWidth="140"/>
+            <TextBlock Grid.Row="2" Classes="sub" Text="종목" VerticalAlignment="Center"/>
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding WatchSymbolsText}" FontWeight="SemiBold"/>
           </Grid>
-          <TextBlock Classes="sub" Text="{Binding StockKindDescription}" TextWrapping="Wrap"/>
           <TextBlock Classes="sub" Text="{Binding StrategyDescription}" TextWrapping="Wrap" Foreground="#93C5FD"/>
-          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="8">
             <Button Classes="glass-btn" Content="자동매매 시작"
                     Command="{Binding StartCommand}" IsEnabled="{Binding CanStart}"/>
             <Button Classes="glass-btn-stop" Content="자동매매 종료"
@@ -86,42 +79,66 @@
                     Command="{Binding RefreshCommand}" IsEnabled="{Binding !IsBusy}"/>
           </StackPanel>
           <TextBlock Classes="sub" Text="{Binding ConnectionLabel}" TextWrapping="Wrap" Foreground="#A5B4FC"/>
-          <TextBlock Classes="sub" Text="{Binding SafetyNote}" TextWrapping="Wrap"/>
           <TextBlock Classes="sub" Text="{Binding StatusLine}"/>
         </StackPanel>
 
-        <!-- 잔액 -->
+        <!-- 지정가 · 익절 · 손절 계획 -->
         <Border Classes="glass-card" Grid.Column="1" Padding="12">
-          <StackPanel Spacing="6" VerticalAlignment="Center">
-            <TextBlock Classes="section" Text="잔액"/>
-            <TextBlock FontSize="22" FontWeight="Bold" Text="{Binding BalanceLabel}" TextWrapping="Wrap"/>
-            <TextBlock Classes="sub" Text="{Binding SessionStatusLabel, StringFormat=상태 · {0}}"/>
+          <StackPanel Spacing="5">
+            <TextBlock Classes="section" Text="지정가 · 익절 · 손절 (계획)"/>
+            <TextBlock Classes="sub" Text="{Binding OrderTypeLabel}" Foreground="#7DD3FC"/>
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="3" ColumnSpacing="10">
+              <TextBlock Classes="sub" Text="지정가 ENTRY"/>
+              <TextBlock Grid.Column="1" FontWeight="Bold" Foreground="#38BDF8" Text="{Binding EntryLimitLabel}"/>
+              <TextBlock Grid.Row="1" Classes="sub" Text="손절 SL"/>
+              <TextBlock Grid.Row="1" Grid.Column="1" FontWeight="Bold" Foreground="#EF5350" Text="{Binding StopLossLabel}"/>
+              <TextBlock Grid.Row="2" Classes="sub" Text="익절 TP"/>
+              <TextBlock Grid.Row="2" Grid.Column="1" FontWeight="Bold" Foreground="#22C55E" Text="{Binding TakeProfitLabel}"/>
+              <TextBlock Grid.Row="3" Classes="sub" Text="계획 수량"/>
+              <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding QuantityPlanLabel}"/>
+              <TextBlock Grid.Row="4" Classes="sub" Text="계획 리스크"/>
+              <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding RiskAmountLabel}"/>
+              <TextBlock Grid.Row="5" Classes="sub" Text="손익비 R:R"/>
+              <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding RewardRiskLabel}"/>
+              <TextBlock Grid.Row="6" Classes="sub" Text="ATR"/>
+              <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding AtrLabel}" FontSize="11"/>
+            </Grid>
+            <TextBlock Classes="sub" Text="{Binding BracketSummary}" TextWrapping="Wrap" FontSize="10" Opacity="0.9"/>
           </StackPanel>
         </Border>
 
-        <!-- 수익률 -->
+        <!-- 잔액 · 수익률 -->
         <Border Classes="glass-card" Grid.Column="2" Padding="12">
           <StackPanel Spacing="6" VerticalAlignment="Center">
-            <TextBlock Classes="section" Text="수익률"/>
-            <TextBlock FontSize="28" FontWeight="Bold" Foreground="#4ADE80"
-                       Text="{Binding ReturnRateLabel}"/>
-            <TextBlock Classes="sub" Text="세션 기준 · 투자 조언 아님"/>
+            <TextBlock Classes="section" Text="잔액"/>
+            <TextBlock FontSize="18" FontWeight="Bold" Text="{Binding BalanceLabel}" TextWrapping="Wrap"/>
+            <TextBlock Classes="sub" Text="{Binding SessionStatusLabel, StringFormat=상태 · {0}}"/>
+            <TextBlock Classes="section" Margin="0,8,0,0" Text="수익률"/>
+            <TextBlock FontSize="24" FontWeight="Bold" Foreground="#4ADE80" Text="{Binding ReturnRateLabel}"/>
+            <TextBlock Classes="sub" Text="세션 · 투자 조언 아님"/>
           </StackPanel>
         </Border>
 
-        <!-- 범례 — ChartFanatics + TV -->
-        <StackPanel Grid.Column="3" Spacing="6" VerticalAlignment="Center" MinWidth="140">
-          <TextBlock Classes="section" Text="차트 범례"/>
+        <!-- 범례 -->
+        <StackPanel Grid.Column="3" Spacing="5" VerticalAlignment="Center" MinWidth="132">
+          <TextBlock Classes="section" Text="차트 레벨"/>
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <Ellipse Width="20" Height="20" Fill="#8839FF14"/>
-            <TextBlock Text="상승 버블 (큰=대금↑)" VerticalAlignment="Center" FontSize="11"/>
+            <Rectangle Width="16" Height="3" Fill="#38BDF8"/>
+            <TextBlock Text="ENTRY 지정가" FontSize="11" VerticalAlignment="Center"/>
           </StackPanel>
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <Ellipse Width="20" Height="20" Fill="#88FF2D2D"/>
-            <TextBlock Text="하락 버블 (큰=대금↑)" VerticalAlignment="Center" FontSize="11"/>
+            <Rectangle Width="16" Height="3" Fill="#EF5350"/>
+            <TextBlock Text="SL 손절" FontSize="11" VerticalAlignment="Center"/>
           </StackPanel>
-          <TextBlock Classes="sub" TextWrapping="Wrap" Text="캔들 + SMA + 하단 거래량"/>
-          <TextBlock Classes="sub" TextWrapping="Wrap" Text="줌: 가로 드래그 · 실주문 잠금"/>
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Rectangle Width="16" Height="3" Fill="#22C55E"/>
+            <TextBlock Text="TP 익절" FontSize="11" VerticalAlignment="Center"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Ellipse Width="14" Height="14" Fill="#8839FF14"/>
+            <TextBlock Text="버블=거래대금" FontSize="11" VerticalAlignment="Center"/>
+          </StackPanel>
+          <TextBlock Classes="sub" TextWrapping="Wrap" Text="ATR×1.5 손절 · 2R 익절 · 실주문 잠금"/>
         </StackPanel>
       </Grid>
     </Border>

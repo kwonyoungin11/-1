@@ -57,6 +57,20 @@ public class AppHarnessTests
     }
 
     [Fact]
+    public void GetActiveBracketPlan_is_limit_with_sl_tp_and_live_locked()
+    {
+        var harness = AppHarness.CreateDefault();
+        var plan = harness.GetActiveBracketPlan();
+        Assert.Equal("SPCX", plan.Symbol);
+        Assert.Equal("LIMIT", plan.OrderType);
+        Assert.True(plan.EntryLimit > 0m);
+        Assert.True(plan.StopPrice < plan.EntryLimit);
+        Assert.True(plan.TakeProfitPrice > plan.EntryLimit);
+        Assert.Contains("실주문 잠금", plan.OwnerMessage, StringComparison.Ordinal);
+        Assert.False(harness.IsLiveSubmissionEnabled);
+    }
+
+    [Fact]
     public async Task Start_and_stop_do_not_open_live_orders()
     {
         var harness = AppHarness.CreateDefault();

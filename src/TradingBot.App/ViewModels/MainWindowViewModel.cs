@@ -90,6 +90,15 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _chartSubtitle = string.Empty;
     [ObservableProperty] private string _indicatorLegend = string.Empty;
     [ObservableProperty] private string _lastPriceLabel = string.Empty;
+    [ObservableProperty] private string _bracketSummary = string.Empty;
+    [ObservableProperty] private string _entryLimitLabel = "—";
+    [ObservableProperty] private string _stopLossLabel = "—";
+    [ObservableProperty] private string _takeProfitLabel = "—";
+    [ObservableProperty] private string _quantityPlanLabel = "—";
+    [ObservableProperty] private string _riskAmountLabel = "—";
+    [ObservableProperty] private string _rewardRiskLabel = "—";
+    [ObservableProperty] private string _atrLabel = "—";
+    [ObservableProperty] private string _orderTypeLabel = "LIMIT · 지정가 계획";
     [ObservableProperty] private string _connectionLabel = "연결 확인 전";
     [ObservableProperty] private string _connectionPill = "mock";
     [ObservableProperty] private bool _canStart = true;
@@ -192,8 +201,9 @@ public partial class MainWindowViewModel : ViewModelBase
             ApplyPanel(_harness.GetAutoTradePanel());
             ConnectionLabel = _harness.ConnectionLabel;
             ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel, _harness.ConnectionLabel);
+            ApplyBracket(_harness.GetActiveBracketPlan());
             RebuildChart();
-            StatusLine = $"갱신 완료 · {ConnectionPill} · SPCX 버블차트 · 실주문 잠금";
+            StatusLine = $"갱신 완료 · {ConnectionPill} · 지정가 계획 · 실주문 잠금";
         }
         catch (Exception ex)
         {
@@ -253,7 +263,27 @@ public partial class MainWindowViewModel : ViewModelBase
         _suppressSelectionEcho = false;
     }
 
-    private void BuildEmptyChart() => RebuildChart();
+    private void BuildEmptyChart()
+    {
+        ApplyBracket(_harness.GetActiveBracketPlan());
+        RebuildChart();
+    }
+
+    private void ApplyBracket(TradeBracketPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        OrderTypeLabel = $"{plan.OrderType} · 지정가 계획 · 실주문 잠금";
+        EntryLimitLabel = plan.EntryLimit > 0 ? plan.EntryLimit.ToString("N2") : "—";
+        StopLossLabel = plan.StopPrice > 0 ? plan.StopPrice.ToString("N2") : "—";
+        TakeProfitLabel = plan.TakeProfitPrice > 0 ? plan.TakeProfitPrice.ToString("N2") : "—";
+        QuantityPlanLabel = plan.Quantity > 0 ? plan.Quantity.ToString("N0") : "0";
+        RiskAmountLabel = plan.RiskAmount > 0 ? $"${plan.RiskAmount:N2}" : "—";
+        RewardRiskLabel = plan.RewardRiskRatio > 0 ? $"1 : {plan.RewardRiskRatio:N2}" : "—";
+        AtrLabel = plan.Atr is decimal a
+            ? $"{a:N4} ({plan.StopSource})"
+            : plan.StopSource.ToString();
+        BracketSummary = plan.OwnerMessage;
+    }
 
     private static string ShortConnectionPill(string modeLabel, string? ownerLabel = null)
     {
@@ -281,6 +311,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private void RebuildChart()
     {
         var (candles, markers, indicators) = _harness.GetChartData();
+        var bracket = _harness.GetActiveBracketPlan();
+        ApplyBracket(bracket);
+
         if (candles.Count == 0)
         {
             Series = Array.Empty<ISeries>();
@@ -393,6 +426,27 @@ public partial class MainWindowViewModel : ViewModelBase
             legendParts.Add(line.Name);
         }
 
+        // 지정가 ENTRY / 손절 SL / 익절 TP 수평선 (계획 · 실주문 아님)
+        var t0 = candles[0].Time.UtcDateTime;
+        var t1 = candles[^1].Time.UtcDateTime;
+        if (bracket.EntryLimit > 0m)
+        {
+            seriesList.Add(LevelLine("ENTRY", (double)bracket.EntryLimit, t0, t1, SKColor.Parse("#38BDF8"), 15));
+            legendParts.Add("ENTRY");
+        }
+
+        if (bracket.StopPrice > 0m)
+        {
+            seriesList.Add(LevelLine("SL", (double)bracket.StopPrice, t0, t1, SKColor.Parse("#EF5350"), 16));
+            legendParts.Add("SL");
+        }
+
+        if (bracket.TakeProfitPrice > 0m)
+        {
+            seriesList.Add(LevelLine("TP", (double)bracket.TakeProfitPrice, t0, t1, SKColor.Parse("#22C55E"), 17));
+            legendParts.Add("TP");
+        }
+
         // 버블 — 캔들 위, ChartFanatics
         seriesList.Add(new ScatterSeries<WeightedPoint>
         {
@@ -446,11 +500,13 @@ public partial class MainWindowViewModel : ViewModelBase
         var last = candles[^1];
         var first = candles[0];
         var chg = first.Close > 0 ? (last.Close - first.Close) / first.Close * 100.0 : 0;
-        LastPriceLabel = $"종가 {last.Close:N2} · 구간 {chg:+0.00;-0.00;0}% · 봉 {candles.Count}";
+        LastPriceLabel =
+            $"종가 {last.Close:N2} · 구간 {chg:+0.00;-0.00;0}% · 봉 {candles.Count} · " +
+            $"ENTRY {bracket.EntryLimit:N2} / SL {bracket.StopPrice:N2} / TP {bracket.TakeProfitPrice:N2}";
 
         IndicatorLegend = legendParts.Count == 0
-            ? $"버블 차트 · 규모=거래대금 · 봉 {candles.Count}"
-            : $"보조지표: {string.Join(" · ", legendParts)} ({SelectedStrategy}) · 버블=거래대금";
+            ? $"버블 · 규모=거래대금 · 봉 {candles.Count}"
+            : $"{string.Join(" · ", legendParts)} · {SelectedStrategy} · 지정가 계획(실주문 잠금)";
 
         var dashGrid = new SolidColorPaint(SKColor.Parse("#1A2332"))
         {
@@ -497,6 +553,22 @@ public partial class MainWindowViewModel : ViewModelBase
         // Y0 = 가격 (위 ~72%), Y1 = 거래량 (아래 ~28%) — TradingView 레이아웃
         var priceMin = candles.Min(c => c.Low);
         var priceMax = candles.Max(c => c.High);
+        if (bracket.StopPrice > 0m)
+        {
+            priceMin = Math.Min(priceMin, (double)bracket.StopPrice);
+        }
+
+        if (bracket.TakeProfitPrice > 0m)
+        {
+            priceMax = Math.Max(priceMax, (double)bracket.TakeProfitPrice);
+        }
+
+        if (bracket.EntryLimit > 0m)
+        {
+            priceMin = Math.Min(priceMin, (double)bracket.EntryLimit);
+            priceMax = Math.Max(priceMax, (double)bracket.EntryLimit);
+        }
+
         var pad = Math.Max(0.5, (priceMax - priceMin) * 0.04);
         var volMax = candles.Max(c => c.Volume);
         if (volMax <= 0)
@@ -560,4 +632,27 @@ public partial class MainWindowViewModel : ViewModelBase
 
         return v.ToString("N0");
     }
+
+    private static LineSeries<DateTimePoint> LevelLine(
+        string name,
+        double price,
+        DateTime t0,
+        DateTime t1,
+        SKColor color,
+        int zIndex) =>
+        new()
+        {
+            Name = name,
+            Values = new[]
+            {
+                new DateTimePoint(t0, price),
+                new DateTimePoint(t1, price),
+            },
+            GeometrySize = 0,
+            LineSmoothness = 0,
+            Fill = null,
+            Stroke = new SolidColorPaint(color) { StrokeThickness = 1.8f },
+            ScalesYAt = 0,
+            ZIndex = zIndex,
+        };
 }

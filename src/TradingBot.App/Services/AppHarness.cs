@@ -249,6 +249,47 @@ public sealed class AppHarness
 
     public ChartTimeframe Timeframe => _session.Timeframe;
 
+    /// <summary>
+    /// SPCX long LIMIT bracket plan from last price + ATR (or %). Display / dry-run only.
+    /// Never places live orders.
+    /// </summary>
+    public TradeBracketPlan GetActiveBracketPlan()
+    {
+        var (candles, _, _) = GetChartData();
+        var atr = AtrCalculator.Compute(candles, SpacexRiskParameters.CreateSafeDefaults().AtrPeriod);
+        var last = ResolveLastPrice(candles);
+        var practice = BuildPracticeContext();
+        var risk = SpacexRiskParameters.CreateSafeDefaults() with
+        {
+            RiskPercentPerTrade = practice.RiskPercentPerTrade,
+        };
+        var trend = practice.TrendFollow ?? TrendFollowParameters.CreateSafeDefaults();
+        return TradeBracketPlanner.PlanLongLimit(
+            WatchlistCatalog.SpaceXSymbol,
+            last,
+            practice.Equity > 0m ? practice.Equity : DefaultPracticeStartingBalance,
+            risk,
+            atr,
+            trend);
+    }
+
+    private decimal ResolveLastPrice(IReadOnlyList<CandlePoint> candles)
+    {
+        var quote = _lastQuotes.FirstOrDefault(q =>
+            q.Symbol.Equals(WatchlistCatalog.SpaceXSymbol, StringComparison.OrdinalIgnoreCase));
+        if (quote?.LastPrice is decimal px && px > 0m)
+        {
+            return px;
+        }
+
+        if (candles is { Count: > 0 } && candles[^1].Close > 0)
+        {
+            return (decimal)candles[^1].Close;
+        }
+
+        return (decimal)WatchlistCatalog.ChartSeedPrice(WatchlistCatalog.SpaceXSymbol);
+    }
+
     public (IReadOnlyList<CandlePoint> Candles, IReadOnlyList<TradeMarker> Markers, IReadOnlyList<ChartIndicatorLine> Indicators) GetChartData()
     {
         var symbol = WatchlistCatalog.SpaceXSymbol;
