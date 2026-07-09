@@ -29,4 +29,19 @@ public sealed record BlockedReason(string Code, string Message)
 
     public static BlockedReason LiveImplementationDisabled { get; } =
         new("live_implementation_disabled", "Live order implementation is disabled in this phase.");
+
+    public static BlockedReason MaxOrderNotionalExceeded { get; } =
+        new("max_order_notional_exceeded", "Order notional exceeds configured maximum.");
+
+    public static BlockedReason MaxPositionSizeExceeded { get; } =
+        new("max_position_size_exceeded", "Position size would exceed configured maximum.");
+
+    public static BlockedReason MarketSessionClosed { get; } =
+        new("market_session_closed", "Market session is closed or unknown. Orders blocked.");
+
+    public static BlockedReason CandidateBlockedByRisk { get; } =
+        new("candidate_blocked_by_risk", "Order candidate failed risk evaluation.");
+
+    public static BlockedReason InvalidSignal { get; } =
+        new("invalid_signal", "Strategy signal is invalid or incomplete.");
 }

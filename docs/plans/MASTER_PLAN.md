@@ -27,7 +27,9 @@
 
 - Phase 0: 하네스·worktree·dev-loop 완료
 - Phase 1: **오너 승인 완료** (2026-07-09) — `docs/cockpit/PHASE_01_APPROVAL.md`
-- **다음: Phase 2 토스 읽기 전용 연결**
+- Phase 2: mock read-only 완료
+- **Phase 3: 신호·리스크·후보 파이프라인 구현**
+- **다음: Phase 4 dry-run 고도화 또는 UI**
 - 활성 worktree: `.worktrees/active-dev`
 
 ## 작업 규칙

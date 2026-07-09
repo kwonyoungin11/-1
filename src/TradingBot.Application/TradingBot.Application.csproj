@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TradingBot.Domain\TradingBot.Domain.csproj" />
+    <ProjectReference Include="..\TradingBot.Risk\TradingBot.Risk.csproj" />
   </ItemGroup>
 </Project>

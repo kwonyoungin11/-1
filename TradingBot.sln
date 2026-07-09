@@ -35,6 +35,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TradingBot.Infrastructure.Toss.Tests", "tests\TradingBot.Infrastructure.Toss.Tests\TradingBot.Infrastructure.Toss.Tests.csproj", "{E14261B3-E19C-4D32-AA49-7CDA10B0EB8F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TradingBot.Application.Tests", "tests\TradingBot.Application.Tests\TradingBot.Application.Tests.csproj", "{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -213,6 +215,18 @@ Global
 		{E14261B3-E19C-4D32-AA49-7CDA10B0EB8F}.Release|x64.Build.0 = Release|Any CPU
 		{E14261B3-E19C-4D32-AA49-7CDA10B0EB8F}.Release|x86.ActiveCfg = Release|Any CPU
 		{E14261B3-E19C-4D32-AA49-7CDA10B0EB8F}.Release|x86.Build.0 = Release|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Debug|x64.Build.0 = Debug|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Debug|x86.Build.0 = Debug|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Release|x64.ActiveCfg = Release|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Release|x64.Build.0 = Release|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Release|x86.ActiveCfg = Release|Any CPU
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -220,5 +234,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{067D0F15-ED42-4BC1-8401-CF16FF8CEAC9} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{E14261B3-E19C-4D32-AA49-7CDA10B0EB8F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{C762A3DD-F666-4CF3-8D97-D587C6A5B7E6} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
