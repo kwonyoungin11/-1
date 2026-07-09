@@ -22,18 +22,20 @@
   <!-- 위 2/3 차트 · 아래 1/3 조작 -->
   <Grid RowDefinitions="2*,*" Margin="12,32,12,12">
 
-    <!-- ===== 차트 영역 (상단 2/3) — SPCX + 보조지표 ===== -->
-    <Border Grid.Row="0" Classes="glass-card" Margin="0,0,0,10" Padding="10" Background="#E0080A0E">
+    <!-- ===== 차트 영역 (상단 2/3) — 버블 + TradingView 스타일 ===== -->
+    <Border Grid.Row="0" Classes="glass-card" Margin="0,0,0,10" Padding="8" Background="#E0080A0E">
       <Grid RowDefinitions="Auto,*">
-        <Grid ColumnDefinitions="*,Auto" Margin="4,0,4,8">
-          <StackPanel Spacing="2">
+        <Grid ColumnDefinitions="*,Auto" Margin="4,0,4,6">
+          <StackPanel Spacing="1">
             <TextBlock Classes="section" Text="{Binding ChartTitle}"/>
-            <TextBlock Classes="sub" Text="{Binding ChartSubtitle}"/>
-            <TextBlock Classes="sub" Text="{Binding IndicatorLegend}" Foreground="#93C5FD"/>
+            <TextBlock Classes="sub" Text="{Binding ChartSubtitle}" FontSize="11"/>
+            <TextBlock Classes="sub" Text="{Binding IndicatorLegend}" Foreground="#93C5FD" FontSize="11"/>
+            <TextBlock Classes="sub" Text="{Binding LastPriceLabel}" Foreground="#E2E8F0" FontSize="12" FontWeight="SemiBold"/>
           </StackPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
             <Border Classes="pill-lock"><TextBlock Text="실주문 잠금"/></Border>
             <Border Classes="pill-ok"><TextBlock Text="{Binding ConnectionPill}"/></Border>
+            <Border Classes="pill-mode"><TextBlock Text="버블차트"/></Border>
             <Border Classes="pill-mode"><TextBlock Text="SPCX"/></Border>
           </StackPanel>
         </Grid>
@@ -42,10 +44,12 @@
                             XAxes="{Binding XAxes}"
                             YAxes="{Binding YAxes}"
                             DrawMarginFrame="{Binding DrawMarginFrame}"
+                            DrawMargin="{Binding DrawMargin}"
                             TooltipPosition="Top"
                             ZoomMode="X"
+                            AnimationsSpeed="0:0:0"
                             LegendPosition="Hidden"
-                            Background="#0A0C10"/>
+                            Background="#0B0F14"/>
       </Grid>
     </Border>
 
@@ -104,19 +108,19 @@
           </StackPanel>
         </Border>
 
-        <!-- 범례 -->
-        <StackPanel Grid.Column="3" Spacing="8" VerticalAlignment="Center" MinWidth="128">
-          <TextBlock Classes="section" Text="차트 표시"/>
+        <!-- 범례 — ChartFanatics + TV -->
+        <StackPanel Grid.Column="3" Spacing="6" VerticalAlignment="Center" MinWidth="140">
+          <TextBlock Classes="section" Text="차트 범례"/>
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <Ellipse Width="18" Height="18" Fill="#9939FF14"/>
-            <TextBlock Text="매수 (큰=규모↑)" VerticalAlignment="Center" FontSize="12"/>
+            <Ellipse Width="20" Height="20" Fill="#8839FF14"/>
+            <TextBlock Text="상승 버블 (큰=대금↑)" VerticalAlignment="Center" FontSize="11"/>
           </StackPanel>
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <Ellipse Width="18" Height="18" Fill="#99FF2D2D"/>
-            <TextBlock Text="매도 (큰=규모↑)" VerticalAlignment="Center" FontSize="12"/>
+            <Ellipse Width="20" Height="20" Fill="#88FF2D2D"/>
+            <TextBlock Text="하락 버블 (큰=대금↑)" VerticalAlignment="Center" FontSize="11"/>
           </StackPanel>
-          <TextBlock Classes="sub" TextWrapping="Wrap" Text="선 = 전략 보조지표 (SMA/BB)"/>
-          <TextBlock Classes="sub" TextWrapping="Wrap" Text="실주문 버튼 없음 · 게이트 잠금"/>
+          <TextBlock Classes="sub" TextWrapping="Wrap" Text="캔들 + SMA + 하단 거래량"/>
+          <TextBlock Classes="sub" TextWrapping="Wrap" Text="줌: 가로 드래그 · 실주문 잠금"/>
         </StackPanel>
       </Grid>
     </Border>

@@ -49,9 +49,11 @@ public class AppHarnessTests
         _ = await harness.GetDashboardAsync();
         var (candles, markers, indicators) = harness.GetChartData();
         Assert.True(candles.Count >= 10);
+        // Volume bubbles always present (live or mock) — one per candle baseline
+        Assert.NotEmpty(markers);
+        Assert.True(markers.Count >= candles.Count);
         Assert.NotEmpty(indicators);
         Assert.Contains(indicators, i => i.Name.Contains("SMA", StringComparison.Ordinal));
-        _ = markers; // may be empty when live-connected without fills
     }
 
     [Fact]

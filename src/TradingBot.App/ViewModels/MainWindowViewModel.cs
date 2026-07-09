@@ -3,8 +3,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LiveChartsCore;
 using LiveChartsCore.Defaults;
+using LiveChartsCore.Kernel.Sketches;
+using LiveChartsCore.Measure;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
+using LiveChartsCore.SkiaSharpView.Painting.Effects;
 using SkiaSharp;
 using TradingBot.App.Services;
 using TradingBot.Domain;
@@ -14,8 +17,8 @@ namespace TradingBot.App.ViewModels;
 
 /// <summary>
 /// 상단 차트 2/3 + 하단 자동매매 조작 1/3.
-/// 종목: 스페이스X(SPCX) 전용. 시간봉 + 전략 보조지표. 토스 실데이터 읽기.
-/// 실주문은 게이트 잠금 유지 (오너 해제 전).
+/// ChartFanatics 버블(규모=거래대금) + TradingView식 캔들·거래량·보조지표.
+/// 종목 SPCX · 토스 실데이터 · 실주문 게이트 잠금.
 /// </summary>
 public partial class MainWindowViewModel : ViewModelBase
 {
@@ -24,8 +27,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private static readonly SKColor[] IndicatorColors =
     [
-        SKColor.Parse("#38BDF8"), // sky
-        SKColor.Parse("#FBBF24"), // amber
+        SKColor.Parse("#38BDF8"), // sky SMA20
+        SKColor.Parse("#FBBF24"), // amber SMA60
         SKColor.Parse("#A78BFA"), // violet
         SKColor.Parse("#34D399"), // emerald
         SKColor.Parse("#F472B6"), // pink
@@ -61,7 +64,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ConnectionLabel = _harness.ConnectionLabel;
         ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel);
         SafetyHeadline = SafetyHeadlineText;
-        ChartSubtitle = "SPCX · 시간봉 선택 · 전략 보조지표 · 버블=체결 규모";
+        ChartSubtitle = "버블 크기 = 거래대금 · 초록=상승 · 빨강=하락 · 하단=거래량";
     }
 
     public ObservableCollection<string> StockKindOptions { get; }
@@ -86,6 +89,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _chartTitle = "SPCX";
     [ObservableProperty] private string _chartSubtitle = string.Empty;
     [ObservableProperty] private string _indicatorLegend = string.Empty;
+    [ObservableProperty] private string _lastPriceLabel = string.Empty;
     [ObservableProperty] private string _connectionLabel = "연결 확인 전";
     [ObservableProperty] private string _connectionPill = "mock";
     [ObservableProperty] private bool _canStart = true;
@@ -96,6 +100,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private Axis[] _xAxes = Array.Empty<Axis>();
     [ObservableProperty] private Axis[] _yAxes = Array.Empty<Axis>();
     [ObservableProperty] private DrawMarginFrame? _drawMarginFrame;
+    [ObservableProperty] private LiveChartsCore.Measure.Margin? _drawMargin;
 
     partial void OnSelectedStockKindChanged(string value)
     {
@@ -122,7 +127,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             _harness.SetStrategy(s);
             StrategyDescription = StrategyCatalog.Describe(s);
-            StatusLine = $"전략 · {s} · 보조지표 갱신";
+            StatusLine = $"전략 · {s} · 보조지표·버블 갱신";
             RebuildChart();
         }
     }
@@ -150,8 +155,8 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             _harness.SetTimeframe(tf);
             ChartTitle = $"SPCX · {tf}";
-            ChartSubtitle = ChartTimeframeCatalog.Describe(tf);
-            StatusLine = $"시간봉 · {tf} · 차트 갱신 필요 시 새로고침";
+            ChartSubtitle = ChartTimeframeCatalog.Describe(tf) + " · 버블=거래대금";
+            StatusLine = $"시간봉 · {tf} · 새로고침으로 실봉 갱신";
             RebuildChart();
         }
     }
@@ -184,7 +189,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ConnectionLabel = _harness.ConnectionLabel;
             ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel, _harness.ConnectionLabel);
             RebuildChart();
-            StatusLine = $"갱신 완료 · {ConnectionPill} · SPCX · 실주문 잠금";
+            StatusLine = $"갱신 완료 · {ConnectionPill} · SPCX 버블차트 · 실주문 잠금";
         }
         catch (Exception ex)
         {
@@ -269,29 +274,70 @@ public partial class MainWindowViewModel : ViewModelBase
     private void RebuildChart()
     {
         var (candles, markers, indicators) = _harness.GetChartData();
+        if (candles.Count == 0)
+        {
+            Series = Array.Empty<ISeries>();
+            LastPriceLabel = string.Empty;
+            return;
+        }
+
+        var isDaily = SelectedTimeframe.Contains("일", StringComparison.Ordinal)
+                      || _harness.Timeframe == ChartTimeframe.일봉;
+
+        // ── 캔들 (TradingView식 두꺼운 봉) ──────────────────────────
         var financial = candles
             .Select(c => new FinancialPoint(c.Time.UtcDateTime, c.High, c.Open, c.Close, c.Low))
             .ToArray();
 
+        var maxBarWidth = candles.Count switch
+        {
+            > 140 => 4.0,
+            > 100 => 6.0,
+            > 70 => 8.0,
+            > 40 => 11.0,
+            _ => 14.0,
+        };
+
+        var upColor = SKColor.Parse("#26A69A");
+        var downColor = SKColor.Parse("#EF5350");
+
+        // ── 버블 (규모 = 거래대금) ───────────────────────────────────
         var buyBubbles = markers
             .Where(m => m.Side == TradeMarkerSide.매수)
             .Select(m => new WeightedPoint(
                 m.Time.UtcDateTime.Ticks,
                 m.Price,
-                Math.Max(0.2, m.SizeWeight)))
+                Math.Clamp(m.SizeWeight, 0.35, 5.5)))
             .ToArray();
         var sellBubbles = markers
             .Where(m => m.Side == TradeMarkerSide.매도)
             .Select(m => new WeightedPoint(
                 m.Time.UtcDateTime.Ticks,
                 m.Price,
-                Math.Max(0.2, m.SizeWeight)))
+                Math.Clamp(m.SizeWeight, 0.35, 5.5)))
             .ToArray();
 
-        var buyFill = new SolidColorPaint(new SKColor(0x39, 0xFF, 0x14, 0xB8));
-        var sellFill = new SolidColorPaint(new SKColor(0xFF, 0x2D, 0x2D, 0xC0));
-        var buyStroke = new SolidColorPaint(new SKColor(0x00, 0xE6, 0x76, 0x90)) { StrokeThickness = 1.2f };
-        var sellStroke = new SolidColorPaint(new SKColor(0xFF, 0x52, 0x52, 0x90)) { StrokeThickness = 1.2f };
+        // 반투명 버블 — 캔들 가리지 않음
+        var buyFill = new SolidColorPaint(new SKColor(0x39, 0xFF, 0x14, 0x88));
+        var sellFill = new SolidColorPaint(new SKColor(0xFF, 0x2D, 0x2D, 0x90));
+        var buyStroke = new SolidColorPaint(new SKColor(0x00, 0xE6, 0x76, 0x55)) { StrokeThickness = 1.0f };
+        var sellStroke = new SolidColorPaint(new SKColor(0xFF, 0x52, 0x52, 0x55)) { StrokeThickness = 1.0f };
+
+        // ── 거래량 컬럼 (ScalesYAt = 1) ──────────────────────────────
+        var volUp = new List<DateTimePoint>(candles.Count);
+        var volDown = new List<DateTimePoint>(candles.Count);
+        foreach (var c in candles)
+        {
+            var pt = new DateTimePoint(c.Time.UtcDateTime, Math.Max(0, c.Volume));
+            if (c.Close >= c.Open)
+            {
+                volUp.Add(pt);
+            }
+            else
+            {
+                volDown.Add(pt);
+            }
+        }
 
         var seriesList = new List<ISeries>
         {
@@ -299,16 +345,17 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 Name = "SPCX",
                 Values = financial,
-                UpFill = new SolidColorPaint(SKColor.Parse("#26A69A")),
-                UpStroke = new SolidColorPaint(SKColor.Parse("#26A69A")) { StrokeThickness = 1 },
-                DownFill = new SolidColorPaint(SKColor.Parse("#EF5350")),
-                DownStroke = new SolidColorPaint(SKColor.Parse("#EF5350")) { StrokeThickness = 1 },
-                MaxBarWidth = 5,
-                ZIndex = 0,
+                UpFill = new SolidColorPaint(upColor),
+                UpStroke = new SolidColorPaint(upColor) { StrokeThickness = 1.2f },
+                DownFill = new SolidColorPaint(downColor),
+                DownStroke = new SolidColorPaint(downColor) { StrokeThickness = 1.2f },
+                MaxBarWidth = maxBarWidth,
+                ScalesYAt = 0,
+                ZIndex = 2,
             },
         };
 
-        // 전략 보조지표 라인
+        // 전략 보조지표 (가격 축)
         var legendParts = new List<string>();
         for (var i = 0; i < indicators.Count; i++)
         {
@@ -331,74 +378,170 @@ public partial class MainWindowViewModel : ViewModelBase
                 GeometrySize = 0,
                 LineSmoothness = 0,
                 Fill = null,
-                Stroke = new SolidColorPaint(color) { StrokeThickness = 1.6f },
-                ZIndex = 5 + i,
+                Stroke = new SolidColorPaint(color) { StrokeThickness = 1.8f },
+                ScalesYAt = 0,
+                ZIndex = 4 + i,
             });
             legendParts.Add(line.Name);
         }
 
+        // 버블 — 캔들 위, ChartFanatics
         seriesList.Add(new ScatterSeries<WeightedPoint>
         {
-            Name = "매수규모",
+            Name = "상승규모",
             Values = buyBubbles,
-            MinGeometrySize = 10,
-            GeometrySize = 52,
+            MinGeometrySize = 7,
+            GeometrySize = 48,
             Fill = buyFill,
             Stroke = buyStroke,
-            ZIndex = 10,
+            ScalesYAt = 0,
+            ZIndex = 12,
         });
         seriesList.Add(new ScatterSeries<WeightedPoint>
         {
-            Name = "매도규모",
+            Name = "하락규모",
             Values = sellBubbles,
-            MinGeometrySize = 10,
-            GeometrySize = 52,
+            MinGeometrySize = 7,
+            GeometrySize = 48,
             Fill = sellFill,
             Stroke = sellStroke,
-            ZIndex = 10,
+            ScalesYAt = 0,
+            ZIndex = 12,
+        });
+
+        // 거래량 패널 (하단 Y 축)
+        seriesList.Add(new ColumnSeries<DateTimePoint>
+        {
+            Name = "거래량↑",
+            Values = volUp,
+            Fill = new SolidColorPaint(new SKColor(0x26, 0xA6, 0x9A, 0x99)),
+            Stroke = null,
+            MaxBarWidth = maxBarWidth,
+            ScalesYAt = 1,
+            ZIndex = 1,
+            Padding = 1,
+        });
+        seriesList.Add(new ColumnSeries<DateTimePoint>
+        {
+            Name = "거래량↓",
+            Values = volDown,
+            Fill = new SolidColorPaint(new SKColor(0xEF, 0x53, 0x50, 0x99)),
+            Stroke = null,
+            MaxBarWidth = maxBarWidth,
+            ScalesYAt = 1,
+            ZIndex = 1,
+            Padding = 1,
         });
 
         Series = seriesList.ToArray();
-        IndicatorLegend = legendParts.Count == 0
-            ? "보조지표 없음"
-            : $"보조지표: {string.Join(" · ", legendParts)} ({SelectedStrategy})";
 
-        var isDaily = SelectedTimeframe.Contains("일", StringComparison.Ordinal);
+        var last = candles[^1];
+        var first = candles[0];
+        var chg = first.Close > 0 ? (last.Close - first.Close) / first.Close * 100.0 : 0;
+        LastPriceLabel = $"종가 {last.Close:N2} · 구간 {chg:+0.00;-0.00;0}% · 봉 {candles.Count}";
+
+        IndicatorLegend = legendParts.Count == 0
+            ? $"버블 차트 · 규모=거래대금 · 봉 {candles.Count}"
+            : $"보조지표: {string.Join(" · ", legendParts)} ({SelectedStrategy}) · 버블=거래대금";
+
+        var dashGrid = new SolidColorPaint(SKColor.Parse("#1A2332"))
+        {
+            StrokeThickness = 1,
+            PathEffect = new DashEffect([4, 6]),
+        };
+
         XAxes =
         [
             new Axis
             {
                 LabelsPaint = new SolidColorPaint(SKColor.Parse("#64748B")),
-                SeparatorsPaint = new SolidColorPaint(SKColor.Parse("#1A1F2E")) { StrokeThickness = 1 },
-                Labeler = value => value > 0
-                    ? new DateTime((long)value).ToString(isDaily ? "MM-dd" : "HH:mm")
-                    : string.Empty,
+                SeparatorsPaint = dashGrid,
+                ShowSeparatorLines = true,
+                Labeler = value =>
+                {
+                    if (value <= 0)
+                    {
+                        return string.Empty;
+                    }
+
+                    var dt = new DateTime((long)value);
+                    return isDaily ? dt.ToString("MM-dd") : dt.ToString("HH:mm");
+                },
                 UnitWidth = isDaily
                     ? TimeSpan.FromDays(1).Ticks
                     : TimeSpan.FromMinutes(1).Ticks,
                 MinStep = isDaily
                     ? TimeSpan.FromDays(1).Ticks
                     : TimeSpan.FromMinutes(5).Ticks,
-                TextSize = 11,
+                TextSize = 10,
+                Padding = new LiveChartsCore.Drawing.Padding(0, 4, 0, 0),
             },
         ];
+
+        // Y0 = 가격 (위 ~72%), Y1 = 거래량 (아래 ~28%) — TradingView 레이아웃
+        var priceMin = candles.Min(c => c.Low);
+        var priceMax = candles.Max(c => c.High);
+        var pad = Math.Max(0.5, (priceMax - priceMin) * 0.04);
+        var volMax = candles.Max(c => c.Volume);
+        if (volMax <= 0)
+        {
+            volMax = 1;
+        }
 
         YAxes =
         [
             new Axis
             {
+                Name = "가격",
+                NamePaint = new SolidColorPaint(SKColor.Parse("#64748B")) { SKTypeface = SKTypeface.Default },
+                NameTextSize = 10,
                 LabelsPaint = new SolidColorPaint(SKColor.Parse("#94A3B8")),
-                SeparatorsPaint = new SolidColorPaint(SKColor.Parse("#1A1F2E")) { StrokeThickness = 1 },
-                Position = LiveChartsCore.Measure.AxisPosition.End,
-                TextSize = 11,
+                SeparatorsPaint = dashGrid,
+                ShowSeparatorLines = true,
+                Position = AxisPosition.End,
+                TextSize = 10,
                 Labeler = value => value.ToString("N2"),
+                MinLimit = priceMin - pad,
+                MaxLimit = priceMax + pad,
+            },
+            new Axis
+            {
+                Name = "Vol",
+                NamePaint = new SolidColorPaint(SKColor.Parse("#475569")),
+                NameTextSize = 9,
+                LabelsPaint = new SolidColorPaint(SKColor.Parse("#64748B")),
+                SeparatorsPaint = new SolidColorPaint(SKColors.Transparent),
+                ShowSeparatorLines = false,
+                Position = AxisPosition.Start,
+                TextSize = 9,
+                Labeler = value => FormatVolume(value),
+                MinLimit = 0,
+                MaxLimit = volMax * 4.2, // 거래량을 하단 약 1/4 높이에 압축 표시
             },
         ];
 
         DrawMarginFrame = new DrawMarginFrame
         {
-            Fill = new SolidColorPaint(SKColor.Parse("#0A0C10")),
+            Fill = new SolidColorPaint(SKColor.Parse("#0B0F14")),
             Stroke = new SolidColorPaint(SKColor.Parse("#1E293B")) { StrokeThickness = 1 },
         };
+
+        // 플롯 여백 최소화 (프로 차트 밀도)
+        DrawMargin = new LiveChartsCore.Measure.Margin(48, 12, 56, 28);
+    }
+
+    private static string FormatVolume(double v)
+    {
+        if (v >= 1_000_000)
+        {
+            return $"{v / 1_000_000:0.#}M";
+        }
+
+        if (v >= 1_000)
+        {
+            return $"{v / 1_000:0.#}K";
+        }
+
+        return v.ToString("N0");
     }
 }

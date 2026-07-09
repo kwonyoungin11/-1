@@ -88,8 +88,26 @@ public class AutoTradeSessionServiceTests
     {
         var candles = MockCandleSeriesFactory.CreateSeries("SPCX", 80, DateTimeOffset.UtcNow, seedPrice: 85);
         var markers = MockCandleSeriesFactory.CreateDemoMarkers(candles);
-        Assert.True(markers.Count >= candles.Count);
+        Assert.Equal(candles.Count, markers.Count);
         Assert.Contains(markers, m => m.SizeWeight > 1.5);
         Assert.Contains(markers, m => m.Side == TradeMarkerSide.매수 && m.SizeWeight > 0);
+    }
+
+    [Fact]
+    public void Volume_bubbles_one_per_candle_with_side_from_ohlc()
+    {
+        var candles = new List<CandlePoint>
+        {
+            new(DateTimeOffset.UtcNow.AddMinutes(-2), 100, 105, 99, 104, 1_000_000), // up
+            new(DateTimeOffset.UtcNow.AddMinutes(-1), 104, 104, 98, 99, 500_000),   // down
+            new(DateTimeOffset.UtcNow, 99, 110, 99, 108, 2_000_000),               // up large
+        };
+        var markers = MockCandleSeriesFactory.CreateVolumeBubbles(candles);
+        Assert.Equal(3, markers.Count);
+        Assert.Equal(TradeMarkerSide.매수, markers[0].Side);
+        Assert.Equal(TradeMarkerSide.매도, markers[1].Side);
+        Assert.Equal(TradeMarkerSide.매수, markers[2].Side);
+        Assert.True(markers[2].SizeWeight >= markers[1].SizeWeight);
+        Assert.All(markers, m => Assert.InRange(m.SizeWeight, 0.4, 5.1));
     }
 }

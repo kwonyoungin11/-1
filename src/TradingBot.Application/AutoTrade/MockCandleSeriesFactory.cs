@@ -66,18 +66,18 @@ public static class MockCandleSeriesFactory
     }
 
     /// <summary>
-    /// 봉마다 거래대금(거래량×종가)에 비례한 매수/매도 버블.
-    /// SizeWeight가 클수록 원이 큼 = 그날 체결 규모가 큼.
+    /// 실데이터/연습 공통: 봉마다 거래대금 버블 1개 (ChartFanatics).
+    /// 양봉 → 매수(초록), 음봉 → 매도(빨강). SizeWeight = √(상대 거래대금) 스케일 0.4~5.
+    /// 난수 데모 없음 — 실봉 volume×close 기반.
     /// </summary>
-    public static IReadOnlyList<TradeMarker> CreateDemoMarkers(IReadOnlyList<CandlePoint> candles)
+    public static IReadOnlyList<TradeMarker> CreateVolumeBubbles(IReadOnlyList<CandlePoint> candles)
     {
         ArgumentNullException.ThrowIfNull(candles);
-        if (candles.Count < 8)
+        if (candles.Count == 0)
         {
             return Array.Empty<TradeMarker>();
         }
 
-        var rnd = new Random(42);
         var notionals = candles
             .Select(c => TradeMarker.VolumeNotionalSize(c.Volume, c.Close))
             .ToArray();
@@ -87,50 +87,25 @@ public static class MockCandleSeriesFactory
             maxN = 1;
         }
 
-        var markers = new List<TradeMarker>(candles.Count * 2);
-
+        var markers = new List<TradeMarker>(candles.Count);
         for (var i = 0; i < candles.Count; i++)
         {
             var c = candles[i];
-            var notional = notionals[i];
-            var rel = notional / maxN;
-            var bubbleCount = rel > 0.75 ? 3 : rel > 0.4 ? 2 : 1;
+            var rel = notionals[i] / maxN;
+            // √ 스케일: 초대형 봉만 거대, 중간 봉도 구분
+            var weight = 0.4 + Math.Sqrt(Math.Clamp(rel, 0, 1)) * 4.6;
             var isUp = c.Close >= c.Open;
-            var progress = i / (double)Math.Max(1, candles.Count - 1);
-
-            for (var b = 0; b < bubbleCount; b++)
-            {
-                var buyBias = progress < 0.72
-                    ? (isUp ? 0.72 : 0.45)
-                    : (isUp ? 0.35 : 0.18);
-                var isBuy = rnd.NextDouble() < buyBias;
-                var side = isBuy ? TradeMarkerSide.매수 : TradeMarkerSide.매도;
-
-                var mid = (c.High + c.Low) / 2.0;
-                var span = Math.Max(0.15, c.High - c.Low);
-                var y = mid + (rnd.NextDouble() - 0.5) * span * 0.9;
-                if (isBuy)
-                {
-                    y = Math.Min(y, c.Close + span * 0.15);
-                }
-                else
-                {
-                    y = Math.Max(y, c.Close - span * 0.15);
-                }
-
-                // 규모 가중: 거래대금 상대값 + 후반 급락 구간 강조
-                // LiveCharts Weight로 쓰이므로 0.3~5 범위로 정규화
-                var weight = 0.35 + rel * 3.2 + (progress > 0.7 ? 0.9 : 0) + rnd.NextDouble() * 0.5;
-                if (b == 0 && rel > 0.85)
-                {
-                    weight += 1.8; // 초대형 버블 = 초대형 체결 규모
-                }
-
-                var label = isBuy ? "매수" : "매도";
-                markers.Add(new TradeMarker(c.Time.AddSeconds(b * 7), y, side, label, weight));
-            }
+            var side = isUp ? TradeMarkerSide.매수 : TradeMarkerSide.매도;
+            var label = isUp ? "상승규모" : "하락규모";
+            markers.Add(new TradeMarker(c.Time, c.Close, side, label, weight));
         }
 
         return markers;
     }
+
+    /// <summary>
+    /// 하위 호환: 데모 = 볼륨 버블 (실데이터와 동일 규칙).
+    /// </summary>
+    public static IReadOnlyList<TradeMarker> CreateDemoMarkers(IReadOnlyList<CandlePoint> candles) =>
+        CreateVolumeBubbles(candles);
 }

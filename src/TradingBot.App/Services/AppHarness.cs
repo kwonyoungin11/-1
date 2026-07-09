@@ -266,42 +266,22 @@ public sealed class AppHarness
             candles = MockCandleSeriesFactory.CreateSeries(symbol, 160, DateTimeOffset.UtcNow, seed);
         }
 
+        // 실데이터·mock 공통: 봉 거래대금 버블 (ChartFanatics). 실연결에서 버블 실종 방지.
+        var volumeBubbles = MockCandleSeriesFactory.CreateVolumeBubbles(candles);
         var paperAll = MockCandleSeriesFactory.MarkersFromPaperFills(_paperLedger.GetSnapshot());
-        var paperFocus = paperAll.ToList();
-
         IReadOnlyList<TradeMarker> markers;
-        if (_isLiveReadOnlyConnected)
+        if (paperAll.Count == 0)
         {
-            // 실데이터 모드: 데모 버블 제거, paper 체결만 (있으면)
-            if (paperFocus.Count == 0)
-            {
-                markers = Array.Empty<TradeMarker>();
-            }
-            else
-            {
-                var maxPaper = paperFocus.Max(m => m.SizeWeight);
-                markers = paperFocus
-                    .Select(p =>
-                    {
-                        var w = maxPaper <= 0 ? 1 : 1.2 + 4.0 * (p.SizeWeight / maxPaper);
-                        return p with { SizeWeight = w, Label = p.Label };
-                    })
-                    .ToList();
-            }
-        }
-        else if (paperFocus.Count == 0)
-        {
-            markers = MockCandleSeriesFactory.CreateDemoMarkers(candles);
+            markers = volumeBubbles;
         }
         else
         {
-            var demo = MockCandleSeriesFactory.CreateDemoMarkers(candles);
-            var merged = new List<TradeMarker>(demo.Count + paperFocus.Count);
-            merged.AddRange(demo);
-            var maxPaper = paperFocus.Max(m => m.SizeWeight);
-            foreach (var p in paperFocus)
+            var maxPaper = paperAll.Max(m => m.SizeWeight);
+            var merged = new List<TradeMarker>(volumeBubbles.Count + paperAll.Count);
+            merged.AddRange(volumeBubbles);
+            foreach (var p in paperAll)
             {
-                var w = maxPaper <= 0 ? 1 : 1.2 + 4.0 * (p.SizeWeight / maxPaper);
+                var w = maxPaper <= 0 ? 2.5 : 2.0 + 3.5 * (p.SizeWeight / maxPaper);
                 merged.Add(p with { SizeWeight = w, Label = $"{p.Label}(체결)" });
             }
 
