@@ -26,6 +26,7 @@ public sealed class StrategySignalRouter
         new MeanReversionSignalGenerator(),
         new MomentumBreakoutSignalGenerator(),
         new OneMinuteSplitScalpSignalGenerator(),
+        new CersSignalGenerator(),
     ];
 
     public StrategySignal Generate(
@@ -33,14 +34,26 @@ public sealed class StrategySignalRouter
         QuoteSnapshot quote,
         decimal baseOrderQuantity,
         DateTimeOffset nowUtc,
-        TrendFollowParameters? trendFollowParameters = null)
+        TrendFollowParameters? trendFollowParameters = null,
+        PracticeStrategyContext? practice = null)
     {
         // Practice / call-site override: use TrendFollowSignalGenerator with explicit params.
-        var effectiveTrend = trendFollowParameters ?? _trendFollowParameters;
+        var effectiveTrend = trendFollowParameters ?? _trendFollowParameters ?? practice?.TrendFollow;
         if (kind == TradingStrategyKind.추세추종 && effectiveTrend is not null)
         {
             return new TrendFollowSignalGenerator(effectiveTrend)
                 .Generate(quote, baseOrderQuantity, nowUtc);
+        }
+
+        // CERS needs candle series from practice context (IStrategySignalGenerator has no practice).
+        if (kind == TradingStrategyKind.CERS비용회귀)
+        {
+            return CersSignalGenerator.GenerateFromCandles(
+                quote,
+                baseOrderQuantity,
+                nowUtc,
+                candles: practice?.Candles,
+                openLong: practice?.CersPosition);
         }
 
         if (!_map.TryGetValue(kind, out var gen))
