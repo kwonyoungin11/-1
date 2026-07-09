@@ -122,4 +122,46 @@ public class ChartIndicatorCalculatorTests
         Assert.Throws<ArgumentOutOfRangeException>(() => ChartIndicatorCalculator.Ema(closes, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => ChartIndicatorCalculator.Rsi(closes, 0));
     }
+
+    [Fact]
+    public void ForStrategy_CERS비용회귀_includes_EMA21_and_CERS_lines()
+    {
+        var candles = Enumerable.Range(0, 80)
+            .Select(i => new CandlePoint(
+                DateTimeOffset.UtcNow.AddMinutes(i - 80),
+                100 + i * 0.1,
+                101 + i * 0.1,
+                99 + i * 0.1,
+                100.5 + i * 0.1,
+                1_000))
+            .ToList();
+
+        var lines = ChartIndicatorCalculator.ForStrategy(candles, TradingStrategyKind.CERS비용회귀);
+        var names = lines.Select(l => l.Name).ToArray();
+
+        Assert.Contains("EMA21", names);
+        Assert.True(
+            names.Any(n => n is "CERS" or "CERS edge"),
+            $"expected CERS line name, got [{string.Join(", ", names)}]");
+    }
+
+    [Fact]
+    public void ForStrategy_CERS비용회귀_CERS_line_length_equals_candle_count()
+    {
+        var candles = Enumerable.Range(0, 60)
+            .Select(i => new CandlePoint(
+                DateTimeOffset.UtcNow.AddMinutes(i - 60),
+                50 + i * 0.05,
+                51 + i * 0.05,
+                49 + i * 0.05,
+                50.2 + i * 0.05,
+                2_000))
+            .ToList();
+
+        var lines = ChartIndicatorCalculator.ForStrategy(candles, TradingStrategyKind.CERS비용회귀);
+        var cers = lines.Single(l => l.Name is "CERS" or "CERS edge");
+
+        Assert.Equal(candles.Count, cers.Values.Count);
+        Assert.Equal(candles.Count, lines.Single(l => l.Name == "EMA21").Values.Count);
+    }
 }
