@@ -1,14 +1,19 @@
 # Live Readiness Evidence — How Evidence Is Collected
 
 **Status: LIVE REMAINS BLOCKED (`LIVE_READY=false`)**  
+**Owner unlock: `LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence`**  
 **Date baseline: 2026-07-09**  
-**Worktree snapshot: `feature/pw06-readiness` (WAVE 06 — pre-live code vs ops honesty)**
+**Worktree snapshot: `feature/pw07-docs-live` (WAVE 07 — gated path + unlock honesty)**
 
 This document explains **how** readiness evidence is collected and verified, and maps  
 **current codebase artifacts** to [`docs/LIVE_READINESS_CHECKLIST.md`](../LIVE_READINESS_CHECKLIST.md).
 
 It does **not** authorize live orders. Until every checklist item has reproducible evidence  
 **and** the owner signs phase-7 approval, live is impossible.
+
+**Honesty line:** A live-capable **code path** may exist only **behind gates**. Defaults block.  
+Owner must set flags. Default launch stays dry-run. Scripts never auto-true `LIVE_READY`.  
+`ready_for_owner_unlock` is **not** auto-live.
 
 ---
 
@@ -17,13 +22,61 @@ It does **not** authorize live orders. Until every checklist item has reproducib
 | 항목 | 값 |
 |------|-----|
 | 실거래 가능? | **아니오** (`LIVE_READY=false`) |
-| Pre-live **code** | **완료** (Phase 0–5 엔지니어링 + mock/dry-run/paper unit/cockpit/safety) |
-| Phase 6 **ops/owner** | **갭 남음** (다일 paper, 실 스모크, incident 날짜, Phase 7 서명 등) |
+| 오너 언락 상태 | **`blocked_missing_evidence`** (ops 미완) |
+| Pre-live **code** | **완료** (Phase 0–5 엔지니어링 + mock/dry-run/paper unit/cockpit/safety/export) |
+| Phase 6 **ops/owner** | **갭 남음** (multi-session export 파일, multi-day, 실 스모크, incident 날짜, Phase 7 서명 등) |
+| Live-capable path | **GATED** — defaults block · owner must set flags · no auto-live |
 | 기계 게이트 | `check-live-readiness.sh` → `LIVE_READY=false` + exit 0 (정상 차단) |
 | 안전 스캔 | `check-trading-safety.sh` PASSED |
 | 단위 테스트 | `dotnet test` 실패 0 (2026-07-09, 이 worktree) |
 | 주문 API | **미구현** · `SubmitOrderAsync` 없음 · `BlockedLiveOrderRouter` / `BlockedTossOrderClient` |
-| 다음 | multi-day paper ops · (선택) redacted 읽기 스모크 · incident drill · 오너 Phase 7 전 개방 금지 |
+| 증거 폴더 | `artifacts/live-readiness/` — **캡처 세트 미첨부** |
+| 다음 | multi-session export 저장 · (선택) redacted 읽기 스모크 · incident drill · Phase 7 전 개방 금지 |
+
+---
+
+## 0a. Live-capable path is GATED
+
+| Principle | Meaning |
+|-----------|---------|
+| Defaults block | `ALLOW_LIVE_ORDERS=false`, `KILL_SWITCH=true`, `ORDER_MODE=dry_run` in source, `.env.example`, harness |
+| Owner must set flags | Live consideration requires **owner-local** env/flag changes — never agent/script auto-flip |
+| Gated path ≠ open | Even if a live code path is later present, it stays behind LiveOrderGate + flags + risk |
+| Default launch | Always dry-run / blocked under repository defaults |
+| No auto-live | No process self-promotes to live when evidence is “enough” |
+| Script never auto-trues `LIVE_READY` | `check-live-readiness.sh` prints `LIVE_READY=false` while safety defaults hold; it does **not** set env flags or claim live |
+
+```text
+LIVE_READY=false                 # automation expectation under defaults — never auto-true
+LIVE_SAFETY_INTACT=true          # defaults still fail-closed
+LIVE_READINESS_STATUS=blocked_as_expected
+LIVE_OWNER_UNLOCK_STATUS=...     # separate from LIVE_READY (see §0d)
+```
+
+---
+
+## 0d. LIVE_OWNER_UNLOCK_STATUS meanings
+
+Human/ops readiness for **owner to consider unlock** — **not** permission to trade live.
+
+| Value | Meaning | Auto-live? | Default launch | Owner action |
+|-------|---------|------------|----------------|--------------|
+| `blocked_missing_evidence` | Required ops/owner artifacts missing or incomplete | No | dry-run · blocked | Collect evidence under `artifacts/live-readiness/` |
+| `ready_for_owner_unlock` | Agreed evidence set is present so owner **may review** unlock | **No** | **still dry-run · blocked** | Manual flags + Phase 7 signature + gate E; process does not self-enable live |
+| (unset) | Not evaluated yet | No | dry-run · blocked | Run readiness evaluation after artifacts exist |
+
+### Do not confuse
+
+| Phrase | Honest reading |
+|--------|----------------|
+| `LIVE_READY=false` | Live not authorized; expected under defaults |
+| `LIVE_READINESS_STATUS=blocked_as_expected` | Safety gate green **because** live is still blocked |
+| `LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence` | Do not invite owner unlock yet |
+| `LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock` | Evidence enough to **discuss** unlock — **not** live on, **not** auto-live |
+| “code path available when gates open” | Implementation may exist later behind gates; **default launch still dry-run** |
+
+**Current status:** `blocked_missing_evidence`  
+(until dated files exist under `artifacts/live-readiness/` and checklist ops rows are honest-complete).
 
 ---
 
@@ -42,13 +95,14 @@ Honest split: **engineering finished for practice/read-only path** vs **ops that
 | Dry-run unit | `DryRunOrderRouter` · `InMemoryDryRunLedger` · `DryRunLedgerTests` |
 | Paper **unit** (not multi-day ops) | `PaperOrderRouter` · `InMemoryPaperLedger` · `PaperLedgerTests` · `EvidenceBuilderTests` (`LiveModePresent=false`) |
 | Idempotency **field + store (dry-run/paper)** | `ClientOrderIdFactory` + `ClientOrderIdIndex` on dry-run/paper routers; tests in `ClientOrderIdempotencyTests` |
+| Evidence export **code** | `TradingEvidenceExporter` · always `live_orders=false` / `LiveSubmissionEnabled=false` |
 | Cockpit live lock / kill UI | `CockpitSnapshot` · Web `LiveLock`/`SafetyStrip` · Avalonia safety strip · Ui tests |
 | Audit redaction | Domain + Observability redactor tests |
 | OpenAPI 1.2.2 snapshot on disk | `artifacts/openapi/toss-openapi.snapshot.json` |
 | Readiness automation expects block | `check-live-readiness.sh` → `LIVE_READY=false` |
 
 **Code conclusion:** Pre-live development for the safe practice pipeline is **complete**.  
-Claiming “live ready” still requires the ops/owner section below — which is **not** done.
+Claiming “live ready” or `ready_for_owner_unlock` still requires the ops/owner section below — which is **not** done.
 
 ---
 
@@ -58,7 +112,8 @@ Do **not** mark these complete without dated artifacts / owner action.
 
 | Blocker | Status | Notes |
 |---------|--------|-------|
-| Multi-day paper ops log | **Missing** | Unit paper ≠ period stability. Need redacted ledger export under `artifacts/` |
+| **Multi-session export** under `artifacts/live-readiness/` | **Missing files** | Exporter code exists; save JSON/text export. **Name it multi-session export** — not multi-calendar-day real ops |
+| **Multi-calendar-day real ops** log | **Missing** | Only if owner ran paper across **calendar days**. Separate from multi-session export |
 | Owner-approved redacted Toss read smoke | **Missing** | Optional for daily work; **required before claiming live-ready connectivity**. Never commit tokens |
 | OpenAPI re-fetch / drift ops log | **Missing log** | Scripts exist; attach dated re-verify when run |
 | gitleaks/trivy as hard gate | **Optional / not hard** | `verify.sh` non-fatal today |
@@ -68,9 +123,43 @@ Do **not** mark these complete without dated artifacts / owner action.
 | Owner walkthrough completion note | **Missing date** | Doc exists; no owner signature/date |
 | Owner Phase 7 signature | **Absent (intentional)** | Automation must never invent this |
 | Final gate E all true simultaneously | **Not met** | Defaults remain blocked |
+| Owner env unlock flags | **Defaults block** | Owner must set flags; scripts never flip them |
 
-**LIVE_READY stays false** until these are evidenced **and** owner Phase 7 process completes.  
-Multi-day paper, real Toss smoke, incident date, and Phase 7 signature are **explicitly not done**.
+**LIVE_READY stays false** under defaults (script never auto-trues) until human Phase 7 process completes.  
+**LIVE_OWNER_UNLOCK_STATUS stays `blocked_missing_evidence`** until capturable artifacts exist.
+
+### Naming rule: multi-session export ≠ multi-calendar-day real ops
+
+| Term | Use when | Do **not** claim |
+|------|----------|------------------|
+| **multi-session export** | Several dry-run/paper sessions aggregated via `TradingEvidenceExporter` (or equivalent) into `artifacts/live-readiness/multi-session-export.*` | “multi-day production ops complete”, “N calendar days stable” |
+| **multi-calendar-day real ops** | Owner actually operated paper across **calendar dates** with dated notes under `artifacts/live-readiness/multi-day-ops-*.md` | Implied by multi-session export alone |
+| unit tests | `dotnet test` in-memory ledgers | Either of the above |
+
+If only a multi-session export is attached, checklist language must say **multi-session export**, not multi-day real ops.
+
+---
+
+## 0e. Capturable ops artifacts — `artifacts/live-readiness/`
+
+Store **redacted** ops evidence here (never secrets). Empty directory / missing files ⇒ **no ops evidence**.
+
+| File (recommended / observed) | Source / how to produce | Proves | Does **not** prove |
+|-------------------------------|-------------------------|--------|---------------------|
+| `paper-multi-session-export.txt` (or `multi-session-export.json`/`.txt`) | `TradingEvidenceExporter` and/or ops generator over dry-run+paper sessions | **Multi-session export**; `live_orders=false` | Multi-calendar-day real ops |
+| `paper-session-notes-YYYYMMDD.md` | Owner/operator notes per session | Session context (no profit guarantees) | Calendar-day stability alone |
+| `multi-day-ops-YYYYMMDD-YYYYMMDD.md` | Only after real multi-calendar-day paper | Multi-calendar-day real ops | Anything if file absent |
+| `toss-read-smoke-redacted.log` | Owner-local real read smoke (`TOSS_ALLOW_LIVE_HTTP=true` only) | Real read connectivity (no orders) | Live order safety |
+| `toss-read-smoke-residual.md` | Residual-risk note when real smoke not run | Mock path residual documentation | Real Toss smoke complete |
+| `openapi-recheck.log` / `openapi-reverify-YYYYMMDD.log` | fetch + diff scripts | Snapshot freshness ops | Live trading |
+| `incident-drill-record.md` / `incident-drill-YYYYMMDD.md` | Tabletop via `docs/INCIDENT_RESPONSE.md` | Drill date + kill-switch confirmation | Live unlock |
+| `owner-walkthrough-signoff.md` | Owner cockpit walkthrough | Owner understanding dated | Live permission |
+| `owner-unlock-signoff.md` | Owner Phase 7 / unlock form | Only after **human signature** | If still `UNSIGNED TEMPLATE` → no unlock |
+| `phase7-owner-approval.md` | Owner-written only | Phase 7 consent | Auto-generated text |
+| `gate-e-snapshot-YYYYMMDD.txt` | Operator gate E snapshot | Simultaneous-gate record (aliases only) | Auto-live |
+
+**Current (this docs worktree):** no capturable set under `artifacts/live-readiness/` ⇒ unlock **blocked_missing_evidence**.  
+If ops wave adds files: treat `paper-multi-session-export.txt` as **multi-session export** only; treat unsigned `owner-unlock-signoff.md` as template; treat residual smoke as **not** real connectivity evidence.
 
 ---
 
@@ -79,12 +168,14 @@ Multi-day paper, real Toss smoke, incident date, and Phase 7 signature are **exp
 | Kind | Meaning | Example |
 |------|---------|---------|
 | Machine gate | Script exit 0 with explicit status lines | `LIVE_READY=false`, `LIVE_SAFETY_INTACT=true` |
+| Unlock status | Ops completeness for owner review | `LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence` |
 | Automated test | `dotnet test` assertion that would fail if safety weakened | `TradingSafetyDefaultsTests` |
-| Artifact | Timestamped log, ledger export, OpenAPI snapshot | dry-run ledger, paper fill log, `artifacts/openapi/` |
+| Artifact | Timestamped log, multi-session export, OpenAPI snapshot | `artifacts/live-readiness/`, `artifacts/openapi/` |
 | Owner sign-off | Written approval with date and conditions | live transition approval form |
 
 Passing a machine gate **never** means “open live”.  
-The live-readiness automation gate is designed to **pass while live is blocked**.
+The live-readiness automation gate is designed to **pass while live is blocked**.  
+`ready_for_owner_unlock` **never** means auto-live.
 
 ---
 
@@ -114,6 +205,12 @@ LIVE_SAFETY_INTACT=true
 LIVE_READINESS_STATUS=blocked_as_expected
 live readiness automation PASSED (live remains blocked)
 ```
+
+**Important:** Under defaults, **`LIVE_READY` remains false always** from this script’s perspective.  
+The script **never auto-trues** `LIVE_READY`, never sets `ALLOW_LIVE_ORDERS=true`, never clears kill switch, never sets `ORDER_MODE=live`.  
+Owner env configuration for a future unlock is **outside** this script and still does not rewrite repository defaults.
+
+`LIVE_OWNER_UNLOCK_STATUS` is evaluated from **ops artifacts + checklist honesty** (see §0d–0e), not from “dev-loop green” alone.
 
 ### Fail conditions (exit 1)
 
@@ -154,7 +251,7 @@ and never changes `ORDER_MODE` to live.**
 ## 4. Evidence map — checklist A–E → code / tests / scripts
 
 Use this when updating `LIVE_READINESS_CHECKLIST.md`. Store ops artifacts under  
-`artifacts/` (never commit secrets). Prefer redacted logs.
+`artifacts/live-readiness/` (never commit secrets). Prefer redacted logs.
 
 ### A. Environment / security
 
@@ -171,14 +268,14 @@ Use this when updating `LIVE_READINESS_CHECKLIST.md`. Store ops artifacts under
 | Checklist item | Status | How / where |
 |----------------|--------|-------------|
 | Official OpenAPI snapshot | **Evidence (code artifact)** | `artifacts/openapi/toss-openapi.snapshot.json` (v **1.2.2**) · notes docs |
-| Snapshot freshness process | **Partial (ops log missing)** | `fetch-toss-openapi-spec.sh` + `check-toss-openapi-diff.sh` — re-run and attach log |
+| Snapshot freshness process | **Partial (ops log missing)** | `fetch-toss-openapi-spec.sh` + `check-toss-openapi-diff.sh` — re-run and attach log under `artifacts/live-readiness/` |
 | OAuth / mock | **Evidence (code)** | fixtures · `MockTossClients` · stub token path tests |
 | Live HTTP clients (read) | **Code + stub tests** | `LiveToss*Client` · `TossReadOnlyFactory` |
 | Live HTTP guard | **Evidence (code)** | `LiveHttpGuard` · `TOSS_ALLOW_LIVE_HTTP` default false |
 | accounts / holdings / prices / calendar | **Mock evidence (code)** | Fixtures · `ReadOnlyPortfolioServiceTests` · `TossDtoMapperTests` |
 | No order HTTP on read path | **Evidence (stub)** | `LiveTossHttpClientTests` excludes `orders` |
 | Order client disabled | **Evidence (code)** | `BlockedTossOrderClient` · safety scan |
-| Real sandbox smoke | **Missing ops/owner log** | Owner-local only; redacted log to `artifacts/` — **not done** |
+| Real sandbox smoke | **Missing ops/owner log** | Owner-local only; redacted log to `artifacts/live-readiness/` — **not done** |
 | rate limit / errors | **Partial** | Notes; dedicated tests thin |
 | redaction | **Evidence (code)** | Domain + Observability |
 
@@ -187,22 +284,23 @@ Use this when updating `LIVE_READINESS_CHECKLIST.md`. Store ops artifacts under
 | Checklist item | Status | How / where |
 |----------------|--------|-------------|
 | Risk gate core + tests | **Evidence (pre-live code)** | `RiskGate` · `LiveOrderGate` · `UsMarketSessionGuard` · Risk.Tests |
-| Full live limits / reconcile | **Missing ops/design** | Not multi-day paper; still blocks claiming live-ready limits |
+| Full live limits / reconcile | **Missing ops/design** | Still blocks claiming live-ready limits |
 | Dry-run stable (unit) | **Evidence (code)** | `DryRunOrderRouter` · `DryRunLedgerTests` · `OrderRouterTests` |
 | Paper ledger (unit) | **Evidence (code)** | `PaperOrderRouter` · `PaperLedgerTests` · `PHASE_05_paper.md` |
 | Evidence aggregation | **Evidence (code)** | `EvidenceBuilder` · `LiveModePresent == false` |
-| Multi-day paper ops | **Missing (ops)** | **Do not mark done** without dated export under `artifacts/` |
+| **Multi-session export** | **Missing ops file** | `TradingEvidenceExporter` → write `artifacts/live-readiness/multi-session-export.*` — **do not call this multi-calendar-day real ops** |
+| **Multi-calendar-day real ops** | **Missing** | Separate dated notes only if calendar-day ops actually ran |
 | Manual approval UX | **Partial** | Flag + lock UI; no live unlock control (by design) |
 | Idempotency field | **Present (code)** | `ClientOrderIdFactory` in pipeline |
 | Idempotency / duplicate store | **Present for dry-run/paper** | `ClientOrderIdIndex` + tests; live path still none (blocks live claims) |
-| Live impl still disabled | **Evidence (code)** | `BlockedLiveOrderRouter` · no `SubmitOrderAsync` · readiness + safety scripts |
+| Live impl still disabled / gated | **Evidence (code)** | `BlockedLiveOrderRouter` · no `SubmitOrderAsync` · readiness + safety scripts |
 
 ### D. UX / operations
 
 | Checklist item | Status | How / where |
 |----------------|--------|-------------|
 | Live lock / kill switch clear | **Evidence (code + unit)** | `CockpitSnapshot` · Web/Avalonia safety surfaces · Ui.Tests |
-| Owner understands state | **Partial (owner)** | `OWNER_WALKTHROUGH.md` — needs dated owner completion note |
+| Owner understands state | **Partial (owner)** | `OWNER_WALKTHROUGH.md` — needs dated owner completion note in `artifacts/live-readiness/` |
 | Incident response drill | **Missing date (ops)** | `INCIDENT_RESPONSE.md` — **no rehearsal date recorded** |
 | Owner live-approval signature | **Missing (owner Phase 7)** | Not created by automation |
 
@@ -221,15 +319,15 @@ ORDER_MODE=dry_run
 
 | Final gate line | Current honest status |
 |-----------------|----------------------|
-| KILL_SWITCH=false | **Blocked** (default true) |
-| ALLOW_LIVE_ORDERS=true | **Blocked** (default false) |
-| ORDER_MODE=live | **Blocked** (default dry_run) |
+| KILL_SWITCH=false | **Blocked** (default true) — owner must set |
+| ALLOW_LIVE_ORDERS=true | **Blocked** (default false) — owner must set |
+| ORDER_MODE=live | **Blocked** (default dry_run) — owner must set |
 | manual approval exists | Flag only; ops flow incomplete |
 | session open | Unit guard only |
 | market data fresh | Unit staleness rule only |
 | risk gate pass | Pre-live core unit rules |
-| dry-run pass | Unit OK |
-| paper trading stable | Unit OK; **multi-day missing** |
+| dry-run pass | Unit OK; multi-session export ops missing |
+| paper trading stable | Unit OK; **multi-session export / multi-day missing** |
 | valid Toss credential | Local owner secret; **no committed smoke** |
 | account reconciled | Not evidenced |
 | limits ok | Partial Max* settings |
@@ -262,7 +360,7 @@ dotnet test TradingBot.sln --nologo
 | `tests/TradingBot.Domain.Tests` | Fail-closed defaults · secret mask · strategy catalog |
 | `tests/TradingBot.Application.Tests` | Candidate pipeline · strategy signals · auto-trade session |
 | `tests/TradingBot.Risk.Tests` | LiveOrderGate blocks · candidate risk · session guard |
-| `tests/TradingBot.Orders.Tests` | Dry-run / paper ledgers · blocked live router · evidence never live |
+| `tests/TradingBot.Orders.Tests` | Dry-run / paper ledgers · blocked live router · evidence export never live |
 | `tests/TradingBot.Infrastructure.Toss.Tests` | Mock portfolio · live HTTP guard · stub read without orders · blocked order client |
 | `tests/TradingBot.Observability.Tests` | Audit redaction |
 | `tests/TradingBot.Ui.Tests` / `Web.Tests` / `App.Tests` / `Runner.Tests` | Cockpit/harness still show blocked live |
@@ -276,6 +374,7 @@ dotnet test TradingBot.sln --nologo
 | Risk gate | `src/TradingBot.Risk/RiskGate.cs` | Candidate + session evaluation |
 | Blocked live router | `src/TradingBot.Orders/BlockedLiveOrderRouter.cs` | Never calls Toss order APIs |
 | Dry-run / paper | `src/TradingBot.Orders/DryRunOrderRouter.cs`, `PaperOrderRouter.cs` | Practice paths only |
+| Evidence export | `src/TradingBot.Orders/TradingEvidenceExporter.cs` | Multi-session export payload (`live_orders=false`) |
 | Toss order client | `src/TradingBot.Infrastructure.Toss/ITossClients.cs` (`BlockedTossOrderClient`) | `IsLiveSubmissionEnabled => false` |
 | Live HTTP guard | `src/TradingBot.Infrastructure.Toss/Http/LiveHttpGuard.cs` | Blocks outbound unless owner flag |
 | Mock clients | `src/TradingBot.Infrastructure.Toss/Mock/MockTossClients.cs` | Default read path |
@@ -289,20 +388,24 @@ dotnet test TradingBot.sln --nologo
 - A **fail** with `broken` is a safety stop — do not weaken the gate to “fix” tests.
 - Opening live requires owner phase-7 process outside this automation (see checklist E + `docs/OWNER_PLAYBOOK.md`).
 - **Do not confuse** `docs/DEV_LOOP.md` (engineering quality loop) with a live-trading loop.
-- **Pre-live code complete** + **dev-loop green** still means **live blocked**.
+- **Pre-live code complete** + **dev-loop green** still means **live blocked** and usually **`blocked_missing_evidence`**.
+- `ready_for_owner_unlock` (if ever set after ops artifacts) still means **default launch dry-run**, not auto-live.
 
 ---
 
 ## 7. Explicit non-goals
 
 - Do not treat `LIVE_READINESS_STATUS=blocked_as_expected` as live permission.
+- Do not treat `LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock` as auto-live or `LIVE_READY=true`.
 - Do not flip source defaults or `.env.example` to live “for testing”.
-- Do not add `SubmitOrderAsync` under `src` until live implementation is explicitly approved and gated.
+- Do not add unguarded `SubmitOrderAsync` under `src` until live implementation is explicitly approved and gated.
 - Do not commit tokens, account numbers, or raw `.env`.
-- Do not claim multi-day paper stability from unit tests alone.
+- Do not claim multi-calendar-day real ops from unit tests alone.
+- Do not claim multi-calendar-day real ops from **multi-session export** alone — name the substitute correctly.
 - Do not claim real Toss connectivity from mock/stub tests alone.
 - Do not mark multi-day paper, owner Phase 7 signature, or real Toss smoke as done when artifacts/signatures are absent.
 - Do not reclassify remaining ops/owner blockers as “development incomplete” when the practice pipeline code already exists.
+- Do not claim scripts auto-true `LIVE_READY` after owner configures env — repository automation expectation under defaults remains **false**.
 
 ---
 
@@ -327,18 +430,35 @@ bash scripts/grok/dev-loop.sh   # development only; not live trading
 2. TOSS_ALLOW_LIVE_HTTP=true  (read HTTP only)
 3. ALLOW_LIVE_ORDERS stays false; KILL_SWITCH stays true; ORDER_MODE stays dry_run
 4. Run read-only portfolio/quote path; confirm no order endpoints
-5. Save redacted log under artifacts/ (no tokens/account numbers)
+5. Save redacted log under artifacts/live-readiness/toss-read-smoke-redacted.log
 ```
 
-### Multi-day paper ops (still required before live claims)
+### Multi-session export (ops evidence — not multi-day real ops)
 
 ```text
-1. Agree owner paper period (calendar days / sessions)
-2. Run paper path only (ORDER_MODE=paper or project paper mode; never live)
-3. Export redacted ledger / session notes to artifacts/ with dates
-4. No profit guarantees in logs or owner reports
-5. Attach path in checklist C — only then mark multi-day paper evidenced
+1. Run paper/dry-run sessions only (never live)
+2. Use TradingEvidenceExporter (or ops generator) to dump JSON/text
+3. Save as one of:
+   artifacts/live-readiness/paper-multi-session-export.txt
+   artifacts/live-readiness/multi-session-export.json
+   artifacts/live-readiness/multi-session-export.txt
+4. Confirm export contains live_orders=false and LiveSubmissionEnabled=false
+5. Label checklist as "multi-session export" — do NOT claim multi-calendar-day real ops
+6. Optional separate multi-day-ops-*.md only if calendar-day operation actually occurred
+7. owner-unlock-signoff.md may exist as UNSIGNED TEMPLATE — that is not Phase 7 approval
+```
+
+### Owner unlock path (still not auto-live)
+
+```text
+1. LIVE_OWNER_UNLOCK_STATUS may become ready_for_owner_unlock only after agreed artifacts exist
+2. LIVE_READY remains false under defaults; scripts do not auto-true it
+3. Owner sets flags locally only after Phase 7 signature + gate E review
+4. Default product launch remains dry-run even when code path can open under gates
+5. Any single gate failure → block
 ```
 
 **Bottom line:** Pre-live **code** evidence is in place. Ops/owner evidence is **not**.  
-Live trading remains **not ready** (`LIVE_READY=false`) until human checklist A–E ops items are fully evidenced and owner-approved. Phase 7 remains **forbidden**.
+Live trading remains **not ready** (`LIVE_READY=false`).  
+Owner unlock remains **`blocked_missing_evidence`**.  
+Phase 7: code path available **when gates open**; **default launch still dry-run**; **owner unlock required**. Auto-live is **never** claimed.

@@ -35,3 +35,32 @@
 - “일단 다시 켜서 확인”
 - kill switch 끄고 재시도
 - 문제 있는 채로 실주문 테스트
+- `LIVE_OWNER_UNLOCK_STATUS=ready_for_owner_unlock` 를 live 허용으로 해석
+- multi-session export 만으로 multi-calendar-day 실운영 완료 주장
+
+## 리허설 (ops drill — live 허용 아님)
+
+사고 대응 **절차 연습**이다. 리허설을 해도 live는 열리지 않는다.
+
+| 항목 | 내용 |
+|------|------|
+| 목적 | kill switch / allow-live off / dry-run 복귀 손동작 확인 |
+| 기록 위치 | `artifacts/live-readiness/incident-drill-record.md` 또는 `incident-drill-YYYYMMDD.md` |
+| 필수 기록 | 날짜(KST), 참석(오너), 시나리오 1줄, kill switch 확인, live 미개방 확인 |
+| 금지 | 실주문, 토큰 로그, 수익 보장 문구 |
+| 체크리스트 연결 | `docs/LIVE_READINESS_CHECKLIST.md` 섹션 D — **날짜 없으면 drill 미완** |
+
+### 최소 리허설 체크리스트
+
+```text
+[ ] Runner / 앱 중지 연습
+[ ] KILL_SWITCH=true 확인
+[ ] ALLOW_LIVE_ORDERS=false 확인
+[ ] ORDER_MODE=dry_run 확인
+[ ] (가상) 키 유출 시 재발급 절차 말로 확인
+[ ] artifacts/live-readiness/incident-drill-record.md (또는 incident-drill-YYYYMMDD.md) 작성
+[ ] LIVE_READY 가 여전히 false 임을 확인 (스크립트 never auto-true)
+[ ] multi-session export 를 multi-calendar-day real ops 로 허위 표기하지 않음
+```
+
+**현재:** 날짜 찍힌 리허설 기록 **없음** → Phase 6 ops 갭 · `LIVE_OWNER_UNLOCK_STATUS=blocked_missing_evidence` 유지 요인 중 하나.
