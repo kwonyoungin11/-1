@@ -60,3 +60,6 @@ logs/private/
 # Grok / agent local
 .agents/state/private/
 *.bak
+
+# Local agent/session noise
+.omo/
