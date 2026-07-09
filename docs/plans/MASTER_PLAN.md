@@ -33,7 +33,7 @@
 
 - Phase 0–1: 완료 (하네스 + 콕핏 UI 고정 — Avalonia 데스크톱 현재 레이아웃 유지)
 - Phase 2: **코드 완료** — mock 기본 + gated live HTTP 읽기 클라이언트  
-  - 실 토스 redacted 스모크는 **ops/owner** (미첨부; live-ready 주장 시 필요)  
+  - 실 토스 redacted 스모크는 residual (`toss-read-smoke-residual.md` 첨부 · 실 로그 선택)
   - 주문 API / `SubmitOrderAsync` **없음** (또는 이후 웨이브에서 게이트 뒤에만)
 - Phase 3–5: **pre-live 엔지니어링 완료** (신호·리스크·dry-run·paper **단위** 통과; multi-session/multi-day는 ops)
 - **Phase 6 (지금):**  

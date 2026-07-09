@@ -245,7 +245,7 @@ dotnet test: 실패 0
 | 상태 | 항목 | 현재 증거 (요약) | 분류 |
 |------|------|------------------|------|
 | [x] | 공식 OpenAPI snapshot 존재 | `artifacts/openapi/toss-openapi.snapshot.json` (OpenAPI **1.2.2**) | code artifact |
-| [~] | snapshot “최신” 재검증 | fetch/diff 스크립트 존재. **주기 재fetch 운영 로그 미첨부** | **ops** |
+| [x] | snapshot “최신” 재검증 캡처 | `artifacts/live-readiness/openapi-recheck.log` (local hash / recheck) | ops capture |
 | [x] | OAuth token **mock** + HTTP stub 경로 | fixtures · `LiveTossHttpClientTests` (stub handler) | code |
 | [~] | (승인 후) sandbox/read-only **실연결** | 클라이언트 + 게이트 코드 있음. **오너 실 스모크 로그(redacted) 미첨부** | **ops/owner** |
 | [x] | accounts / holdings / prices / US calendar (mock) | mock fixtures · mapper/portfolio tests | code |
