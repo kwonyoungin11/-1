@@ -11,13 +11,16 @@ public sealed class PaperOrderRouter : IOrderRouter
 {
     private readonly IPaperLedger _ledger;
     private readonly Func<OrderCandidate, decimal?>? _referencePriceResolver;
+    private readonly ClientOrderIdIndex _clientOrderIdIndex;
 
     public PaperOrderRouter(
         IPaperLedger ledger,
-        Func<OrderCandidate, decimal?>? referencePriceResolver = null)
+        Func<OrderCandidate, decimal?>? referencePriceResolver = null,
+        ClientOrderIdIndex? clientOrderIdIndex = null)
     {
         _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
         _referencePriceResolver = referencePriceResolver;
+        _clientOrderIdIndex = clientOrderIdIndex ?? new ClientOrderIdIndex();
     }
 
     /// <inheritdoc />
@@ -32,10 +35,21 @@ public sealed class PaperOrderRouter : IOrderRouter
         var fillPrice = ResolveFillPrice(candidate);
         if (fillPrice is null || fillPrice <= 0m)
         {
+            // Price failure does not consume ClientOrderId — retry with same id is allowed after fix.
             return Task.FromResult(new OrderRouteResult(
                 Accepted: false,
                 Mode: OrderMode.Paper.ToString(),
                 Message: "Paper fill rejected: no limit or reference price available. No live order was submitted.",
+                Blocks: Array.Empty<BlockedReason>()));
+        }
+
+        // Case-sensitive (ordinal) idempotency: reject duplicate ClientOrderId before ledger append.
+        if (!_clientOrderIdIndex.TryRegister(candidate.ClientOrderId))
+        {
+            return Task.FromResult(new OrderRouteResult(
+                Accepted: false,
+                Mode: OrderMode.Paper.ToString(),
+                Message: "Duplicate client order id. Paper fill rejected; no second ledger entry. No live order was submitted.",
                 Blocks: Array.Empty<BlockedReason>()));
         }
 

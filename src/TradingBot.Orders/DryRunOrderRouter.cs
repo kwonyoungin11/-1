@@ -6,10 +6,14 @@ namespace TradingBot.Orders;
 public sealed class DryRunOrderRouter : IOrderRouter
 {
     private readonly IDryRunLedger? _ledger;
+    private readonly ClientOrderIdIndex _clientOrderIdIndex;
 
-    public DryRunOrderRouter(IDryRunLedger? ledger = null)
+    public DryRunOrderRouter(
+        IDryRunLedger? ledger = null,
+        ClientOrderIdIndex? clientOrderIdIndex = null)
     {
         _ledger = ledger;
+        _clientOrderIdIndex = clientOrderIdIndex ?? new ClientOrderIdIndex();
     }
 
     /// <inheritdoc />
@@ -20,6 +24,16 @@ public sealed class DryRunOrderRouter : IOrderRouter
     {
         ArgumentNullException.ThrowIfNull(candidate);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Case-sensitive (ordinal) idempotency: reject duplicate ClientOrderId before ledger append.
+        if (!_clientOrderIdIndex.TryRegister(candidate.ClientOrderId))
+        {
+            return Task.FromResult(new OrderRouteResult(
+                Accepted: false,
+                Mode: OrderMode.DryRun.ToString(),
+                Message: "Duplicate client order id. Dry-run rejected; no second ledger entry. No live order was submitted.",
+                Blocks: Array.Empty<BlockedReason>()));
+        }
 
         var result = new OrderRouteResult(
             Accepted: true,
