@@ -207,7 +207,7 @@ public static class BacktestCommand
               --initial-cash <N>     Default: 10000
               --fee <rate>           Per-side fee rate (default 0.001)
               --slippage <rate>      Per-side slippage (default 0.0005)
-              --max-hold-bars <N>    Default: 60
+              --max-hold-bars <N>    Default: 0 (unlimited; strategies self-cap)
               --help                 Show this help
 
             Safety:
@@ -230,7 +230,8 @@ internal sealed class BacktestCliOptions
     public decimal InitialCash { get; init; } = 10_000m;
     public decimal FeeRate { get; init; } = 0.001m;
     public decimal SlippageRate { get; init; } = 0.0005m;
-    public int MaxHoldBars { get; init; } = 60;
+    /// <summary>0 = unlimited engine force-exit; strategies apply their own hold caps.</summary>
+    public int MaxHoldBars { get; init; } = 0;
     public bool ShowHelp { get; init; }
 
     public static BacktestCliOptions Parse(string[] args)
@@ -246,7 +247,7 @@ internal sealed class BacktestCliOptions
         var cash = 10_000m;
         var fee = 0.001m;
         var slip = 0.0005m;
-        var maxHold = 60;
+        var maxHold = 0; // 0 = engine does not force-exit; strategies apply own caps
         var help = false;
 
         for (var i = 0; i < args.Length; i++)
@@ -330,9 +331,10 @@ internal sealed class BacktestCliOptions
             }
 
             if (a == "--max-hold-bars" && i + 1 < args.Length
-                && int.TryParse(args[++i], out var mh) && mh > 0)
+                && int.TryParse(args[++i], out var mh) && mh >= 0)
             {
                 maxHold = mh;
+                continue;
             }
         }
 

@@ -46,9 +46,48 @@ public static class BacktestReportWriter
         }
 
         File.WriteAllText(mdPath, RenderMarkdown(document), Encoding.UTF8);
-        File.WriteAllText(jsonPath, JsonSerializer.Serialize(document, JsonOptions), Encoding.UTF8);
+        // Slim JSON: drop equity curves, cap trades — full curve is huge for 1m 6m runs.
+        File.WriteAllText(jsonPath, JsonSerializer.Serialize(ToSlim(document), JsonOptions), Encoding.UTF8);
         return new BacktestReportPaths(mdPath, jsonPath);
     }
+
+    private const int JsonTradeCap = 50;
+
+    private static object ToSlim(BacktestReportDocument doc) => new
+    {
+        doc.Title,
+        doc.Symbol,
+        doc.Interval,
+        doc.DataSource,
+        doc.BarCount,
+        doc.FirstBarTime,
+        doc.LastBarTime,
+        doc.FirstClose,
+        doc.LastClose,
+        Config = doc.Config,
+        Results = doc.Results
+            .OrderByDescending(r => r.TotalReturnPct)
+            .Select(r => new
+            {
+                r.StrategyName,
+                r.InitialCash,
+                r.FinalEquity,
+                r.TotalReturnPct,
+                r.MaxDrawdownPct,
+                r.Sharpe,
+                r.TradeCount,
+                r.WinRatePct,
+                r.ProfitFactor,
+                r.AvgHoldBars,
+                r.Notes,
+                Trades = r.Trades.Take(JsonTradeCap).ToList(),
+                EquityCurvePointCount = r.EquityCurve.Count,
+            })
+            .ToList(),
+        doc.GeneratedAtUtc,
+        doc.Notes,
+        Disclaimer = "simulation · not investment advice · past ≠ future · fills optimistic vs thin books",
+    };
 
     public static string RenderMarkdown(BacktestReportDocument doc)
     {
@@ -124,8 +163,20 @@ public static class BacktestReportWriter
         sb.AppendLine("1. **과거 시뮬레이션 ≠ 미래 수익.** 실주문 게이트와 무관합니다.");
         sb.AppendLine("2. 1분봉 + 편도 수수료·슬리피지는 스캘프 엣지를 쉽게 잠식합니다.");
         sb.AppendLine("3. 플러스 결과가 나와도 과최적화·호가 두께·생존 편향을 의심해야 합니다.");
-        sb.AppendLine("4. 라이브 주문 기본값은 차단(`ALLOW_LIVE_ORDERS=false`)입니다.");
+        sb.AppendLine("4. 체결은 **다음 봉 시가 ± 슬리피지** 가정 — 저유동 VMAR 실호가보다 낙관적일 수 있습니다.");
+        sb.AppendLine("5. 전액 재투자(복리) 가정 — 소액·분할 시 결과는 달라집니다.");
+        sb.AppendLine("6. 라이브 주문 기본값은 차단입니다. 백테스트가 실주문을 열지 않습니다.");
         sb.AppendLine();
+
+        var buyHold = ranked.FirstOrDefault(r =>
+            r.StrategyName.Equals("BuyHold", StringComparison.OrdinalIgnoreCase));
+        if (buyHold is not null && ranked[0].TotalReturnPct > 0 && buyHold.TotalReturnPct < -50m)
+        {
+            sb.AppendLine(
+                $"> 참고: 같은 기간 BuyHold는 **{buyHold.TotalReturnPct:F1}%**. " +
+                "커스텀 지표 플러스는 ‘하락장 롱 스캘프 타이밍’ 시뮬레이션 결과이며 보장 아님.");
+            sb.AppendLine();
+        }
 
         if (ranked.Count > 0 && ranked[0].Trades.Count > 0)
         {

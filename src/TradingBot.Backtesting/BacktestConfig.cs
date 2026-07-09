@@ -10,7 +10,8 @@ public sealed record BacktestConfig(
     decimal SlippageRatePerSide = 0.0005m,
     int CooldownBarsAfterExit = 3,
     bool RegularSessionOnly = true,
-    int MaxHoldBars = 60,
+    /// <summary>0 disables engine-level max hold; strategies may still self-exit.</summary>
+    int MaxHoldBars = 0,
     /// <summary>
     /// Bars per year for Sharpe annualization.
     /// Null → estimate from median bar spacing (1m US ≈ 98_280, daily ≈ 252).
