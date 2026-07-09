@@ -1,6 +1,6 @@
 # Phase 2 — 토스 읽기 전용 연결
 
-**상태:** 착수 준비 (Phase 1 승인 후)  
+**상태:** mock-first 구현 진행 (2026-07-09)  
 **돈 위험:** 매우 낮음 — **주문 create/modify/cancel 호출 금지**  
 **실거래 연결:** 실거래의 재료(계좌·시세·장시간)를 정확히 읽는 단계
 
@@ -55,3 +55,14 @@
 ## 7. 롤백
 
 read client 비활성 플래그로 즉시 끄기. 주문과 무관.
+
+
+## 구현 체크 (진행 중)
+
+- [x] TossOptions + TOSS_ALLOW_LIVE_HTTP=false 기본
+- [x] DTO mapper + fixture contract tests
+- [x] Mock auth/account/market clients
+- [x] LiveHttpGuard blocks outbound when flag false
+- [x] ReadOnlyPortfolioService + Cockpit projector
+- [x] Order client still disabled
+- [ ] Owner-approved live read-only HTTP smoke (optional, later)

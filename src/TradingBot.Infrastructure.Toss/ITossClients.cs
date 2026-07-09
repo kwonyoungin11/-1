@@ -1,20 +1,30 @@
+using TradingBot.Domain;
+
 namespace TradingBot.Infrastructure.Toss;
 
-/// <summary>Toss adapter contracts. Order client is a gated stub in harness phase.</summary>
 public interface ITossAuthClient
 {
-    // Token acquisition will be implemented after SDK install + owner credentials.
-}
-
-public interface ITossMarketDataClient
-{
+    Task<TossAccessToken> GetAccessTokenAsync(CancellationToken cancellationToken);
 }
 
 public interface ITossAccountClient
 {
+    Task<IReadOnlyList<AccountSummary>> GetAccountsAsync(CancellationToken cancellationToken);
+
+    Task<HoldingsReadModel> GetHoldingsAsync(CancellationToken cancellationToken);
 }
 
-/// <summary>Order client interface exists for architecture; live implementation is blocked.</summary>
+public interface ITossMarketDataClient
+{
+    Task<IReadOnlyList<QuoteSnapshot>> GetPricesAsync(
+        IReadOnlyList<string> symbols,
+        CancellationToken cancellationToken);
+
+    Task<UsMarketSessionSnapshot> GetUsMarketCalendarAsync(
+        DateOnly? date,
+        CancellationToken cancellationToken);
+}
+
 public interface ITossOrderClient
 {
     bool IsLiveSubmissionEnabled { get; }
@@ -25,17 +35,18 @@ public interface ITossClock
     DateTimeOffset UtcNow { get; }
 }
 
-public interface ITossRateLimitPolicy
-{
-}
-
 public interface ITossRedactor
 {
     string MaskToken(string? token);
     string MaskAccount(string? account);
 }
 
-/// <summary>Harness stub: live submission always disabled.</summary>
+public sealed record TossAccessToken(string AccessToken, string TokenType, long ExpiresInSeconds);
+
+public sealed record HoldingsReadModel(
+    string? MarketValueUsd,
+    IReadOnlyList<HoldingSummary> Items);
+
 public sealed class BlockedTossOrderClient : ITossOrderClient
 {
     public bool IsLiveSubmissionEnabled => false;
@@ -48,7 +59,7 @@ public sealed class SystemTossClock : ITossClock
 
 public sealed class DomainTossRedactor : ITossRedactor
 {
-    public string MaskToken(string? token) => TradingBot.Domain.SecretRedactor.MaskToken(token);
+    public string MaskToken(string? token) => SecretRedactor.MaskToken(token);
 
-    public string MaskAccount(string? account) => TradingBot.Domain.SecretRedactor.MaskAccount(account);
+    public string MaskAccount(string? account) => SecretRedactor.MaskAccount(account);
 }

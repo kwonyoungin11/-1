@@ -1,0 +1,17 @@
+{
+  "result": {
+    "marketValue": {
+      "amount": { "krw": "0", "usd": "2500.00" },
+      "amountAfterCost": { "krw": "0", "usd": "2490.00" }
+    },
+    "items": [
+      {
+        "symbol": "AAPL",
+        "name": "Apple Inc.",
+        "currency": "USD",
+        "quantity": "5",
+        "lastPrice": "200.00"
+      }
+    ]
+  }
+}

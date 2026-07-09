@@ -1,0 +1,64 @@
+using System.Text.Json;
+using TradingBot.Infrastructure.Toss;
+using TradingBot.Infrastructure.Toss.Dto;
+
+namespace TradingBot.Infrastructure.Toss.Tests;
+
+public class TossDtoMapperTests
+{
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    private static T Load<T>(string name)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", name);
+        var json = File.ReadAllText(path);
+        return JsonSerializer.Deserialize<T>(json, JsonOptions)
+               ?? throw new InvalidOperationException($"Failed to deserialize {name}");
+    }
+
+    [Fact]
+    public void Maps_token_response_without_exposing_in_type_name()
+    {
+        var dto = Load<OAuth2TokenResponseDto>("oauth_token.json");
+        var token = TossDtoMapper.MapToken(dto);
+        Assert.Equal("Bearer", token.TokenType);
+        Assert.False(string.IsNullOrEmpty(token.AccessToken));
+        var masked = new DomainTossRedactor().MaskToken(token.AccessToken);
+        Assert.DoesNotContain(token.AccessToken, masked, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Maps_accounts_with_masking()
+    {
+        var dto = Load<AccountsResponseDto>("accounts.json");
+        var accounts = TossDtoMapper.MapAccounts(dto, new DomainTossRedactor());
+        Assert.Single(accounts);
+        Assert.Equal("1", accounts[0].AccountSeq);
+        Assert.DoesNotContain("1234567890", accounts[0].AccountNoMasked, StringComparison.Ordinal);
+        Assert.Contains("7890", accounts[0].AccountNoMasked, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Maps_holdings_and_prices()
+    {
+        var holdings = TossDtoMapper.MapHoldings(Load<HoldingsResponseDto>("holdings.json"));
+        Assert.Equal("2500.00", holdings.MarketValueUsd);
+        Assert.Equal("AAPL", holdings.Items[0].Symbol);
+        Assert.Equal(5m, holdings.Items[0].Quantity);
+
+        var prices = TossDtoMapper.MapPrices(Load<PricesResponseDto>("prices.json"));
+        Assert.Equal("AAPL", prices[0].Symbol);
+        Assert.Equal(200m, prices[0].LastPrice);
+    }
+
+    [Fact]
+    public void Maps_us_calendar()
+    {
+        var cal = TossDtoMapper.MapUsCalendar(Load<UsMarketCalendarResponseDto>("us_calendar.json"));
+        Assert.Equal("2026-07-09", cal.Date);
+        Assert.False(cal.IsHolidayOrClosed);
+    }
+}

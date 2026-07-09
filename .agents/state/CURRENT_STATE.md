@@ -2,18 +2,14 @@
 
 ```text
 현재 날짜: 2026-07-09
-프로젝트: C# / .NET 토스증권 Open API 나스닥 자동매매
-최종 목적: 실거래
-UI: 사용자 중심 cockpit
-
-Phase 0: 완료
-Phase 1: 오너 승인 완료 (2026-07-09) — docs/cockpit/PHASE_01_APPROVAL.md
-Phase 2: 착수 준비 — docs/plans/PHASE_02_toss_readonly.md
+Phase 1: 승인 완료
+Phase 2: mock-first read-only 구현
+  - Mock clients + DTO contract tests
+  - TOSS_ALLOW_LIVE_HTTP=false 기본 (실 HTTP 차단)
+  - Cockpit projector 연동
+  - 주문 API 없음
 
 활성 worktree: .worktrees/active-dev
-브랜치: feature/worktree-all-dev
 live order: blocked
-ALLOW_LIVE_ORDERS=false / KILL_SWITCH=true / ORDER_MODE=dry_run
-
-다음 작업: Phase 2 read-only Toss client (mock-first, no order APIs)
+다음: dev-loop 통과 후 커밋 / 선택적 실 HTTP는 오너 승인 시
 ```

@@ -38,9 +38,11 @@ run_gate() {
 
 # Non-retryable safety gates (run every attempt; block must not be "worked around")
 run_safety_gates() {
-  run_gate "check-secrets" bash ./scripts/grok/check-secrets.sh
-  run_gate "check-trading-safety" bash ./scripts/grok/check-trading-safety.sh
-  run_gate "check-owner-readiness" bash ./scripts/grok/check-owner-readiness.sh
+  local failed=0
+  run_gate "check-secrets" bash ./scripts/grok/check-secrets.sh || failed=1
+  run_gate "check-trading-safety" bash ./scripts/grok/check-trading-safety.sh || failed=1
+  run_gate "check-owner-readiness" bash ./scripts/grok/check-owner-readiness.sh || failed=1
+  return "$failed"
 }
 
 run_dotnet_gates() {

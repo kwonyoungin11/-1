@@ -1,0 +1,48 @@
+using TradingBot.Domain;
+using TradingBot.Infrastructure.Toss;
+using TradingBot.Infrastructure.Toss.Http;
+
+namespace TradingBot.Infrastructure.Toss.Tests;
+
+public class ReadOnlyPortfolioServiceTests
+{
+    [Fact]
+    public async Task Mock_service_returns_connected_snapshot_without_live_orders()
+    {
+        var svc = ReadOnlyPortfolioService.CreateMock();
+        var snap = await svc.GetSnapshotAsync(new[] { "AAPL", "MSFT" }, CancellationToken.None);
+
+        Assert.Equal(ConnectionStatus.MockConnected, snap.ConnectionStatus);
+        Assert.NotEmpty(snap.Accounts);
+        Assert.NotEmpty(snap.Holdings);
+        Assert.Equal(2, snap.Quotes.Count);
+        Assert.Contains(snap.BlockMessages, m => m.Contains("주문 API 미사용", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Live_http_guard_blocks_when_flag_false()
+    {
+        var options = new TossOptions { AllowLiveHttp = false };
+        Assert.Throws<InvalidOperationException>(() => LiveHttpGuard.EnsureAllowed(options));
+    }
+
+    [Fact]
+    public void Order_client_never_enables_live_submission()
+    {
+        ITossOrderClient client = new BlockedTossOrderClient();
+        Assert.False(client.IsLiveSubmissionEnabled);
+    }
+
+    [Fact]
+    public void TossOptions_defaults_disallow_live_http()
+    {
+        var env = new Dictionary<string, string?>
+        {
+            ["TOSS_CLIENT_ID"] = "id",
+            ["TOSS_CLIENT_SECRET"] = "secret",
+        };
+        var opt = TossOptions.FromEnvironment(env);
+        Assert.False(opt.AllowLiveHttp);
+        Assert.True(opt.HasClientCredentials);
+    }
+}

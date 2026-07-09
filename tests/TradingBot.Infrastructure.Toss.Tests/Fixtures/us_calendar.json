@@ -1,0 +1,12 @@
+{
+  "result": {
+    "today": {
+      "date": "2026-07-09",
+      "regularMarket": { "startTime": "09:30", "endTime": "16:00" },
+      "previousBusinessDay": null,
+      "nextBusinessDay": null
+    },
+    "previousBusinessDay": { "date": "2026-07-08" },
+    "nextBusinessDay": { "date": "2026-07-10" }
+  }
+}
