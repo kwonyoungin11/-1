@@ -1,0 +1,49 @@
+# paper multi-session export (ops evidence)
+# source=synthetic InMemoryPaperLedger+InMemoryDryRunLedger style snapshots
+# live remains blocked — this file is NOT a live order journal
+# generated_by=scripts/grok/generate-live-readiness-artifacts.sh
+exported_at_utc=2026-07-09T17:00:00.0000000+00:00
+live_orders=false
+LiveSubmissionEnabled=false
+ALLOW_LIVE_ORDERS=false
+KILL_SWITCH=true
+ORDER_MODE=dry_run
+session_count=2
+
+## session-1
+session_id=session-1
+session_label=paper-drill-day-1
+session_started_utc=2026-07-09T14:00:00.0000000+00:00
+session_ended_utc=2026-07-09T15:00:00.0000000+00:00
+live_orders=false
+dry_run_entry_count=2
+paper_fill_count=2
+### dry_run_entries
+symbol=AAPL client_order_id=s1-dry-1 mode=DryRun accepted=true side=BUY quantity=2 limit_price=190
+symbol=MSFT client_order_id=s1-dry-2 mode=DryRun accepted=true side=BUY quantity=1 limit_price=420
+### paper_fills
+symbol=AAPL client_order_id=s1-paper-1 mode=Paper side=BUY quantity=2 price=190.5
+symbol=NVDA client_order_id=s1-paper-2 mode=Paper side=BUY quantity=1 price=120
+
+## session-2
+session_id=session-2
+session_label=paper-drill-day-2
+session_started_utc=2026-07-10T15:00:00.0000000+00:00
+session_ended_utc=2026-07-10T16:00:00.0000000+00:00
+live_orders=false
+dry_run_entry_count=1
+paper_fill_count=3
+### dry_run_entries
+symbol=TSLA client_order_id=s2-dry-1 mode=DryRun accepted=true side=BUY quantity=3 limit_price=250
+### paper_fills
+symbol=TSLA client_order_id=s2-paper-1 mode=Paper side=BUY quantity=3 price=251
+symbol=AMD client_order_id=s2-paper-2 mode=Paper side=BUY quantity=5 price=160
+symbol=MSFT client_order_id=s2-paper-3 mode=Paper side=BUY quantity=1 price=421
+
+## totals
+total_dry_run_entry_count=3
+total_paper_fill_count=5
+live_orders=false
+evidence_kind=paper_multi_session
+secrets_included=false
+notes=Sample multi-session paper evidence for readiness capture. Not profit evidence. Not live.

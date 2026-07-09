@@ -1,0 +1,18 @@
+# OpenAPI snapshot recheck log
+generated_at_utc=2026-07-09T04:50:29Z
+date_utc=2026-07-09
+live_orders=false
+script=scripts/grok/check-toss-openapi-diff.sh
+snapshot_path=artifacts/openapi/toss-openapi.snapshot.json
+snapshot_sha256=3c1d00b61950688b8712382889b24f3e7ceb6b12f8367019794ccb375099c47c
+snapshot_present=true
+snapshot_openapi_info_version=1.2.2
+
+## recheck
+recheck_mode=local_hash
+recheck_status=ok
+recheck ok (local snapshot hash recorded; network recheck not requested)
+hint: OPENAPI_RECHECK_MODE=network bash scripts/grok/generate-live-readiness-artifacts.sh
+
+secrets_included=false
+live_orders=false
