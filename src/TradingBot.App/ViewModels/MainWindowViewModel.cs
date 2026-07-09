@@ -62,33 +62,16 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         else
         {
-            // Preserve harness CERS if already selected (do not force-reset to scalp).
-            var keepCers = _harness.Session.Strategy == TradingStrategyKind.CERS비용회귀;
-            var preservedTf = keepCers ? _harness.Timeframe : VmarOneMinuteScalpPreset.Timeframe;
-
+            // Owner primary practice: VMAR + CERS (exact backtest params · live still gated).
             _harness.SetStockKind(StockMarketKind.비전마린);
+            _harness.SetCersPreset();
             SelectedStockKind = StockMarketKind.비전마린.ToString();
             SelectedSymbol = WatchlistCatalog.VmarSymbol;
             _harness.SetFocusSymbol(WatchlistCatalog.VmarSymbol);
-
-            if (keepCers)
-            {
-                _harness.SetStrategy(TradingStrategyKind.CERS비용회귀);
-                _harness.SetTimeframe(preservedTf);
-                SelectedStrategy = CersPreset.Strategy.ToString();
-                SelectedTimeframe = ChartTimeframeCatalog.UiLabel(preservedTf);
-                OfficialStrategyLabel = CersPreset.OwnerSummary;
-                RecommendedStrategyNote = CersPreset.OwnerSummary;
-            }
-            else
-            {
-                SelectedTimeframe = ChartTimeframeCatalog.UiLabel(VmarOneMinuteScalpPreset.Timeframe);
-                _harness.SetTimeframe(VmarOneMinuteScalpPreset.Timeframe);
-                SelectedStrategy = VmarOneMinuteScalpPreset.Strategy.ToString();
-                _harness.SetStrategy(VmarOneMinuteScalpPreset.Strategy);
-                OfficialStrategyLabel = VmarOneMinuteScalpPreset.OwnerSummary;
-                RecommendedStrategyNote = VmarOneMinuteScalpPreset.OwnerSummary;
-            }
+            SelectedStrategy = CersPreset.Strategy.ToString();
+            SelectedTimeframe = ChartTimeframeCatalog.UiLabel(CersPreset.Timeframe);
+            OfficialStrategyLabel = CersPreset.OwnerSummary;
+            RecommendedStrategyNote = CersPreset.OwnerSummary;
         }
 
         _suppressSelectionEcho = false;
