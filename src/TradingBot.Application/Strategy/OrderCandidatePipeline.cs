@@ -23,15 +23,30 @@ public sealed class OrderCandidatePipeline
         bool marketSessionKnown = true,
         IReadOnlyDictionary<string, decimal>? positions = null,
         UsMarketSessionSnapshot? usMarket = null,
-        TradingStrategyKind strategy = TradingStrategyKind.단순연습전략)
+        TradingStrategyKind strategy = TradingStrategyKind.단순연습전략,
+        PracticeStrategyContext? practice = null)
     {
         ArgumentNullException.ThrowIfNull(quotes);
         ArgumentNullException.ThrowIfNull(settings);
         positions ??= new Dictionary<string, decimal>();
 
+        // Practice daily-loss halt (percent of day-start equity). Fail-closed → no candidates.
+        if (practice is not null
+            && practice.MaxDailyLossPercent > 0m
+            && practice.DayStartEquity is decimal dayStart
+            && practice.CurrentEquity is decimal currentEquity)
+        {
+            var daily = DailyLossGuard.Evaluate(dayStart, currentEquity, practice.MaxDailyLossPercent);
+            if (daily.IsBlocked)
+            {
+                return Array.Empty<EvaluatedOrderCandidate>();
+            }
+        }
+
         string? sessionOwnerMessage = null;
         if (usMarket is not null)
         {
+            // Wall-clock session gate (holiday / closed / entry window).
             var session = UsMarketSessionGuard.Evaluate(usMarket, nowUtc);
             marketSessionOpen = session.IsOpenForOrders;
             marketSessionKnown = session.IsKnown;
@@ -40,16 +55,51 @@ public sealed class OrderCandidatePipeline
 
         var results = new List<EvaluatedOrderCandidate>();
 
+        // When practice sizing will override quantity, generators still need a positive base qty
+        // to emit an actionable direction (sizer replaces SuggestedQuantity afterward).
+        var signalBaseQuantity = defaultOrderQuantity > 0m
+            ? defaultOrderQuantity
+            : practice is not null ? 1m : 0m;
+
         foreach (var quote in quotes)
         {
-            var signal = _router.Generate(strategy, quote, defaultOrderQuantity, nowUtc);
+            var signal = _router.Generate(
+                strategy,
+                quote,
+                signalBaseQuantity,
+                nowUtc,
+                practice?.TrendFollow);
+
             if (!signal.IsActionable || signal.Side is not (SignalSide.Buy or SignalSide.Sell))
             {
                 continue;
             }
 
             var qty = signal.SuggestedQuantity ?? 0m;
-            var price = signal.ReferencePrice;
+            var price = signal.ReferencePrice ?? quote.LastPrice;
+
+            // Practice path: position size from equity risk + stop distance (not signal qty).
+            if (practice is not null)
+            {
+                if (price is not decimal sizedPrice || sizedPrice <= 0m)
+                {
+                    continue;
+                }
+
+                var sized = PositionRiskSizer.Calculate(
+                    practice.Equity,
+                    practice.RiskPercentPerTrade,
+                    practice.StopLossPercent,
+                    sizedPrice);
+
+                qty = sized.Quantity;
+                if (qty <= 0m)
+                {
+                    // Prefer sizer only when practice is provided; qty 0 → skip candidate.
+                    continue;
+                }
+            }
+
             var side = signal.Side == SignalSide.Buy ? "BUY" : "SELL";
             var clientOrderId = ClientOrderIdFactory.CreateUnique(signal.Symbol, side, nowUtc);
             var candidate = new OrderCandidate(
@@ -75,6 +125,8 @@ public sealed class OrderCandidatePipeline
                 MarketSessionOpen = marketSessionOpen,
                 MarketSessionKnown = marketSessionKnown,
                 MarketSessionOwnerMessage = sessionOwnerMessage,
+                DayStartEquity = practice?.DayStartEquity,
+                CurrentEquity = practice?.CurrentEquity,
             };
 
             var risk = _riskGate.EvaluateOrderCandidate(settings, ctx);

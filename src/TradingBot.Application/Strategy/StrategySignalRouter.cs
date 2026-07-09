@@ -6,18 +6,23 @@ namespace TradingBot.Application;
 public sealed class StrategySignalRouter
 {
     private readonly IReadOnlyDictionary<TradingStrategyKind, IStrategySignalGenerator> _map;
+    private readonly TrendFollowParameters? _trendFollowParameters;
 
-    public StrategySignalRouter(IEnumerable<IStrategySignalGenerator>? generators = null)
+    public StrategySignalRouter(
+        IEnumerable<IStrategySignalGenerator>? generators = null,
+        TrendFollowParameters? trendFollowParameters = null)
     {
-        var list = (generators ?? DefaultGenerators()).ToList();
+        _trendFollowParameters = trendFollowParameters;
+        var list = (generators ?? DefaultGenerators(trendFollowParameters)).ToList();
         _map = list.ToDictionary(g => g.Kind);
     }
 
-    public static IReadOnlyList<IStrategySignalGenerator> DefaultGenerators() =>
+    public static IReadOnlyList<IStrategySignalGenerator> DefaultGenerators(
+        TrendFollowParameters? trendFollowParameters = null) =>
     [
         new HoldOnlySignalGenerator(),
         new SimplePracticeSignalGenerator(),
-        new TrendFollowSignalGenerator(),
+        new TrendFollowSignalGenerator(trendFollowParameters),
         new MeanReversionSignalGenerator(),
         new MomentumBreakoutSignalGenerator(),
     ];
@@ -26,8 +31,17 @@ public sealed class StrategySignalRouter
         TradingStrategyKind kind,
         QuoteSnapshot quote,
         decimal baseOrderQuantity,
-        DateTimeOffset nowUtc)
+        DateTimeOffset nowUtc,
+        TrendFollowParameters? trendFollowParameters = null)
     {
+        // Practice / call-site override: use TrendFollowSignalGenerator with explicit params.
+        var effectiveTrend = trendFollowParameters ?? _trendFollowParameters;
+        if (kind == TradingStrategyKind.추세추종 && effectiveTrend is not null)
+        {
+            return new TrendFollowSignalGenerator(effectiveTrend)
+                .Generate(quote, baseOrderQuantity, nowUtc);
+        }
+
         if (!_map.TryGetValue(kind, out var gen))
         {
             gen = new HoldOnlySignalGenerator();
