@@ -33,4 +33,16 @@ public class AuditMessageRedactorTests
         Assert.DoesNotContain("secret-token-value", AuditMessageRedactor.MaskToken("secret-token-value"), StringComparison.Ordinal);
         Assert.Contains("****", AuditMessageRedactor.MaskAccount("1234567890"), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Redact_still_strips_token_when_embedded_in_session_style_message()
+    {
+        const string secret = "session-oauth-token-abcdef";
+        var input = $"자동매매(연습) 시작 Authorization: Bearer {secret}";
+
+        var redacted = AuditMessageRedactor.Redact(input);
+        Assert.DoesNotContain(secret, redacted, StringComparison.Ordinal);
+        Assert.Contains("Bearer [REDACTED]", redacted, StringComparison.Ordinal);
+        Assert.Contains("연습", redacted, StringComparison.Ordinal);
+    }
 }
