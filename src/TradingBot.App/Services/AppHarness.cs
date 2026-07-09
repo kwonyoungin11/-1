@@ -346,15 +346,15 @@ public sealed class AppHarness
     {
         ArgumentNullException.ThrowIfNull(portfolio);
 
-        // Optional post-merge properties (buying-power wave): CashBuyingPowerUsd / CashBuyingPower
-        if (TryReadOptionalDecimalProperty(portfolio, "CashBuyingPowerUsd") is decimal usdCash)
-        {
-            return usdCash;
-        }
-
-        if (TryReadOptionalDecimalProperty(portfolio, "CashBuyingPower") is decimal cash)
+        // Prefer USD cash buying power from Toss GET /api/v1/buying-power.
+        if (portfolio.CashBuyingPower is decimal cash && cash > 0m)
         {
             return cash;
+        }
+
+        if (portfolio.MarketValueUsdDecimal is decimal mvd && mvd > 0m)
+        {
+            return mvd;
         }
 
         if (!string.IsNullOrWhiteSpace(portfolio.MarketValueUsdSummary)
@@ -363,7 +363,7 @@ public sealed class AppHarness
                 System.Globalization.NumberStyles.Number,
                 System.Globalization.CultureInfo.InvariantCulture,
                 out var mv)
-            && mv >= 0m)
+            && mv > 0m)
         {
             return mv;
         }
@@ -410,7 +410,7 @@ public sealed class AppHarness
     }
 
     /// <summary>
-    /// Optional candles on portfolio service (candles wave merge). Reflection-safe; no-op if missing.
+    /// Cache real Toss candles for chart when live read-only is connected.
     /// </summary>
     private async Task TryCacheRealCandlesAsync(string symbol, CancellationToken cancellationToken)
     {
@@ -421,74 +421,13 @@ public sealed class AppHarness
 
         try
         {
-            var method = _portfolio.GetType().GetMethod(
-                "GetCandlesAsync",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
-            if (method is null)
+            var candles = await _portfolio
+                .GetCandlesAsync(symbol, "1m", 160, cancellationToken)
+                .ConfigureAwait(false);
+            if (candles.Count > 0)
             {
-                return;
-            }
-
-            var parameters = method.GetParameters();
-            object? resultTask;
-            if (parameters.Length >= 2)
-            {
-                // Prefer (symbol, count, ct) or (symbol, ct)
-                var args = new object?[parameters.Length];
-                args[0] = symbol;
-                for (var i = 1; i < parameters.Length; i++)
-                {
-                    var p = parameters[i];
-                    if (p.ParameterType == typeof(CancellationToken))
-                    {
-                        args[i] = cancellationToken;
-                    }
-                    else if (p.ParameterType == typeof(int) || p.ParameterType == typeof(int?))
-                    {
-                        args[i] = 160;
-                    }
-                    else if (p.ParameterType == typeof(string))
-                    {
-                        args[i] = "1m";
-                    }
-                    else if (p.HasDefaultValue)
-                    {
-                        args[i] = p.DefaultValue;
-                    }
-                    else
-                    {
-                        args[i] = null;
-                    }
-                }
-
-                resultTask = method.Invoke(_portfolio, args);
-            }
-            else
-            {
-                return;
-            }
-
-            if (resultTask is not Task task)
-            {
-                return;
-            }
-
-            await task.ConfigureAwait(false);
-            var resultProp = task.GetType().GetProperty("Result");
-            var result = resultProp?.GetValue(task);
-            if (result is IReadOnlyList<CandlePoint> list && list.Count > 0)
-            {
-                _cachedRealCandles = list;
+                _cachedRealCandles = candles;
                 _cachedCandlesSymbol = symbol.ToUpperInvariant();
-            }
-            else if (result is IEnumerable<CandlePoint> seq)
-            {
-                var arr = seq.ToList();
-                if (arr.Count > 0)
-                {
-                    _cachedRealCandles = arr;
-                    _cachedCandlesSymbol = symbol.ToUpperInvariant();
-                }
             }
         }
         catch

@@ -116,4 +116,11 @@ public sealed class ReadOnlyPortfolioService : IReadOnlyPortfolioService
             };
         }
     }
+
+    public Task<IReadOnlyList<CandlePoint>> GetCandlesAsync(
+        string symbol,
+        string interval,
+        int count,
+        CancellationToken cancellationToken) =>
+        _market.GetCandlesAsync(symbol, interval, count, cancellationToken);
 }
