@@ -154,3 +154,9 @@ See `docs/LIVE_READINESS_CHECKLIST.md`. Until every item is evidenced: **live re
 - 실패 시 수정 후 재검증. 최대 시도 한도 준수. safety BLOCK은 우회 금지.
 - **실주문 루프와 혼동 금지.** 상세: `docs/DEV_LOOP.md`
 
+## 병렬 에이전트 필수 (오너 확정 2026-07-09)
+
+- **모든 개발은 병렬 에이전트로 분할 실행**하는 것을 기본으로 한다.
+- 상세: `docs/PARALLEL_AGENTS.md`
+- 오케스트레이터가 구역·안전·dev-loop·병합을 책임진다.
+

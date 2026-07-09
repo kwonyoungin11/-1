@@ -2,11 +2,15 @@
 
 ```text
 현재 날짜: 2026-07-09
-Phase 1: 승인 완료
-Phase 2: mock read-only 완료
-Phase 3: 신호 + risk + 주문 후보 파이프라인 (실주문 없음)
+개발 방식: worktree + dev-loop + 병렬 에이전트 (오너 확정)
+정책: docs/PARALLEL_AGENTS.md
 
-활성 worktree: .worktrees/active-dev
+Phase 0-3: 완료
+병렬 스트림 (진행):
+  A: Phase 4 dry-run ledger / audit
+  B: Observability audit module
+  C: Cockpit UI binding models
+
 live order: blocked
-다음: dry-run Phase 4 또는 paper, 또는 cockpit UI
+활성 worktree: .worktrees/active-dev
 ```
