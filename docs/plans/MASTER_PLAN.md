@@ -25,27 +25,28 @@
 
 ## 현재 위치
 
-- Phase 0–3: 완료
-- Phase 4 dry-run ledger: 완료
-- Phase 5 paper: 골격+증거 완료
-- Blazor MVP 8 screens: 데이터 바인딩 완료
+- Phase 0–1: 완료 (하네스 + 콕핏 UI 고정 — Avalonia 데스크톱 현재 레이아웃 유지)
+- Phase 2: **완료 (코드)** — mock 기본 + live HTTP 읽기 클라이언트  
+  - 실 토스 스모크는 오너가 `TOSS_ALLOW_LIVE_HTTP=true` 일 때만
+- Phase 3–5: 완료 (신호·리스크·dry-run·paper 골격)
 - Live readiness automation: `check-live-readiness.sh` (LIVE_READY=false expected)
+- **UI/UX:** 현재 차트+하단 조작 고정 · 플랜 진행은 백엔드/안전/토스 연결
 - **실거래: 계속 차단** (오너 Phase 7 승인 전 개방 없음)
-
 
 ## 작업 규칙
 
 1. worktree에서만 구현
 2. 단계 통과 증거 없이 다음 phase로 강제 이동 금지
 3. 실거래(Phase 7) 전 Phase 6 필수
-4. UI는 사용자 중심 cockpit 우선 (승인된 MVP 8화면)
+4. **UI/UX는 현재 데스크톱 콕핏 유지** (레이아웃 대변경 금지, 상태 표시만 추가)
 5. 병합 전 `bash scripts/grok/dev-loop.sh`
 
 ## 다음 실행
 
-1. Phase 2 상세 플랜 확정 및 read-only 클라이언트 설계
-2. cockpit에 연결 상태·계좌 마스킹 슬롯 데이터 붙이기 (주문 없음)
-3. UI 프레임워크는 구현 직전 오너 재확인 (브라우저 추천)
+1. (선택) 오너 승인 후 `TOSS_ALLOW_LIVE_HTTP=true` 로 **읽기 전용** 실 API 1회 스모크
+2. Phase 3–5 전략/증거 보강 (UI 유지)
+3. Phase 6 live readiness 체크리스트 증거 채우기 — **여전히 실주문 잠금**
+4. Phase 7은 오너 명시 승인 전까지 진행 금지
 
 ## 개발 루프 (오너 확정 2026-07-09)
 

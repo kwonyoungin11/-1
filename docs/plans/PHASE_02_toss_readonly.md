@@ -1,8 +1,9 @@
 # Phase 2 — 토스 읽기 전용 연결
 
-**상태:** mock-first 구현 진행 (2026-07-09)  
+**상태:** 구현 완료 (mock 기본 + live HTTP 읽기 클라이언트) — 2026-07-09  
 **돈 위험:** 매우 낮음 — **주문 create/modify/cancel 호출 금지**  
-**실거래 연결:** 실거래의 재료(계좌·시세·장시간)를 정확히 읽는 단계
+**실거래 연결:** 실거래의 재료(계좌·시세·장시간)를 정확히 읽는 단계  
+**UI:** 기존 콕핏 레이아웃 유지 · 연결 상태 문구/뱃지만 표시
 
 ---
 
@@ -45,24 +46,27 @@
 
 ## 6. 통과 기준
 
-- [ ] 주문 경로 코드 없음 (safety scan)  
-- [ ] mock contract tests PASS  
-- [ ] secret redaction tests PASS  
-- [ ] cockpit에 “미연결/연결됨/오류” 구분  
-- [ ] dev-loop PASS  
-- [ ] (선택) 오너 승인 하에 실 read-only 1회 스모크  
+- [x] 주문 경로 코드 없음 (BlockedTossOrderClient + safety scan)  
+- [x] mock contract tests PASS  
+- [x] secret redaction tests PASS  
+- [x] cockpit에 mock / 토스 읽기 / 오류 구분 (ConnectionPill + ConnectionLabel)  
+- [x] live HTTP 클라이언트 + StubHandler 통합 테스트  
+- [ ] (선택) 오너 승인 하에 실 read-only 1회 스모크 (`TOSS_ALLOW_LIVE_HTTP=true`)  
 
 ## 7. 롤백
 
-read client 비활성 플래그로 즉시 끄기. 주문과 무관.
+`TOSS_ALLOW_LIVE_HTTP=false` (기본) → 즉시 mock. 주문과 무관.
 
 
-## 구현 체크 (진행 중)
+## 구현 체크
 
 - [x] TossOptions + TOSS_ALLOW_LIVE_HTTP=false 기본
 - [x] DTO mapper + fixture contract tests
 - [x] Mock auth/account/market clients
 - [x] LiveHttpGuard blocks outbound when flag false
+- [x] LiveTossAuth/Account/Market clients (OAuth + read paths only)
+- [x] TossReadOnlyFactory (env → mock or live)
 - [x] ReadOnlyPortfolioService + Cockpit projector
+- [x] AppHarness wires factory; desktop shows connection status
 - [x] Order client still disabled
-- [ ] Owner-approved live read-only HTTP smoke (optional, later)
+- [ ] Owner-approved live read-only HTTP smoke (optional — set env flag)

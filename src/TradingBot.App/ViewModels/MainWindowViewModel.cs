@@ -14,11 +14,12 @@ namespace TradingBot.App.ViewModels;
 
 /// <summary>
 /// 상단 차트 2/3 + 하단 자동매매 필수 조작 1/3.
-/// 매수/매도는 차트 마커만 (실행 주문 버튼 없음 · 실주문 차단).
+/// 버블 크기 = 체결 규모(수량×가격 · 거래대금). 투자 조언 아님 · 실주문 차단.
 /// </summary>
 public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly AppHarness _harness;
+    private bool _suppressSelectionEcho;
 
     public MainWindowViewModel()
         : this(AppHarness.CreateDefault())
@@ -28,17 +29,22 @@ public partial class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel(AppHarness harness)
     {
         _harness = harness ?? throw new ArgumentNullException(nameof(harness));
-        StockKindOptions = new ObservableCollection<string>(["나스닥", "미국주식", "국내주식"]);
-        StrategyOptions = new ObservableCollection<string>(["단순연습전략", "관망만"]);
-        SelectedStockKind = "나스닥";
-        SelectedStrategy = "단순연습전략";
+        StockKindOptions = new ObservableCollection<string>(WatchlistCatalog.KindLabels);
+        StrategyOptions = new ObservableCollection<string>(StrategyCatalog.Labels);
+        SymbolOptions = new ObservableCollection<string>();
+        SelectedStockKind = StockMarketKind.나스닥.ToString();
+        SelectedStrategy = TradingStrategyKind.단순연습전략.ToString();
+        RefreshSymbolOptions();
         BuildEmptyChart();
         ApplyPanel(_harness.GetAutoTradePanel());
+        ConnectionLabel = _harness.ConnectionLabel;
+        ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel);
         SafetyHeadline = "실거래 잠김 · 실제 주문은 나가지 않습니다";
     }
 
     public ObservableCollection<string> StockKindOptions { get; }
     public ObservableCollection<string> StrategyOptions { get; }
+    public ObservableCollection<string> SymbolOptions { get; }
 
     [ObservableProperty] private string _title = "자동매매 콕핏";
     [ObservableProperty] private string _safetyHeadline = string.Empty;
@@ -50,7 +56,12 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _safetyNote = string.Empty;
     [ObservableProperty] private string _selectedStockKind = "나스닥";
     [ObservableProperty] private string _selectedStrategy = "단순연습전략";
+    [ObservableProperty] private string _selectedSymbol = "AAPL";
+    [ObservableProperty] private string _stockKindDescription = string.Empty;
+    [ObservableProperty] private string _strategyDescription = string.Empty;
     [ObservableProperty] private string _chartTitle = "차트";
+    [ObservableProperty] private string _connectionLabel = "연결 확인 전";
+    [ObservableProperty] private string _connectionPill = "mock";
     [ObservableProperty] private bool _canStart = true;
     [ObservableProperty] private bool _canStop;
     [ObservableProperty] private bool _isBusy;
@@ -58,24 +69,71 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private ISeries[] _series = Array.Empty<ISeries>();
     [ObservableProperty] private Axis[] _xAxes = Array.Empty<Axis>();
     [ObservableProperty] private Axis[] _yAxes = Array.Empty<Axis>();
+    [ObservableProperty] private DrawMarginFrame? _drawMarginFrame;
 
     partial void OnSelectedStockKindChanged(string value)
     {
+        if (_suppressSelectionEcho)
+        {
+            return;
+        }
+
         if (Enum.TryParse<StockMarketKind>(value, out var kind))
         {
             _harness.SetStockKind(kind);
+            RefreshSymbolOptions();
             var panel = _harness.GetAutoTradePanel();
-            WatchSymbolsText = panel.WatchSymbolsText;
-            ChartTitle = $"{value} · {panel.WatchSymbolsText.Split(',').FirstOrDefault()?.Trim() ?? ""}";
+            ApplyPanel(panel);
+            RebuildChart();
         }
     }
 
     partial void OnSelectedStrategyChanged(string value)
     {
+        if (_suppressSelectionEcho)
+        {
+            return;
+        }
+
         if (Enum.TryParse<TradingStrategyKind>(value, out var s))
         {
             _harness.SetStrategy(s);
+            StrategyDescription = StrategyCatalog.Describe(s);
+            StatusLine = $"전략 · {s} · {StrategyDescription}";
         }
+    }
+
+    partial void OnSelectedSymbolChanged(string value)
+    {
+        if (_suppressSelectionEcho || string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        _harness.SetFocusSymbol(value);
+        ChartTitle = $"{SelectedStockKind} · {value}";
+        RebuildChart();
+    }
+
+    private void RefreshSymbolOptions()
+    {
+        if (!Enum.TryParse<StockMarketKind>(SelectedStockKind, out var kind))
+        {
+            kind = StockMarketKind.나스닥;
+        }
+
+        var symbols = WatchlistCatalog.ResolveSymbols(kind);
+        SymbolOptions.Clear();
+        foreach (var s in symbols)
+        {
+            SymbolOptions.Add(s);
+        }
+
+        var focus = _harness.GetAutoTradePanel().FocusSymbol;
+        _suppressSelectionEcho = true;
+        SelectedSymbol = symbols.Contains(focus) ? focus : symbols[0];
+        _suppressSelectionEcho = false;
+        _harness.SetFocusSymbol(SelectedSymbol);
     }
 
     [RelayCommand]
@@ -92,12 +150,16 @@ public partial class MainWindowViewModel : ViewModelBase
             StatusLine = "불러오는 중…";
             _ = await _harness.GetDashboardAsync().ConfigureAwait(true);
             ApplyPanel(_harness.GetAutoTradePanel());
+            ConnectionLabel = _harness.ConnectionLabel;
+            ConnectionPill = ShortConnectionPill(_harness.ConnectionModeLabel);
             RebuildChart();
-            StatusLine = "갱신 완료 · 실주문 없음";
+            StatusLine = $"갱신 완료 · {ConnectionPill} · 실주문 없음";
         }
         catch
         {
             StatusLine = "오류 · 실주문은 하지 않습니다";
+            ConnectionLabel = "읽기 연결 오류";
+            ConnectionPill = "오류";
         }
         finally
         {
@@ -123,6 +185,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void ApplyPanel(AutoTradePanelSnapshot p)
     {
+        _suppressSelectionEcho = true;
         SessionStatusLabel = p.SessionStatusLabel;
         WatchSymbolsText = p.WatchSymbolsText;
         BalanceLabel = p.BalanceLabel;
@@ -132,11 +195,34 @@ public partial class MainWindowViewModel : ViewModelBase
         CanStop = p.CanStop;
         SelectedStockKind = p.StockKindLabel;
         SelectedStrategy = p.StrategyLabel;
-        ChartTitle = $"{p.StockKindLabel} · {p.WatchSymbolsText.Split(',').FirstOrDefault()?.Trim() ?? "종목"}";
+        StockKindDescription = p.StockKindDescription;
+        StrategyDescription = p.StrategyDescription;
+        if (SymbolOptions.Contains(p.FocusSymbol))
+        {
+            SelectedSymbol = p.FocusSymbol;
+        }
+
+        ChartTitle = $"{p.StockKindLabel} · {p.FocusSymbol}";
         SafetyHeadline = "실거래 잠김 · 실제 주문은 나가지 않습니다 · 연습 모드";
+        _suppressSelectionEcho = false;
     }
 
     private void BuildEmptyChart() => RebuildChart();
+
+    private static string ShortConnectionPill(string modeLabel)
+    {
+        if (modeLabel.Contains("실 HTTP", StringComparison.Ordinal))
+        {
+            return "토스 읽기";
+        }
+
+        if (modeLabel.Contains("오류", StringComparison.Ordinal))
+        {
+            return "오류";
+        }
+
+        return "mock";
+    }
 
     private void RebuildChart()
     {
@@ -145,16 +231,27 @@ public partial class MainWindowViewModel : ViewModelBase
             .Select(c => new FinancialPoint(c.Time.UtcDateTime, c.High, c.Open, c.Close, c.Low))
             .ToArray();
 
-        var buyPoints = markers
+        // Weight = 체결 규모 (클수록 큰 버블)
+        var buyBubbles = markers
             .Where(m => m.Side == TradeMarkerSide.매수)
-            .Select(m => new DateTimePoint(m.Time.UtcDateTime, m.Price))
+            .Select(m => new WeightedPoint(
+                m.Time.UtcDateTime.Ticks,
+                m.Price,
+                Math.Max(0.2, m.SizeWeight)))
             .ToArray();
-        var sellPoints = markers
+        var sellBubbles = markers
             .Where(m => m.Side == TradeMarkerSide.매도)
-            .Select(m => new DateTimePoint(m.Time.UtcDateTime, m.Price))
+            .Select(m => new WeightedPoint(
+                m.Time.UtcDateTime.Ticks,
+                m.Price,
+                Math.Max(0.2, m.SizeWeight)))
             .ToArray();
 
-        // 트레이딩뷰 스타일 다크 캔들 + 매수(초록) / 매도(빨강) 마커
+        var buyFill = new SolidColorPaint(new SKColor(0x39, 0xFF, 0x14, 0xB8));
+        var sellFill = new SolidColorPaint(new SKColor(0xFF, 0x2D, 0x2D, 0xC0));
+        var buyStroke = new SolidColorPaint(new SKColor(0x00, 0xE6, 0x76, 0x90)) { StrokeThickness = 1.2f };
+        var sellStroke = new SolidColorPaint(new SKColor(0xFF, 0x52, 0x52, 0x90)) { StrokeThickness = 1.2f };
+
         Series =
         [
             new CandlesticksSeries<FinancialPoint>
@@ -165,23 +262,28 @@ public partial class MainWindowViewModel : ViewModelBase
                 UpStroke = new SolidColorPaint(SKColor.Parse("#26A69A")) { StrokeThickness = 1 },
                 DownFill = new SolidColorPaint(SKColor.Parse("#EF5350")),
                 DownStroke = new SolidColorPaint(SKColor.Parse("#EF5350")) { StrokeThickness = 1 },
-                MaxBarWidth = 8,
+                MaxBarWidth = 5,
+                ZIndex = 0,
             },
-            new ScatterSeries<DateTimePoint>
+            new ScatterSeries<WeightedPoint>
             {
-                Name = "매수",
-                Values = buyPoints,
-                GeometrySize = 16,
-                Fill = new SolidColorPaint(SKColor.Parse("#00E676")),
-                Stroke = new SolidColorPaint(SKColors.White) { StrokeThickness = 1 },
+                Name = "매수규모",
+                Values = buyBubbles,
+                MinGeometrySize = 10,
+                GeometrySize = 52,
+                Fill = buyFill,
+                Stroke = buyStroke,
+                ZIndex = 10,
             },
-            new ScatterSeries<DateTimePoint>
+            new ScatterSeries<WeightedPoint>
             {
-                Name = "매도",
-                Values = sellPoints,
-                GeometrySize = 16,
-                Fill = new SolidColorPaint(SKColor.Parse("#FF5252")),
-                Stroke = new SolidColorPaint(SKColors.White) { StrokeThickness = 1 },
+                Name = "매도규모",
+                Values = sellBubbles,
+                MinGeometrySize = 10,
+                GeometrySize = 52,
+                Fill = sellFill,
+                Stroke = sellStroke,
+                ZIndex = 10,
             },
         ];
 
@@ -189,11 +291,14 @@ public partial class MainWindowViewModel : ViewModelBase
         [
             new Axis
             {
-                LabelsPaint = new SolidColorPaint(SKColor.Parse("#94A3B8")),
-                SeparatorsPaint = new SolidColorPaint(SKColor.Parse("#1E293B")) { StrokeThickness = 1 },
-                Labeler = value => value > 0 ? new DateTime((long)value).ToString("MM-dd HH:mm") : string.Empty,
-                UnitWidth = TimeSpan.FromMinutes(5).Ticks,
+                LabelsPaint = new SolidColorPaint(SKColor.Parse("#64748B")),
+                SeparatorsPaint = new SolidColorPaint(SKColor.Parse("#1A1F2E")) { StrokeThickness = 1 },
+                Labeler = value => value > 0
+                    ? new DateTime((long)value).ToString("HH:mm")
+                    : string.Empty,
+                UnitWidth = TimeSpan.FromMinutes(1).Ticks,
                 MinStep = TimeSpan.FromMinutes(5).Ticks,
+                TextSize = 11,
             },
         ];
 
@@ -202,9 +307,17 @@ public partial class MainWindowViewModel : ViewModelBase
             new Axis
             {
                 LabelsPaint = new SolidColorPaint(SKColor.Parse("#94A3B8")),
-                SeparatorsPaint = new SolidColorPaint(SKColor.Parse("#1E293B")) { StrokeThickness = 1 },
+                SeparatorsPaint = new SolidColorPaint(SKColor.Parse("#1A1F2E")) { StrokeThickness = 1 },
                 Position = LiveChartsCore.Measure.AxisPosition.End,
+                TextSize = 11,
+                Labeler = value => value.ToString("N0"),
             },
         ];
+
+        DrawMarginFrame = new DrawMarginFrame
+        {
+            Fill = new SolidColorPaint(SKColor.Parse("#0A0C10")),
+            Stroke = new SolidColorPaint(SKColor.Parse("#1E293B")) { StrokeThickness = 1 },
+        };
     }
 }

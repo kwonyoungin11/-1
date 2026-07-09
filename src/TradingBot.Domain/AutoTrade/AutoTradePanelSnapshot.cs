@@ -10,6 +10,9 @@ public sealed class AutoTradePanelSnapshot
     public required string StrategyLabel { get; init; }
     public required string SessionStatusLabel { get; init; }
     public required string WatchSymbolsText { get; init; }
+    public required string FocusSymbol { get; init; }
+    public required string StockKindDescription { get; init; }
+    public required string StrategyDescription { get; init; }
     public required decimal Balance { get; init; }
     public required string BalanceLabel { get; init; }
     public required decimal ReturnRatePercent { get; init; }

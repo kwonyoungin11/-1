@@ -13,6 +13,8 @@ public class AppHarnessTests
         var dash = await harness.GetDashboardAsync();
         Assert.Equal(LiveLockState.Locked, dash.Snapshot.LiveLock);
         Assert.False(dash.IsLiveTradingVisuallyOpen);
+        Assert.False(string.IsNullOrWhiteSpace(harness.ConnectionLabel));
+        Assert.False(string.IsNullOrWhiteSpace(harness.ConnectionModeLabel));
 
         var (candles, markers) = harness.GetChartData();
         Assert.True(candles.Count >= 10);

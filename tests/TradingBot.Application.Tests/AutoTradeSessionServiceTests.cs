@@ -41,4 +41,16 @@ public class AutoTradeSessionServiceTests
         Assert.Contains(markers, m => m.Side == TradeMarkerSide.매수);
         Assert.Contains(markers, m => m.Side == TradeMarkerSide.매도);
     }
+
+    [Fact]
+    public void Bubble_markers_have_variable_size_weights()
+    {
+        var candles = MockCandleSeriesFactory.CreateSeries("NQ", 80, DateTimeOffset.UtcNow, seedPrice: 21950);
+        var markers = MockCandleSeriesFactory.CreateDemoMarkers(candles);
+        Assert.True(markers.Count >= candles.Count);
+        Assert.Contains(markers, m => m.SizeWeight > 1.5);
+        Assert.Contains(markers, m => m.Side == TradeMarkerSide.매수 && m.SizeWeight > 0);
+        Assert.Contains(markers, m => m.Side == TradeMarkerSide.매도 && m.SizeWeight > 0);
+        Assert.True(markers.Max(m => m.SizeWeight) > markers.Min(m => m.SizeWeight));
+    }
 }

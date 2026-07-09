@@ -30,7 +30,12 @@ public sealed class MockTossAccountClient : ITossAccountClient
         {
             Result = new List<AccountDto>
             {
-                new() { AccountNo = "1234567890", AccountSeq = "1", AccountType = "위탁" },
+                new()
+                {
+                    AccountNo = "1234567890",
+                    AccountSeqElement = System.Text.Json.JsonSerializer.SerializeToElement("1"),
+                    AccountType = "위탁",
+                },
             },
         };
         return Task.FromResult(TossDtoMapper.MapAccounts(dto, _redactor));
@@ -72,8 +77,16 @@ public sealed class MockTossMarketDataClient : ITossMarketDataClient
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(symbols);
+        // 심볼별 서로 다른 연습 시세 (전략 모멘텀 점수 다양화)
         var list = symbols
-            .Select(s => new QuoteSnapshot(s, 100m, "USD", DateTimeOffset.UtcNow))
+            .Select(s =>
+            {
+                var seed = (decimal)WatchlistCatalog.ChartSeedPrice(s);
+                var jitter = (Math.Abs(HashCode.Combine(s, DateTime.UtcNow.Minute / 5)) % 100) / 50m; // 0..2
+                var price = Math.Max(1m, seed * (0.98m + jitter * 0.02m));
+                var ccy = s.Length == 6 && s.All(char.IsDigit) ? "KRW" : "USD";
+                return new QuoteSnapshot(s, Math.Round(price, 2), ccy, DateTimeOffset.UtcNow);
+            })
             .ToList();
         return Task.FromResult<IReadOnlyList<QuoteSnapshot>>(list);
     }

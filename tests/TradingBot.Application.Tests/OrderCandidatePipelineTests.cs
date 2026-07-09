@@ -20,7 +20,12 @@ public class OrderCandidatePipelineTests
         };
 
         var pipeline = new OrderCandidatePipeline();
-        var result = pipeline.BuildCandidates(quotes, settings, defaultOrderQuantity: 2m, nowUtc: now);
+        var result = pipeline.BuildCandidates(
+            quotes,
+            settings,
+            defaultOrderQuantity: 2m,
+            nowUtc: now,
+            strategy: TradingStrategyKind.단순연습전략);
 
         Assert.Single(result);
         Assert.True(result[0].IsAcceptedForDryRun);

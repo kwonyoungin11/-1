@@ -27,8 +27,18 @@ public sealed class AccountDto
     [JsonPropertyName("accountNo")]
     public string? AccountNo { get; set; }
 
+    /// <summary>OpenAPI 는 integer, fixture 는 string — JsonElement 로 수용.</summary>
     [JsonPropertyName("accountSeq")]
-    public string? AccountSeq { get; set; }
+    public System.Text.Json.JsonElement AccountSeqElement { get; set; }
+
+    [JsonIgnore]
+    public string? AccountSeq =>
+        AccountSeqElement.ValueKind switch
+        {
+            System.Text.Json.JsonValueKind.Number => AccountSeqElement.GetRawText(),
+            System.Text.Json.JsonValueKind.String => AccountSeqElement.GetString(),
+            _ => null,
+        };
 
     [JsonPropertyName("accountType")]
     public string? AccountType { get; set; }

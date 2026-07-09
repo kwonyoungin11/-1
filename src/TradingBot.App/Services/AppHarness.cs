@@ -10,6 +10,7 @@ namespace TradingBot.App.Services;
 
 /// <summary>
 /// Mac 앱 조합 루트. 차트·자동매매 연습 세션. 실주문 HTTP 없음.
+/// 버블 크기 = 체결 규모(수량×가격).
 /// </summary>
 public sealed class AppHarness
 {
@@ -23,6 +24,9 @@ public sealed class AppHarness
     private readonly PaperOrderRouter _paper;
     private readonly IAuditLog _audit;
     private readonly AutoTradeSessionService _session;
+    private readonly TossOptions _tossOptions;
+    private string _connectionLabel = "연결 확인 전";
+    private string _connectionModeLabel = "mock";
 
     public AppHarness(
         TradingSafetySettings settings,
@@ -34,7 +38,8 @@ public sealed class AppHarness
         IPaperLedger paperLedger,
         PaperOrderRouter paper,
         IAuditLog audit,
-        AutoTradeSessionService session)
+        AutoTradeSessionService session,
+        TossOptions? tossOptions = null)
     {
         _settings = settings;
         _portfolio = portfolio;
@@ -46,9 +51,15 @@ public sealed class AppHarness
         _paper = paper;
         _audit = audit;
         _session = session;
+        _tossOptions = tossOptions ?? new TossOptions { AllowLiveHttp = false };
+        _connectionModeLabel = TossReadOnlyFactory.DescribeMode(_tossOptions);
     }
 
     public AutoTradeSessionService Session => _session;
+
+    public string ConnectionLabel => _connectionLabel;
+
+    public string ConnectionModeLabel => _connectionModeLabel;
 
     public static AppHarness CreateDefault()
     {
@@ -60,6 +71,8 @@ public sealed class AppHarness
             MaxOrderNotional = 50_000m,
             MarketDataMaxStalenessSeconds = TradingSafetyDefaults.MarketDataMaxStalenessSeconds,
         };
+        var toss = TossReadOnlyFactory.LoadOptionsFromEnvironment();
+        var portfolio = TossReadOnlyFactory.CreatePortfolioService(toss);
         var audit = new InMemoryAuditLog();
         var dryLedger = new InMemoryDryRunLedger();
         var dryRun = new DryRunOrderRouter(dryLedger);
@@ -67,7 +80,7 @@ public sealed class AppHarness
         var paper = new PaperOrderRouter(paperLedger);
         return new AppHarness(
             settings,
-            ReadOnlyPortfolioService.CreateMock(),
+            portfolio,
             new OrderCandidatePipeline(),
             new LiveOrderGate(),
             dryLedger,
@@ -75,7 +88,8 @@ public sealed class AppHarness
             paperLedger,
             paper,
             audit,
-            new AutoTradeSessionService());
+            new AutoTradeSessionService(),
+            toss);
     }
 
     public AutoTradePanelSnapshot GetAutoTradePanel() => _session.ToPanelSnapshot();
@@ -98,17 +112,35 @@ public sealed class AppHarness
 
     public void SetStrategy(TradingStrategyKind strategy) => _session.Strategy = strategy;
 
+    public void SetFocusSymbol(string symbol) => _session.FocusSymbol = symbol;
+
     public (IReadOnlyList<CandlePoint> Candles, IReadOnlyList<TradeMarker> Markers) GetChartData()
     {
-        var symbol = _session.ResolveWatchSymbols().FirstOrDefault() ?? "AAPL";
-        var candles = MockCandleSeriesFactory.CreateSeries(symbol, 120, DateTimeOffset.UtcNow);
-        var paperMarkers = MockCandleSeriesFactory.MarkersFromPaperFills(_paperLedger.GetSnapshot());
-        if (paperMarkers.Count > 0)
+        var symbol = _session.ResolveFocusSymbol();
+        var seed = WatchlistCatalog.ChartSeedPrice(symbol);
+        var candles = MockCandleSeriesFactory.CreateSeries(symbol, 160, DateTimeOffset.UtcNow, seed);
+        var paperAll = MockCandleSeriesFactory.MarkersFromPaperFills(_paperLedger.GetSnapshot());
+        // 포커스 종목 paper 체결만 강조 + 데모 버블(거래대금 규모)
+        var paperFocus = paperAll
+            .Where(m => true) // paper fill에 symbol 없음 → 전체 반영; 규모는 Notional
+            .ToList();
+        var demo = MockCandleSeriesFactory.CreateDemoMarkers(candles);
+        if (paperFocus.Count == 0)
         {
-            return (candles, paperMarkers);
+            return (candles, demo);
         }
 
-        return (candles, MockCandleSeriesFactory.CreateDemoMarkers(candles));
+        var merged = new List<TradeMarker>(demo.Count + paperFocus.Count);
+        merged.AddRange(demo);
+        // paper 규모를 차트 Weight 스케일로 정규화 (로그 스케일 근사)
+        var maxPaper = paperFocus.Max(m => m.SizeWeight);
+        foreach (var p in paperFocus)
+        {
+            var w = maxPaper <= 0 ? 1 : 1.2 + 4.0 * (p.SizeWeight / maxPaper);
+            merged.Add(p with { SizeWeight = w, Label = $"{p.Label}(연습체결)" });
+        }
+
+        return (candles, merged);
     }
 
     public async Task<CockpitDashboardModel> GetDashboardAsync(
@@ -125,11 +157,14 @@ public sealed class AppHarness
         var portfolio = await _portfolio
             .GetSnapshotAsync(symbols, cancellationToken)
             .ConfigureAwait(false);
+        _connectionLabel = portfolio.ConnectionOwnerMessage;
+        _connectionModeLabel = TossReadOnlyFactory.DescribeMode(_tossOptions);
         var snapshot = CockpitReadOnlyProjector.Project(portfolio, _settings);
 
         var now = DateTimeOffset.UtcNow;
         var usSession = UsMarketSessionGuard.Evaluate(portfolio.UsMarket, now);
-        var qty = _session.Strategy == TradingStrategyKind.관망만 ? 0m : 1m;
+        var strategy = _session.Strategy;
+        var qty = StrategyCatalog.BaseQuantity(strategy);
         IReadOnlyList<EvaluatedOrderCandidate> evaluated = Array.Empty<EvaluatedOrderCandidate>();
 
         if (_session.Status == AutoTradeSessionStatus.실행중)
@@ -141,7 +176,8 @@ public sealed class AppHarness
                 nowUtc: now,
                 marketSessionOpen: usSession.IsOpenForOrders,
                 marketSessionKnown: usSession.IsKnown,
-                usMarket: portfolio.UsMarket);
+                usMarket: portfolio.UsMarket,
+                strategy: strategy);
 
             foreach (var item in evaluated.Where(e => e.IsAcceptedForDryRun))
             {
@@ -150,6 +186,7 @@ public sealed class AppHarness
                 if (paperResult.Accepted && item.Candidate.LimitPrice is decimal px)
                 {
                     _session.ApplyVirtualFill(item.Candidate.Side, item.Candidate.Quantity, px);
+                    // 규모(수량×가격)에 비례한 소액 평가손익 연습
                     _session.ApplyScaffoldMarkToMarket(item.Candidate.Quantity * px * 0.0005m);
                 }
             }
