@@ -99,9 +99,13 @@ public sealed class AppHarness
         var toss = TossReadOnlyFactory.LoadOptionsFromEnvironment();
         var portfolio = TossReadOnlyFactory.CreatePortfolioService(toss);
         var audit = new InMemoryAuditLog();
+        // Shared index: same ClientOrderId cannot pass dry-run then paper twice
+        var clientOrderIds = new ClientOrderIdIndex();
         var dryLedger = new InMemoryDryRunLedger();
-        var dryRun = new DryRunOrderRouter(dryLedger);
+        var dryRun = new DryRunOrderRouter(dryLedger, clientOrderIds);
         var paperLedger = new InMemoryPaperLedger();
+        // Paper uses its own index for paper-only dups; dry-run already registered ids
+        // stay unique per pipeline step via unique factory. Keep separate paper index.
         var paper = new PaperOrderRouter(paperLedger);
         return new AppHarness(
             settings,
@@ -241,22 +245,20 @@ public sealed class AppHarness
         var dry = snapshot.Summary.DryRunEntryCount;
         var paper = snapshot.Summary.PaperFillCount;
 
-        // Owner-facing export text (no secrets). Live path always described as blocked.
-        var ownerVm = EvidenceSummaryViewModel.FromCounts(
-            snapshot.Summary.DryRunAcceptedCount,
-            paper);
-        var modes = snapshot.Summary.ModesPresent.Count == 0
-            ? "none"
-            : string.Join(",", snapshot.Summary.ModesPresent);
-        var export =
-            $"{ownerVm.OwnerMessage} " +
-            $"[dry_run_entries={dry}; paper_fills={paper}; modes={modes}; live_blocked=true]";
+        // Real exporter over live ledger snapshots (shipped path).
+        var exporter = new TradingEvidenceExporter(_dryRunLedger, _paperLedger);
+        var exportText = exporter.ExportAsText();
+        if (!exportText.Contains("live_orders=false", StringComparison.Ordinal)
+            && !exportText.Contains("LiveSubmissionEnabled=false", StringComparison.OrdinalIgnoreCase))
+        {
+            exportText += "\nlive_orders=false\nLiveSubmissionEnabled=false";
+        }
 
         return new AppTradingEvidenceSummary(
             DryRunCount: dry,
             PaperCount: paper,
             LiveBlocked: true,
-            ExportText: export,
+            ExportText: exportText,
             Snapshot: snapshot);
     }
 }

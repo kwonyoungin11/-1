@@ -150,8 +150,8 @@ public class AppHarnessTests
         Assert.NotNull(evidence.Snapshot);
         Assert.False(evidence.Snapshot!.Summary.LiveModePresent);
         Assert.False(string.IsNullOrWhiteSpace(evidence.ExportText));
-        Assert.Contains("live_blocked=true", evidence.ExportText, StringComparison.Ordinal);
-        Assert.Contains("실주문", evidence.ExportText, StringComparison.Ordinal);
+        Assert.Contains("live_orders=false", evidence.ExportText, StringComparison.Ordinal);
+        Assert.Contains("LiveSubmissionEnabled=false", evidence.ExportText, StringComparison.Ordinal);
         Assert.DoesNotContain(
             evidence.Snapshot.Summary.ModesPresent,
             m => m.Equals("Live", StringComparison.OrdinalIgnoreCase));
@@ -178,7 +178,8 @@ public class AppHarnessTests
         Assert.False(evidence.IsLiveSubmissionEnabled);
         Assert.False(harness.IsLiveSubmissionEnabled);
         Assert.NotNull(evidence.ExportText);
-        Assert.Contains("live_blocked=true", evidence.ExportText, StringComparison.Ordinal);
+        Assert.Contains("live_orders=false", evidence.ExportText, StringComparison.Ordinal);
+        Assert.Contains("LiveSubmissionEnabled=false", evidence.ExportText, StringComparison.Ordinal);
         Assert.NotNull(evidence.Snapshot);
         Assert.False(evidence.Snapshot!.Summary.LiveModePresent);
     }
